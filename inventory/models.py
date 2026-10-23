@@ -380,11 +380,30 @@ class LocationChange(models.Model):
 
 
 class Document(models.Model):
-    """Private object key only. File upload and signed download are a later stage."""
+    """Immutable private bytes committed atomically with the ledger in PostgreSQL."""
 
     movement = models.ForeignKey(Movement, on_delete=models.PROTECT, related_name="documents")
     kind = models.CharField(max_length=20, choices=[("pdf", "Relatório PDF"), ("signature", "Assinatura")])
     storage_key = models.CharField(max_length=500, unique=True)
+    payload = models.BinaryField(null=True, editable=False)
+    byte_size = models.PositiveIntegerField(default=0)
+    content_type = models.CharField(max_length=100, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    objects = HistoryQuerySet.as_manager()
+
+    def save(self, *args, **kwargs):
+        if self.pk or Movement.objects.filter(pk=self.movement_id, status="confirmed").exists():
+            raise ValidationError("Documentos históricos são imutáveis.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if Movement.objects.filter(pk=self.movement_id, status="confirmed").exists():
+            raise ValidationError("Documentos históricos são imutáveis.")
+        return super().delete(*args, **kwargs)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["movement", "kind"], condition=Q(payload__isnull=False), name="one_stored_document_per_kind")]
+
     sha256 = models.CharField(max_length=64)
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 

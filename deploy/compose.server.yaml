@@ -1,0 +1,22 @@
+# Prepared only. No service is started or published by this repository.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ${DEPLOY_ENV_FILE:?Indique o ficheiro privado de ambiente, fora do checkout}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    volumes:
+      - ${DB_CA_CERT_FILE:?Indique a CA do PostgreSQL TLS}:/run/secrets/postgresql-ca.crt:ro
+      - ${BACKUP_HOST_ROOT:?Indique armazenamento separado de backups}:/backups
+      - ${GPG_HOST_HOME:?Indique diretório privado com chave pública de backups}:/home/garrafas/.gnupg
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

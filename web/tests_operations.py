@@ -123,11 +123,11 @@ class OperationWebTests(TestCase):
         self.ref.refresh_from_db()
         self.assertEqual(self.ref.current_stock, 12)
 
-    def test_exit_simple_only_and_report_metadata_stored(self):
+    def test_exit_simple_and_signed_choices_require_valid_signature(self):
         draft = self.reviewed("exit")
         response = self.client.get(reverse("web:operation-review", args=[draft.pk]))
-        self.assertNotContains(response, 'value="signed"')
-        self.client.post(
+        self.assertContains(response, 'value="signed"')
+        rejected = self.client.post(
             reverse("web:operation-review", args=[draft.pk]),
             {
                 "token": draft.review_token,
@@ -136,10 +136,15 @@ class OperationWebTests(TestCase):
                 "report_requested": "no",
             },
         )
+        self.assertEqual(rejected.status_code, 400)
+        self.client.post(
+            reverse("web:operation-review", args=[draft.pk]),
+            {"token": draft.review_token, "confirm": "on", "validation": "simple"},
+        )
         draft.refresh_from_db()
         self.assertEqual(draft.validation, "simple")
         self.assertTrue(draft.report_requested)
-        self.assertFalse(draft.documents.exists())
+        self.assertTrue(draft.documents.filter(kind="pdf").exists())
 
     def test_forged_stock_quantity_status_kind_actor_and_line_totals_ignored(self):
         draft = self.draft()

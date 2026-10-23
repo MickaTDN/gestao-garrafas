@@ -130,3 +130,51 @@ setores e registo de migrações mantiveram-se idênticos. A base reservada cont
 com uma pré-visualização não publicada, sem referências ou movimentos
 operacionais. O Excel não foi reimportado, os ficheiros privados não foram
 alterados e não houve publicação, operações reais, deploy ou merge.
+
+## Validação da quarta etapa
+
+Execução local em 2026-10-23, Python 3.12, Django 5.2 LTS, PostgreSQL 17:
+**267 testes aprovados, nenhum ignorado**. Inclui os 201 anteriores e 66 novos.
+A alteração dos testes antigos limita-se às funcionalidades agora entregues:
+documentos passam a existir e a assinatura passa a ser selecionável, mas continua
+a exigir bytes válidos; mantêm-se invariantes de stock, permissões e histórico.
+
+- 15 casos de documentos: entrada opcional, saída obrigatória, inventário,
+  assinatura, PNG inválido/vazio/dimensões/tamanho, snapshots, correções,
+  imutabilidade ORM/SQL, PDF multipágina e rollback quando a geração falha.
+- 16 casos novos de contas/login: criação e edição com reautenticação, perfis,
+  desativação sem perda de identidade, auto-desativação/despromoção recusadas,
+  CSRF/campos forjados, passwords fracas, limites/expiração de login, cabeçalhos
+  de proxy e rejeição de corpos acima do limite.
+- 21 casos novos de relatórios, exportação e PWA: autenticação, inexistência real
+  de documentos, integridade, downloads, filtros, valores desconhecidos, prevenção
+  de fórmulas, dados históricos, cache privada proibida e assets com hash de produção.
+- 8 casos de backup, incluindo pg_dump/pg_restore reais numa base nova, validação
+  dos documentos restaurados e triggers, retenção, falha sem destruir backups,
+  rejeição de destino existente/arquivo corrompido e cifragem/decifragem GPG com
+  chave temporária sintética. O arquivo e a chave não foram incluídos no Git.
+- 1 teste usa efetivamente uma conta PostgreSQL restrita: confirma uma saída com
+  PDF/assinatura, mas não cria tabelas, altera migrações ou elimina o livro/documentos.
+- 1 teste de reservas de login concorrentes usa seis conexões PostgreSQL reais
+  e comprova que o limite não é excedido.
+- **12 testes Chromium** no total, quatro novos: assinatura com rato em computador,
+  assinatura com toque em telemóvel e limpeza/repetição, criação de utilizador e
+  download XLSX em móvel, e PWA em perfil persistente com elegibilidade de instalação,
+  cache apenas pública, fallback offline e impossibilidade de confirmar sem rede.
+
+Ruff, `check`, migrações coerentes, recursos estáticos e `check --deploy` passaram.
+O PDF A4 foi ainda renderizado e inspecionado visualmente com dados sintéticos.
+A CI executa a suíte e valida a imagem preparada, sem arranque de servidor público
+nem deployment. O resultado remoto está ligado ao PR, distinto da execução local.
+A construção local da imagem encontrou restrições TLS da rede do executor; não
+se desativou validação TLS. A validação da imagem em CI é registada separadamente.
+
+As únicas migrações/escritas foram para bases sintéticas/de testes. A base reservada,
+a pré-visualização e os ficheiros privados são comparados por fingerprints antes
+e depois. Não foi reimportado o Excel, publicado stock real, contratado serviço,
+ativado agendamento de produção, comprado domínio ou feito deploy/merge.
+
+Não foram testados Android/iOS físicos, impressoras do armazém, domínio/TLS real,
+backup remoto de produção, recuperação num segundo servidor real ou capacidade
+sob carga de produção. Estes pontos exigem infraestrutura e validação operacional,
+não podem ser declarados concluídos a partir dos testes sintéticos.

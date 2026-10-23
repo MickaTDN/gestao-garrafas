@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods
 
 from inventory import catalog, operations
@@ -260,6 +261,7 @@ def edit(request, pk):
 
 @administrator_required
 @require_http_methods(["GET", "POST"])
+@sensitive_post_parameters("signature_data")
 def review(request, pk):
     try:
         movement = _own(request, pk)
@@ -273,6 +275,9 @@ def review(request, pk):
     )
     if movement.kind != "entry":
         form.fields.pop("report_requested")
+    if movement.kind != "exit":
+        form.fields.pop("validation")
+        form.fields.pop("signature_data")
     if request.method == "POST" and form.is_valid():
         try:
             confirm_movement(
@@ -280,13 +285,15 @@ def review(request, pk):
                 actor=request.user,
                 review_token=form.cleaned_data["token"],
                 report_requested=form.cleaned_data.get("report_requested"),
+                validation=form.cleaned_data.get("validation"),
+                signature_data=form.cleaned_data.get("signature_data"),
             )
         except ValidationError as error:
             _errors(form, error)
         else:
             messages.success(
                 request,
-                "Operação confirmada. Dados para o relatório guardados; o PDF será disponibilizado na Etapa 4.",
+                "Operação confirmada. Os relatórios solicitados ou obrigatórios foram guardados.",
             )
             return redirect("web:operation-detail", pk=pk)
     # Show exactly what was reviewed, not silently refreshed quantities.
@@ -424,7 +431,15 @@ def detail(request, pk):
         status="confirmed",
     )
     return render(
-        request, "web/operations/detail.html", {"section": "history", "movement": movement}
+        request,
+        "web/operations/detail.html",
+        {
+            "section": "history",
+            "movement": movement,
+            "pdfs": movement.documents.filter(kind="pdf", payload__isnull=False).defer(
+                "payload", "metadata"
+            ),
+        },
     )
 
 

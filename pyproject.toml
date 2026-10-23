@@ -10,10 +10,16 @@ dependencies = [
   "python-dotenv>=1.1,<2",
   "gunicorn>=23,<24",
   "whitenoise>=6.9,<7",
+  "reportlab>=4.4,<5",
+  "pillow>=11.3,<13",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.12,<1", "playwright>=1.55,<2"]
+dev = [
+    "ruff>=0.12,<1",
+    "playwright>=1.55,<2",
+    "pypdf>=6,<7",
+]
 
 [tool.uv]
 package = false

@@ -13,8 +13,12 @@ descrito em [docs/stage2.md](docs/stage2.md).
 
 A terceira etapa acrescenta entradas, saídas, rascunhos próprios, inventários
 parciais/completos, transferências e correções relacionadas, com conferência e
-confirmação atómicas. Consulte [docs/stage3.md](docs/stage3.md). PDFs, captura de
-assinatura, exportação, PWA, alojamento e backups permanecem na Etapa 4.
+confirmação atómicas. Consulte [docs/stage3.md](docs/stage3.md). A Etapa 4
+acrescenta PDFs privados imutáveis, assinatura desenhada, exportação XLSX,
+PWA, gestão de utilizadores, proteção de login e backups/restauro sintéticos.
+Os procedimentos estão em [docs/installation.md](docs/installation.md) e
+[docs/recovery.md](docs/recovery.md). Infraestrutura e publicação reais continuam
+separadas do código.
 A aplicação ainda não é um registo operacional oficial. A publicação inicial
 controlada dos dados reais continua a exigir autorização separada.
 
@@ -91,7 +95,8 @@ assinaladas. Não se inventam datas, horas, setores, capacidades ou histórico q
 não conste da fonte. As outras folhas não são importadas.
 
 `.env`, Excel, bases SQLite, relatórios, backups e documentos privados são
-ignorados pelo Git. PDFs e assinaturas não terão URLs públicas de media.
+ignorados pelo Git. PDFs e assinaturas ficam em bytes privados PostgreSQL,
+com leitura autenticada e checksum; não têm URLs públicas de media.
 Não adicione dados reais a fixtures, migrações, screenshots ou exemplos.
 
 ## Testes e verificações
@@ -102,7 +107,9 @@ A suíte utiliza exclusivamente dados sintéticos e uma base de testes separada:
 uv run ruff check .
 uv run python manage.py check
 uv run python manage.py makemigrations --check --dry-run
-uv run python manage.py test accounts inventory imports web --noinput
+PG_TOOL_PREFIX='["docker","compose","exec","-T","-e","PGPASSWORD","db"]' \
+DB_NAME=garrafas_stage4_synthetic DB_TEST_NAME=test_garrafas_stage4 \
+uv run python manage.py test accounts inventory imports web tests.browser --noinput
 ```
 
 O PostgreSQL deve estar disponível para verificar bloqueios, concorrência e
@@ -118,7 +125,8 @@ uv run python manage.py test tests.browser --noinput
 
 Se Chromium já estiver instalado, a suíte usa-o; pode indicar `CHROMIUM_PATH`.
 Em Linux sem dependências gráficas, use `playwright install --with-deps chromium`.
-O teste cria e elimina utilizadores e referências sintéticas numa base de testes.
+Os testes criam e eliminam utilizadores e referências sintéticas numa base de testes;
+verificam também assinatura por rato/toque, documentos, exportação e política PWA.
 O workflow [CI](.github/workflows/ci.yml) executa as verificações em PostgreSQL,
 o navegador e a configuração de produção.
 

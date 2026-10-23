@@ -1,6 +1,6 @@
 # Arquitetura
 
-Estado: base técnica, catálogo/importação reconciliada e operações da Etapa 3. A
+Estado: base técnica, catálogo/importação, operações e funcionalidades da Etapa 4. A
 publicação dos dados reais exige revisão da pré-visualização e confirmação
 explícita; a existência do importador não prova que essa publicação ocorreu.
 Esta aplicação ainda não substitui todos os fluxos do registo operacional
@@ -22,7 +22,8 @@ adicionar-se interação progressiva quando os formulários operacionais o exigi
 mantendo as mesmas regras no servidor.
 
 Entradas, saídas, rascunhos, contagens e correções relacionadas têm formulários
-operacionais. A interface identifica os PDFs como futuros e não oferece assinatura.
+operacionais. A Etapa 4 acrescenta PDFs privados, assinatura desenhada, exportação,
+PWA, gestão de utilizadores e mecanismos de backup/restauro.
 A entrega não autoriza publicação inicial de dados nem uso operacional oficial.
 
 | Módulo | Responsabilidade |
@@ -53,8 +54,8 @@ O modelo distingue os seguintes elementos:
 - **Proveniência:** `ImportBatch` e `LegacyRow` identificam ficheiro, folha, linha
   e valores originais, para que a migração não destrua informação.
 - **Evidência:** `LocationChange`, `AuditEvent` e `Document` preparam o histórico de
-  transferências, operações e metadados de documentos privados. A geração e
-  disponibilização de ficheiros são etapas posteriores.
+  transferências, operações e documentos privados. Os bytes de PDFs/assinaturas,
+  tamanho, tipo e SHA-256 ficam no PostgreSQL, atómicos com a confirmação.
 
 As relações históricas usam proteção contra eliminação. A desativação preserva
 referências e pessoas; não se apagam registos usados pelo histórico. Validações de
@@ -188,9 +189,12 @@ ambiente. Excel, bases locais, relatórios de importação, backups, PDFs e
 assinaturas não pertencem ao repositório. Os testes usam exclusivamente dados
 sintéticos. Não se devem registar valores de credenciais em logs.
 
-Documentos ficam em armazenamento privado e não em `static`. O modelo guarda
-chave e checksum; o acesso autenticado a documentos e a política de retenção serão
-implementados com os relatórios. Não está configurada uma rota pública de media.
+Documentos ficam em `Document.payload` (bytea privado no PostgreSQL), com chave
+lógica, tipo, tamanho, SHA-256 e snapshot. Assinaturas PNG são limitadas, verificadas
+e recodificadas. A geração/armazenamento de PDF e assinatura pertence à transação
+da confirmação. Ler só permite movimentos confirmados e exige autenticação,
+checksum e resposta sem cache. Não existe rota pública de media. O detalhe está
+na [decisão 4](decisions/0004-private-documents-and-recovery.md).
 
 ## Produção e evolução
 
@@ -200,13 +204,27 @@ e ativa cookies seguros e redirecionamento HTTPS. Hosts e origens CSRF têm de s
 configurados para o domínio real; cabeçalhos de proxy só devem ser aceites de um
 proxy que remova valores fornecidos pelo cliente.
 
-Antes de uso oficial faltam, além das funcionalidades do roadmap: alojamento,
-TLS e gestão de segredos, conta de base com privilégios mínimos, proteção contra
-tentativas repetidas de login, observabilidade, políticas de retenção e backups
-automáticos separados com um restauro comprovado. O serviço Docker é destinado a
+Antes de uso oficial faltam infraestrutura e validações reais: alojamento,
+TLS/domínio e segredos, ativação da conta de base restrita, observabilidade,
+políticas de retenção e backups automáticos separados com restauro no alojamento.
+Proteção de login partilhada entre workers e reautenticação de operações de gestão
+já estão implementadas. O SQL de grants, imagem e configurações são preparados,
+não contas/serviços externos efetivamente configurados. O serviço Docker é destinado a
 desenvolvimento, não uma configuração de produção concluída.
 
-A PWA instalável mantém-se no plano. A primeira versão operacional continuará a
-exigir ligação para consultar e alterar stock. Um futuro service worker poderá
-guardar recursos estáticos; escritas offline e saldos em cache exigem um desenho
-específico para evitar conflitos, e não são assumidos nesta etapa.
+A PWA tem manifesto, ícones e service worker com cache exclusiva de recursos
+públicos. POST nunca é guardado nem repetido offline. Navegação sem rede apresenta
+uma página genérica sem stock/documentos. Manifestos estáticos com hash e versões
+de cache são coordenados. A instalação exige HTTPS e suporte do dispositivo;
+Chromium persistente valida elegibilidade, sem substituir validação física.
+
+A gestão de contas nunca apaga o histórico; exige Administrador e confirmação da
+password atual. Buckets HMAC PostgreSQL limitam tentativas concorrentes de login,
+sem guardar nomes/IP/passwords em claro. O proxy só é confiado por lista explícita.
+Exportações excluem segredos/bytes privados e escapam fórmulas textuais.
+
+Backup guarda dump e documentos verificados em arquivo privado, com cifragem
+obrigatória em produção e retenção após sucesso. Existe restauro automático apenas
+para destinos sintéticos novos; produção segue procedimento manual com revisão.
+A [instalação](installation.md) e a [recuperação](recovery.md) distinguem preparação
+de código, infraestrutura real e operação efetivamente autorizada.

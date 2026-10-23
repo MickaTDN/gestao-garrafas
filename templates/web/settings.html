@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Definições · Gestão de Garrafas{% endblock %}
 {% block content %}
+<div class="toolbar"><a class="btn secondary" href="{% url 'web:users' %}">Gerir utilizadores</a></div>
 <div class="intro"><div><div class="eyebrow">ADMINISTRAÇÃO</div><h1>Definições</h1><p class="muted intro-description">Acesso reservado ao administrador.</p></div></div>
 <div class="grid two"><div class="card stack"><h2>Perfis de acesso</h2><p><strong>Administrador:</strong> acesso às áreas de gestão.</p><p><strong>Consulta:</strong> consulta de stock e histórico sem permissões de alteração.</p><p class="muted">A gestão de utilizadores pela aplicação será disponibilizada numa próxima etapa.</p></div><div class="card stack"><h2>Catálogo e localizações</h2><p>Gerir referências, alertas, localizações e setores, preservando os dados associados.</p><div class="row wrapping"><a class="btn secondary" href="{% url 'web:references' %}">Referências</a><a class="btn secondary" href="{% url 'web:locations' %}">Localizações e setores</a><a class="btn secondary" href="{% url 'web:import-list' %}">Importações do Excel</a></div><p class="muted">A gestão de pessoas e as cópias de segurança serão disponibilizadas nas etapas seguintes.</p></div></div>
 {% endblock %}

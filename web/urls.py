@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import catalog, import_views, operations, views
+from . import catalog, exports, import_views, operations, reports, user_admin, views
 
 app_name = "web"
 
@@ -21,6 +21,12 @@ urlpatterns = [
     path("operacoes/<int:pk>/reativar/<int:reference_pk>/", operations.reactivate, name="operation-reactivate"),
     path("operacoes/<int:pk>/corrigir/", operations.correction, name="operation-correction"),
     path("operacoes/<int:pk>/", operations.detail, name="operation-detail"),
+    path("utilizadores/", user_admin.accounts, name="users"),
+    path("utilizadores/novo/", user_admin.create, name="user-create"),
+    path("utilizadores/<int:pk>/editar/", user_admin.edit, name="user-edit"),
+    path("exportar/", exports.export, name="export"),
+    path("relatorios/", reports.reports, name="reports"),
+    path("documentos/<int:pk>/", reports.content, name="document-content"),
     path("referencias/", catalog.reference_list, name="references"),
     path("referencias/nova/", catalog.reference_create, name="reference-create"),
     path("referencias/<int:pk>/editar/", catalog.reference_edit, name="reference-edit"),

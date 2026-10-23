@@ -57,21 +57,27 @@ Movimentos confirmados só são corrigidos através de novos movimentos relacion
 
 ## Etapa 4 — relatórios, PWA e operação
 
-Entregar relatórios privados, assinatura desenhada e reabertura dos documentos
-históricos. Finalizar instalação PWA e testes em dispositivos, exportação,
-backups e recuperação. Concluir os requisitos de produção e segurança descritos
-na arquitetura antes de usar a aplicação como registo oficial.
+Implementados PDFs privados para novas confirmações, assinatura desenhada opcional
+na saída, consulta/download/impressão dos documentos existentes, PWA sem escritas
+offline, exportação XLSX, gestão de utilizadores e limitação de login. Inclui
+backups PostgreSQL/documentos, cifragem, retenção, restauro sintético real e
+configuração/documentação para um servidor futuro. As proteções anteriores de
+stock, concorrência, proveniência e imutabilidade continuam em vigor.
 
-Critério de conclusão: impressão e PDFs mantêm quantidades históricas e permissões;
-um backup é restaurado com sucesso; a aplicação tem domínio HTTPS, gestão de
-segredos e procedimentos de operação. A PWA não implica escritas de stock offline.
+**Código preparado não significa infraestrutura configurada ou aplicação oficial.**
+Alojamento, DNS/HTTPS, PostgreSQL TLS/rede/conta restrita reais, chaves e destino de
+backups, agendamento/alertas, restauro num segundo sistema, validação em dispositivos
+e publicação inicial controlada continuam dependentes de configuração e autorização.
+Não há merge, publicação real, contratação de serviços ou deploy automático.
+Ver [instalação](installation.md), [recuperação](recovery.md) e
+[decisão 4](decisions/0004-private-documents-and-recovery.md).
 
 ## Matriz de requisitos aprovados
 
 | Requisito | Estado nesta entrega | Etapa de conclusão |
 | --- | --- | --- |
 | Aspeto V3 em computador e telemóvel | Estrutura visual reutilizada nas páginas iniciais. | 1, com regressão visual nas etapas seguintes. |
-| Autenticação e perfis Administrador/Consulta | Utilizador e autorização no servidor; criação explícita de contas. | 1; gestão de utilizadores pela interface ainda pendente. |
+| Autenticação e perfis Administrador/Consulta | Utilizador e autorização no servidor; criação explícita de contas. | 1; gestão administrativa com reautenticação na etapa 4. |
 | Base permanente e migrações | Esquema PostgreSQL; persistência local por volume. | 1; alojamento de produção em 4. |
 | Painel: stock, referências, alertas, rascunhos e acessos rápidos | Consulta dos registos presentes; rascunhos do próprio administrador e acessos aos fluxos. | 1; acompanhamento dos fluxos em 3. |
 | Stock por designação/código, localização e setor | Consulta paginada funcional. | 1. |
@@ -89,26 +95,26 @@ segredos e procedimentos de operação. A PWA não implica escritas de stock off
 | Rascunhos persistentes sem efeito no saldo | Guardar, reabrir, editar e cancelar os próprios rascunhos; revisão otimista e auditoria. | 3. |
 | Saídas apenas de referências existentes e sem exceder stock | Formulário completo; confirmação repete validação de estado e stock sob bloqueio. | 3. |
 | Revisão da saída e correção de quantidades antes de validar | Página de conferência, regresso à edição e invalidação de conferências antigas. | 3. |
-| Confirmação simples ou assinatura desenhada na saída | Validação simples implementada; assinatura não selecionável até à Etapa 4. | 3–4. |
-| Relatório opcional na entrada e obrigatório na saída | Escolha explícita na confirmação de entrada; saída sempre marcada. PDFs pendentes. | 4. |
-| Relatórios com caixas/unidades por referência, total e stock final | Campos de snapshot preparados; apresentação/PDF pendentes. | 4. |
+| Confirmação simples ou assinatura desenhada na saída | Confirmação simples ou assinatura PNG verificada no servidor e incluída no PDF. | 3–4. |
+| Relatório opcional na entrada e obrigatório na saída | Escolha explícita na entrada; saída obrigatória; PDF persistido atomicamente na confirmação. | 4. |
+| Relatórios com caixas/unidades por referência, total e stock final | PDF A4 paginado com snapshots e quantidades exatas, sem recalcular documentos antigos. | 4. |
 | Conservar capacidade e quantidades introduzidas para documentos antigos | Serviço prepara snapshots sem depender da configuração futura. | 1 para base, 4 para documentos. |
 | Inventário parcial/completo com contagem e motivo quando há diferença | Seleção filtrada, paginação, contagem física, motivo, zero explícito e conflitos com nova conferência. | 3. |
 | Mudar localização/setor no inventário, inclusive sem diferença de stock | Transferências no inventário, inclusive sem diferença quantitativa, atómicas com o stock. | 3 para inventário. |
 | Histórico de ajustes e mudanças de localização | Histórico de operações, contagens, transferências, responsáveis e correções relacionadas. | 2 para migração, 3 para ajustes. |
 | Movimentos confirmados imutáveis; ajustes posteriores relacionados | Proteções ORM e PostgreSQL sobre livro, proveniência e transferências; auditoria de acréscimo e ajustes relacionados. | 1 para base; fluxo completo em 3. |
 | Histórico por data/período, referência e pessoa | Consulta funcional; depende da confirmação da publicação dos dados reais. | 1 para consulta, 2 para migração. |
-| Reabrir e imprimir PDFs históricos | Metadados de documentos preparados; acesso e geração pendentes. | 4. |
+| Reabrir e imprimir PDFs históricos | Abrir/imprimir/descarregar apenas PDFs guardados e verificados, com autenticação. | 4. |
 | Excel: ler Stock sem alterar original | Leitura e relatório de preparação. | 1. |
 | Excel: proveniência por ficheiro, folha, linha e coluna | SHA-256, valores brutos e publicação ligada à pré-visualização confirmada. | 1 para preparação, 2 para publicação. |
 | Excel: preservar sinais e etiquetas antigas sem permitir novos tipos legados pela interface | Importador legado mantém sinais e cabeçalhos; testes sintéticos. Publicação real exige confirmação. | 2. |
 | Excel: duplicados reconciliados conservando cada origem | Unificação com ligação às linhas e células originais; conflitos bloqueiam publicação. | 2. |
 | Excel: saldo inicial + movimentos reconciliam por referência | Reconciliação individual, relatório e confirmação; inventário vazio fica desconhecido com parcela inferida separada. | 2. |
 | Excel: preservar datas sem inventar horas, inclusive datas repetidas | Data separada de instante e coluna de origem conservada. | 1 para modelo, 2 para publicação. |
-| Backups automáticos separados, retenção e restauro testado | Não configurados nesta etapa. Volume local não os substitui. | 4. |
-| PDFs/assinaturas privados e permissões de acesso | Metadados e diretório privado; entrega e retenção pendentes. | 4. |
-| Exportação para Excel | Requisito conservado; ainda sem exportador. | 4. |
-| Aplicação PWA instalável | Arquitetura responsiva inicial; manifesto e service worker pendentes. | 4. |
+| Backups automáticos separados, retenção e restauro testado | Comandos, cifragem e timer preparados; restauro sintético comprovado. Infraestrutura/agendamento reais pendentes. | 4. |
+| PDFs/assinaturas privados e permissões de acesso | Bytes privados PostgreSQL, acesso autenticado, checksum e imutabilidade. Política legal/infraestrutura real a definir. | 4. |
+| Exportação para Excel | Exportações filtradas de stock/catálogo/configuração/histórico/transferências, com proteção de fórmulas. | 4. |
+| Aplicação PWA instalável | Manifesto, ícones e cache apenas pública; elegibilidade Chromium validada. Instalação física/HTTPS real pendentes. | 4. |
 | Dados reais e credenciais fora do código | `.env`, anexos, relatórios e bases privadas ignorados; fixtures sintéticas. | Obrigatório em todas as etapas. |
 
 Não se considera concluída a preservação operacional de todo o histórico enquanto

@@ -220,7 +220,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         ).click()
         self.assertIn("CONFIRMADO", page.locator("body").inner_text())
         self.assertEqual(self.stocks(), [29, 8] if kind == "entry" else [7, 2])
-        self.assertIn("geração PDF pendente", page.locator("body").inner_text())
+        self.assertIn("Descarregar PDF guardado", page.locator("body").inner_text())
         self.assert_responsive(page, width)
 
     def inventory_flow(self, width):
@@ -279,3 +279,176 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
     def test_inventory_mobile(self):
         self.inventory_flow(390)
+
+
+class Stage4BrowserTests(StaticLiveServerTestCase):
+    database_call = staticmethod(BrowserSmokeTests.database_call)
+    setUp = OperationalBrowserTests.setUp
+    page = OperationalBrowserTests.page
+    stocks = OperationalBrowserTests.stocks
+    assert_responsive = OperationalBrowserTests.assert_responsive
+
+    def signed_exit(self, width, *, touch=False):
+        import io
+
+        from pypdf import PdfReader
+
+        from inventory.models import Movement
+
+        page = self.page("exit", width)
+        page.get_by_role("button", name="Criar rascunho", exact=True).click()
+        page.get_by_label("Adicionar SYN-OP-1", exact=True).check()
+        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        page.get_by_label("Pessoa que entregou / levantou", exact=True).fill(
+            "Pessoa assinatura sintética"
+        )
+        page.get_by_label("Garrafas soltas", exact=True).fill("2")
+        page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
+        page.get_by_label("Validação da saída", exact=True).select_option("signed")
+        canvas = page.locator("#signature-canvas")
+
+        def draw():
+            canvas.scroll_into_view_if_needed()
+            bounds = canvas.bounding_box()
+            self.assertIsNotNone(bounds)
+            points = [
+                (bounds["x"] + bounds["width"] * x, bounds["y"] + bounds["height"] * y)
+                for x, y in [(0.1, 0.7), (0.25, 0.2), (0.4, 0.8), (0.55, 0.3), (0.8, 0.65)]
+            ]
+            if touch:
+                session = page.context.new_cdp_session(page)
+                session.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
+                session.send(
+                    "Input.dispatchTouchEvent",
+                    {"type": "touchStart", "touchPoints": [{"x": points[0][0], "y": points[0][1]}]},
+                )
+                for x, y in points[1:]:
+                    session.send(
+                        "Input.dispatchTouchEvent",
+                        {"type": "touchMove", "touchPoints": [{"x": x, "y": y}]},
+                    )
+                session.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+                session.detach()
+            else:
+                page.mouse.move(*points[0])
+                page.mouse.down()
+                for x, y in points[1:]:
+                    page.mouse.move(x, y, steps=5)
+                page.mouse.up()
+
+        draw()
+        self.assertTrue(
+            page.locator('input[name="signature_data"]')
+            .input_value()
+            .startswith("data:image/png;base64,")
+        )
+        page.get_by_role("button", name="Limpar assinatura", exact=True).click()
+        self.assertEqual(page.locator('input[name="signature_data"]').input_value(), "")
+        draw()
+        page.locator('input[name="confirm"]').check()
+        self.assert_responsive(page, width)
+        page.get_by_role("button", name="Confirmar saída", exact=True).click()
+        self.assertIn("CONFIRMADO", page.locator("body").inner_text())
+        self.assertEqual(self.stocks(), [13, 5])
+        link = page.get_by_role("link", name="Abrir / imprimir PDF", exact=True)
+        response = page.request.get(self.live_server_url + link.get_attribute("href"))
+        self.assertEqual(response.status, 200)
+        self.assertIn("no-store", response.headers["cache-control"])
+        pdf = PdfReader(io.BytesIO(response.body()))
+        self.assertTrue(any(list(p.images) for p in pdf.pages))
+        self.assertIn("Pessoa assinatura sintética", "".join(p.extract_text() for p in pdf.pages))
+        self.assertEqual(
+            self.database_call(lambda: Movement.objects.get(kind="exit").validation), "signed"
+        )
+        self.assert_responsive(page, width)
+
+    def test_signed_exit_desktop_mouse(self):
+        self.signed_exit(1366)
+
+    def test_signed_exit_mobile_touch(self):
+        self.signed_exit(390, touch=True)
+
+    def test_pwa_manifest_installability_and_private_offline_policy(self):
+        import tempfile
+
+        directory = tempfile.TemporaryDirectory(prefix="gg-pwa-profile-")
+        self.addCleanup(directory.cleanup)
+        context = self.playwright.chromium.launch_persistent_context(
+            directory.name,
+            executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
+            headless=True,
+            args=["--no-sandbox"],
+            viewport={"width": 390, "height": 844},
+        )
+        self.addCleanup(context.close)
+        page = context.new_page()
+        page.set_default_timeout(10000)
+        page.goto(self.live_server_url + reverse("web:entry"))
+        page.get_by_label("Utilizador", exact=True).fill(self.admin.username)
+        page.get_by_label("Palavra-passe", exact=True).fill(self.password)
+        page.get_by_role("button", name="Entrar", exact=True).click()
+        page.evaluate("async () => { await navigator.serviceWorker.ready; }")
+        page.reload()
+        page.wait_for_function("navigator.serviceWorker.controller !== null")
+        session = page.context.new_cdp_session(page)
+        manifest = session.send("Page.getAppManifest")
+        self.assertEqual(manifest["errors"], [])
+        self.assertEqual(session.send("Page.getInstallabilityErrors")["installabilityErrors"], [])
+        session.detach()
+        page.get_by_role("button", name="Criar rascunho", exact=True).click()
+        page.get_by_label("Adicionar SYN-OP-1", exact=True).check()
+        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        page.get_by_label("Pessoa que entregou / levantou", exact=True).fill(
+            "Pessoa offline sintética"
+        )
+        page.get_by_label("Garrafas soltas", exact=True).fill("3")
+        page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
+        review_url = page.url
+        page.context.set_offline(True)
+        page.wait_for_function(
+            "!navigator.onLine && document.querySelector('button[type=submit]').disabled"
+        )
+        result = page.evaluate(
+            "async () => { try { await fetch(location.href, {method:'POST',body:new FormData(document.querySelector('form.card'))}); return 'unexpected'; } catch (_) { return 'blocked'; } }"
+        )
+        self.assertEqual(result, "blocked")
+        page.goto(self.live_server_url + reverse("web:stock"))
+        self.assertIn("Sem ligação", page.locator("h1").inner_text())
+        self.assertNotIn(self.first.name, page.locator("body").inner_text())
+        self.assertNotIn(self.admin.username, page.locator("body").inner_text())
+        cached = page.evaluate(
+            "async () => { const urls=[]; for (const name of await caches.keys()) for (const request of await (await caches.open(name)).keys()) urls.push(new URL(request.url).pathname); return urls; }"
+        )
+        self.assertTrue(cached)
+        self.assertTrue(all(path == "/offline/" or path.startswith("/static/") for path in cached))
+        self.assertEqual(self.stocks(), [15, 5])
+        page.context.set_offline(False)
+        page.goto(review_url)
+        self.assertIn("CONFERÊNCIA", page.locator("body").inner_text())
+        self.assertEqual(self.stocks(), [15, 5])
+
+    def test_mobile_user_creation_and_excel_download(self):
+        from openpyxl import load_workbook
+
+        page = self.page("entry", 390)
+        page.goto(self.live_server_url + reverse("web:user-create"))
+        page.locator("#id_username").fill("browser-created-synthetic")
+        page.locator("#id_role").select_option("viewer")
+        password = secrets.token_urlsafe(32)
+        page.locator("#id_password1").fill(password)
+        page.locator("#id_password2").fill(password)
+        page.locator("#id_current_password").fill(self.password)
+        page.get_by_role("button", name="Guardar", exact=True).click()
+        self.assertIn("browser-created-synthetic", page.locator("body").inner_text())
+        self.assert_responsive(page, 390)
+        page.goto(self.live_server_url + reverse("web:export"))
+        page.get_by_label("Dados a exportar").select_option("references")
+        with page.expect_download() as download:
+            page.get_by_role("button", name="Descarregar .xlsx", exact=True).click()
+        import io
+        from pathlib import Path
+
+        self.assertTrue(download.value.suggested_filename.endswith(".xlsx"))
+        workbook = load_workbook(io.BytesIO(Path(download.value.path()).read_bytes()))
+        self.assertEqual(workbook["Dados"].max_row, 3)
+        self.assert_responsive(page, 390)

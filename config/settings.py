@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.PrivacyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -120,3 +121,15 @@ X_FRAME_OPTIONS = "DENY"
 # Only set this behind a reverse proxy that removes incoming spoofed headers.
 if os.getenv("TRUST_HTTPS_PROXY", "0") == "1":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Bounded uploads and database-backed login protection, shared by all workers.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 256 * 1024
+LOGIN_ACCOUNT_LIMIT = int(os.getenv("LOGIN_ACCOUNT_LIMIT", "5"))
+LOGIN_ADDRESS_LIMIT = int(os.getenv("LOGIN_ADDRESS_LIMIT", "30"))
+LOGIN_WINDOW_SECONDS = int(os.getenv("LOGIN_WINDOW_SECONDS", "900"))
+SESSION_COOKIE_AGE = 8 * 60 * 60
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SECURE_REFERRER_POLICY = "same-origin"
+
+LOGIN_TRUSTED_PROXY_ADDRESSES = {address.strip() for address in os.getenv("LOGIN_TRUSTED_PROXY_ADDRESSES", "").split(",") if address.strip()}

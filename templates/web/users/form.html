@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<div class="intro"><div><h1>{{ title }}</h1><p>O histórico é preservado. Alterações de acesso exigem a sua palavra-passe atual.</p></div></div><form method="post" class="card stack">{% csrf_token %}{{ form.as_p }}<button class="btn">Guardar</button></form><a href="{% url 'web:users' %}">Voltar aos utilizadores</a>{% endblock %}

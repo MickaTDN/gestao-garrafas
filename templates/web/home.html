@@ -25,7 +25,7 @@
   </div>
 </div>
 <div class="card more-areas"><div class="cardtitle"><h2>Outras áreas</h2></div><div class="row wrapping">
-  <a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a>
+  <a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a><a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a><a class="btn secondary small" href="{% url 'web:export' %}">Exportar Excel</a>
   {% if user.is_administrator %}<a class="btn secondary small" href="{% url 'web:drafts' %}">Os meus rascunhos</a><a class="btn secondary small" href="{% url 'web:references' %}">Referências</a><a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
 </div></div>
 {% if not reference_count %}<p class="footer-note">Ainda não existem referências nesta base de dados. A importação do Excel será realizada depois da reconciliação dos saldos e do histórico.</p>{% endif %}
