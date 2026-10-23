@@ -1,5 +1,7 @@
 """Persistent domain model. Stock changes belong to services, never to a browser session."""
 
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -118,7 +120,10 @@ class LegacyRow(models.Model):
 
 class OpeningBalance(models.Model):
     reference = models.ForeignKey(Reference, on_delete=models.PROTECT, related_name="opening_balances")
-    quantity = models.IntegerField()
+    quantity = models.IntegerField(null=True, blank=True)
+    reconciliation_quantity = models.IntegerField(null=True, blank=True)
+    basis = models.CharField(max_length=30, choices=[("counted", "Contagem na fonte"), ("derived_unknown", "Saldo inferido; contagem desconhecida")], default="counted")
+    explanation = models.TextField(blank=True)
     date = models.DateField()
     legacy_row = models.OneToOneField(LegacyRow, on_delete=models.PROTECT, null=True, blank=True, related_name="opening_balance")
 
@@ -127,7 +132,12 @@ class HistoryQuerySet(models.QuerySet):
     """Block ordinary ORM mutation of confirmed records (SQL access is privileged)."""
 
     def _check_mutable(self):
-        condition = {"status": "confirmed"} if self.model.__name__ == "Movement" else {"movement__status": "confirmed"}
+        if self.model.__name__ == "Movement":
+            condition = {"status": "confirmed"}
+        elif self.model.__name__ == "MovementLineSource":
+            condition = {"line__movement__status": "confirmed"}
+        else:
+            condition = {"movement__status": "confirmed"}
         if self.filter(**condition).exists():
             raise ValidationError("Movimentos confirmados são imutáveis; registe um ajuste relacionado.")
 
@@ -152,6 +162,9 @@ class HistoryQuerySet(models.QuerySet):
             movement_ids = {obj.movement_id for obj in objs}
             if Movement.objects.filter(pk__in=movement_ids, status="confirmed").exists():
                 raise ValidationError("As linhas de um movimento confirmado são imutáveis.")
+        if self.model.__name__ == "MovementLineSource":
+            if MovementLine.objects.filter(pk__in=[obj.line_id for obj in objs], movement__status="confirmed").exists():
+                raise ValidationError("A proveniência de um movimento confirmado é imutável.")
         return super().bulk_create(
             objs, batch_size=batch_size, ignore_conflicts=ignore_conflicts,
             update_conflicts=update_conflicts, update_fields=update_fields,
@@ -181,6 +194,8 @@ class Movement(models.Model):
     occurred_at = models.DateTimeField(null=True, blank=True)
     person = models.ForeignKey(Person, on_delete=models.PROTECT, null=True, blank=True, related_name="movements")
     original_label = models.CharField(max_length=250, blank=True)
+    document_number = models.CharField(max_length=250, blank=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
     import_batch = models.ForeignKey(ImportBatch, on_delete=models.PROTECT, null=True, blank=True, related_name="movements")
     source_column = models.PositiveIntegerField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="movements")
@@ -196,6 +211,7 @@ class Movement(models.Model):
         ordering = ["-date", "-pk"]
         indexes = [models.Index(fields=["date", "kind"]), models.Index(fields=["status"])]
         constraints = [
+            models.UniqueConstraint(fields=["import_batch", "source_column"], condition=Q(kind="legacy"), name="one_legacy_movement_per_source_column"),
             models.CheckConstraint(condition=Q(kind__in=["entry", "exit", "inventory", "legacy"]), name="movement_valid_kind"),
             models.CheckConstraint(condition=Q(status__in=["draft", "confirmed"]), name="movement_valid_status"),
             models.CheckConstraint(condition=~Q(kind="legacy") | (Q(import_batch__isnull=False) & Q(occurred_at__isnull=True)), name="legacy_requires_source_no_time"),
@@ -251,6 +267,57 @@ class MovementLine(models.Model):
     def delete(self, *args, **kwargs):
         self._check_mutable()
         return super().delete(*args, **kwargs)
+
+
+class MovementLineSource(models.Model):
+    """Every original contribution remains linked after duplicate references merge."""
+
+    line = models.ForeignKey(MovementLine, on_delete=models.PROTECT, related_name="sources")
+    legacy_row = models.ForeignKey(LegacyRow, on_delete=models.PROTECT, related_name="line_sources")
+    coordinate = models.CharField(max_length=30)
+    quantity = models.IntegerField(null=True, blank=True)
+    raw_value = models.JSONField(null=True, blank=True)
+
+    objects = HistoryQuerySet.as_manager()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["legacy_row", "coordinate"], name="unique_import_source_cell")]
+
+    def _check_mutable(self):
+        line_ids = {self.line_id}
+        if self.pk:
+            line_ids.update(MovementLineSource.objects.filter(pk=self.pk).values_list("line_id", flat=True))
+        if MovementLine.objects.filter(pk__in=line_ids, movement__status="confirmed").exists():
+            raise ValidationError("A proveniência de um movimento confirmado é imutável.")
+
+    def save(self, *args, **kwargs):
+        self._check_mutable()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._check_mutable()
+        return super().delete(*args, **kwargs)
+
+
+class ImportPreview(models.Model):
+    """Private, immutable reconciliation snapshot; publication requires its token."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    import_batch = models.ForeignKey(ImportBatch, on_delete=models.PROTECT, related_name="previews")
+    decisions = models.JSONField(default=dict)
+    summary = models.JSONField(default=dict)
+    rows = models.JSONField(default=list)
+    source_digest = models.CharField(max_length=64)
+    target_digest = models.CharField(max_length=64)
+    reconciliation_digest = models.CharField(max_length=64)
+    confirmation_token = models.UUIDField(default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    validation_report = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class LocationChange(models.Model):

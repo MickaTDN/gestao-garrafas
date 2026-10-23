@@ -1,15 +1,21 @@
 # Gestão de Garrafas
 
-Primeira etapa da aplicação web baseada no protótipo V3: **Django 5.2 LTS,
+Aplicação web baseada no protótipo V3: **Django 5.2 LTS,
 Python 3.12 e PostgreSQL 17**, com o mesmo estilo visual em computador e telemóvel.
 As decisões estão em [docs/architecture.md](docs/architecture.md) e os requisitos
 aprovados e etapas em [docs/roadmap.md](docs/roadmap.md).
 
-Já existem autenticação e dois perfis, migrações da base permanente, painel,
-consulta de stock/fichas/histórico, preparação auditável do Excel e serviço de
-confirmação transacional testável. Os formulários de operações, publicação da
-importação, PDFs, assinatura e PWA serão desenvolvidos nas etapas seguintes.
-As páginas dessas áreas identificam o estado de implementação.
+O projeto inclui autenticação e dois perfis, migrações da base permanente,
+painel e consultas de stock/fichas/histórico. A segunda etapa acrescenta gestão
+de referências, localizações e setores e importação reconciliada, com
+pré-visualização e confirmação explícita antes da publicação. O processo está
+descrito em [docs/stage2.md](docs/stage2.md).
+
+Os formulários de entradas, saídas e inventário continuam reservados à terceira
+etapa. PDFs, captura de assinatura, exportação e PWA são entregas posteriores.
+As páginas dessas áreas identificam o estado de implementação. O serviço
+transacional inicial de confirmação permanece disponível para testes, sem
+expor operações de stock pela interface nesta etapa.
 
 ## Executar em desenvolvimento
 
@@ -65,10 +71,18 @@ movimentos. O SHA-256 impede duplicação do mesmo ficheiro. O relatório não �
 sobrescrito; use outro nome numa nova inspeção. Não execute esta operação em CI.
 
 O relatório preserva fórmulas, caches, valores, tipos, coordenadas, cabeçalhos e
-exceções. Valores vazios e texto não numérico exigem decisões explícitas antes
-da migração definitiva. `openpyxl` não recalcula fórmulas; caches ausentes são
+exceções. A reconciliação usa decisões privadas ligadas ao lote e produz uma
+pré-visualização por referência. Só depois de a rever deve ser confirmada a sua
+publicação. Alterar a fonte, as decisões ou o destino invalida a confirmação
+anterior. Um relatório criado não é uma publicação de stock.
+
+Inventários iniciais vazios permanecem desconhecidos. A quantidade necessária
+para conciliar o saldo oficial é identificada como inferida; nunca aparece como
+uma contagem confirmada de zero. Texto autorizado como anotação conserva a
+origem e a decisão de ausência de impacto. Números de documento não criam
+pessoas fictícias. `openpyxl` não recalcula fórmulas; caches ausentes são
 assinaladas. Não se inventam datas, horas, setores, capacidades ou histórico que
-não conste da fonte. As outras folhas não são importadas automaticamente.
+não conste da fonte. As outras folhas não são importadas.
 
 `.env`, Excel, bases SQLite, relatórios, backups e documentos privados são
 ignorados pelo Git. PDFs e assinaturas não terão URLs públicas de media.

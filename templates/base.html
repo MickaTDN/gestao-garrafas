@@ -48,8 +48,8 @@
   <a class="{% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><b aria-hidden="true">▦</b>Stock</a>
   <a class="{% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><b aria-hidden="true">◷</b>Histórico</a>
   {% if user.is_administrator %}
-  <a class="{% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><b aria-hidden="true">↘</b>Entradas</a>
-  <a class="{% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><b aria-hidden="true">↗</b>Saídas</a>
+  <a class="{% if section == 'references' %}active{% endif %}" href="{% url 'web:references' %}"><b aria-hidden="true">≡</b>Referências</a>
+  <a class="{% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><b aria-hidden="true">⚙</b>Definições</a>
   {% endif %}
 </nav>
 </body>

@@ -27,7 +27,7 @@ class StockFilterForm(forms.Form):
 
 
 class HistoryFilterForm(forms.Form):
-    q = forms.CharField(required=False, max_length=200, label="Referência, pessoa ou etiqueta original")
+    q = forms.CharField(required=False, max_length=200, label="Referência, pessoa, documento ou etiqueta original")
     start = forms.DateField(required=False, label="De", widget=forms.DateInput(attrs={"type": "date"}))
     end = forms.DateField(required=False, label="Até", widget=forms.DateInput(attrs={"type": "date"}))
 

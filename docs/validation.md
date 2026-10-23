@@ -35,3 +35,31 @@ Não foram feitos deploy, restauro numa máquina cloud nova, importação defini
 teste de backups de produção ou testes das interfaces operacionais ainda por
 implementar. As próximas entregas devem manter estes casos e acrescentar testes
 aos fluxos definidos no [roadmap](roadmap.md).
+
+## Validação da segunda etapa
+
+O conjunto completo `manage.py test accounts inventory imports web tests.browser
+--noinput` executou **111 testes, todos aprovados e sem casos ignorados**, em
+PostgreSQL. Inclui os testes anteriores, publicação sintética reconciliada,
+fusão de duplicados com proveniência, preservação de sinais, documentos e
+observações, saldos iniciais desconhecidos, idempotência, rollback e rejeição de
+prévias alteradas ou desatualizadas. Inclui ainda os formulários de catálogo,
+as permissões de ambos os perfis, proteção de stock contra campos forjados,
+relações protegidas e confirmação explícita/CSRF na publicação.
+
+Os dois testes de navegador usam Chromium: consulta em dimensões de computador
+e telemóvel e criação/edição de referência por administrador em telemóvel.
+Ruff, verificação Django, ausência de migrações pendentes, recolha de recursos
+estáticos no perfil de produção e `check --deploy --fail-level WARNING` passaram.
+
+A pré-visualização real foi preparada e verificada individualmente contra a
+fonte oficial, mantendo contagens iniciais ausentes como desconhecidas. As
+decisões, valores individuais e os relatórios reais permanecem privados, fora
+do Git. A fonte e o destino continuam ligados à impressão digital revista.
+Até à confirmação explícita dessa prévia, o catálogo e o histórico operacionais
+permanecem sem dados reais. Este estado não deve ser descrito como importação
+real concluída; a publicação produz o seu próprio relatório de validação.
+
+Os movimentos operacionais da terceira etapa não foram implementados. Os
+resultados de CI no GitHub devem ser consultados separadamente dos resultados
+locais acima.

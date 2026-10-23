@@ -78,7 +78,10 @@ def stock(request):
 @login_required
 @require_GET
 def reference_detail(request, pk):
-    reference = get_object_or_404(Reference.objects.select_related("location", "sector"), pk=pk)
+    reference = get_object_or_404(
+        Reference.objects.select_related("location", "sector").prefetch_related("opening_balances"),
+        pk=pk,
+    )
     return render(request, "web/reference_detail.html", {"section": "stock", "reference": reference})
 
 
@@ -86,7 +89,7 @@ def reference_detail(request, pk):
 @require_GET
 def history(request):
     form = HistoryFilterForm(request.GET)
-    movements = Movement.objects.filter(status="confirmed").select_related("person").prefetch_related("lines").order_by("-date", "-pk")
+    movements = Movement.objects.filter(status="confirmed").select_related("person").prefetch_related("lines__sources").order_by("-date", "-pk")
     valid = form.is_valid()
     if valid:
         query = form.cleaned_data
@@ -94,6 +97,7 @@ def history(request):
             movements = movements.filter(
                 Q(person__name__icontains=query["q"])
                 | Q(original_label__icontains=query["q"])
+                | Q(document_number__icontains=query["q"])
                 | Q(lines__reference_name__icontains=query["q"])
                 | Q(lines__reference__code__icontains=query["q"])
             ).distinct()

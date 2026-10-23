@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">GESTÃO DO CATÁLOGO</div><h1>{{ title }}</h1>{% if description %}<p class="muted intro-description">{{ description }}</p>{% endif %}</div></div>
+<form method="post" class="card stack">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}
+  <div>
+    {% if field.field.widget.input_type == 'checkbox' %}<label class="toggle">{{ field }} {{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
+    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+    {{ field.errors }}
+  </div>
+  {% endfor %}
+  <div class="row wrapping"><button class="btn" type="submit">Guardar</button><a class="btn secondary" href="{% url back_url %}">Cancelar</a></div>
+</form>
+{% endblock %}

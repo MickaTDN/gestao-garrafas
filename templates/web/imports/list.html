@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Importações · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">ADMINISTRAÇÃO</div><h1>Importações do Excel</h1><p class="muted intro-description">A preparação e a publicação são passos separados.</p></div></div>
+<div class="card stack">
+{% for batch in page_obj %}
+  <article class="lined stack"><h2>{{ batch.source_name }}</h2><p><span class="chip">{{ batch.get_status_display }}</span></p>
+    {% for preview in batch.previews.all %}<p><a href="{% url 'web:import-preview' preview.pk %}">Pré-visualização de {{ preview.created_at|date:'d/m/Y H:i' }}</a>{% if preview.published_at %} · publicada{% elif not preview.summary.ready %} · com impedimentos{% endif %}</p>{% empty %}<p class="muted">Ainda não existe uma pré-visualização reconciliada.</p>{% endfor %}
+  </article>
+{% empty %}<p class="empty">Não existem lotes preparados.</p>{% endfor %}
+</div>
+{% include 'web/pagination.html' %}
+<p class="footer-note">Os ficheiros e as decisões são preparados por um administrador no servidor. Cada publicação exige rever a pré-visualização e confirmar explicitamente o total.</p>
+{% endblock %}

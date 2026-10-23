@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import catalog, import_views, views
 
 app_name = "web"
 
@@ -13,5 +13,19 @@ urlpatterns = [
     path("entradas/", views.planned_feature, {"section": "entry"}, name="entry"),
     path("saidas/", views.planned_feature, {"section": "exit"}, name="exit"),
     path("inventario/", views.planned_feature, {"section": "inventory"}, name="inventory"),
-    path("referencias/", views.planned_feature, {"section": "references"}, name="references"),
+    path("referencias/", catalog.reference_list, name="references"),
+    path("referencias/nova/", catalog.reference_create, name="reference-create"),
+    path("referencias/<int:pk>/editar/", catalog.reference_edit, name="reference-edit"),
+    path("referencias/<int:pk>/estado/", catalog.reference_toggle, name="reference-toggle"),
+    path("localizacoes/", catalog.location_list, name="locations"),
+    path("localizacoes/nova/", catalog.location_create, name="location-create"),
+    path("localizacoes/<int:pk>/editar/", catalog.location_edit, name="location-edit"),
+    path("localizacoes/<int:pk>/remover/", catalog.location_delete, name="location-delete"),
+    path("setores/novo/", catalog.sector_create, name="sector-create"),
+    path("setores/<int:pk>/editar/", catalog.sector_edit, name="sector-edit"),
+    path("setores/<int:pk>/remover/", catalog.sector_delete, name="sector-delete"),
+    path("importacoes/", import_views.import_list, name="import-list"),
+    path("importacoes/<uuid:pk>/", import_views.import_preview, name="import-preview"),
+    path("importacoes/<uuid:pk>/relatorio/", import_views.import_report, name="import-report"),
+    path("importacoes/<uuid:pk>/publicar/", import_views.import_publish, name="import-publish"),
 ]
