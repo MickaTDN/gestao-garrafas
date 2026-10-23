@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">GESTÃO DE STOCK</div><h1>{{ title }}</h1><p class="muted intro-description">{{ description }}</p></div></div>
+<div class="card stack"><h2>Disponível numa próxima etapa</h2><p>Esta funcionalidade mantém-se no plano aprovado. A primeira etapa prepara a base de dados, os perfis de acesso e a consulta de stock e histórico.</p><p>O registo de operações estará disponível depois de concluídas as validações das respetivas regras de stock.</p><div><a class="btn secondary" href="{% url 'web:stock' %}">Consultar stock</a></div></div>
+{% endblock %}

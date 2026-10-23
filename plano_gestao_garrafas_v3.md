@@ -1,3 +1,5 @@
+> Documento funcional de referência do V3. As contagens abaixo descrevem a versão histórica; não são os dados atualizados nem uma seed da aplicação. Consulte docs/roadmap.md para o estado de implementação. Os exemplos de nomes foram anonimizados.
+
 # Gestão de Garrafas — plano funcional e estrutura de dados
 
 **Estado:** protótipo v3 e plano funcional; ainda não é a aplicação definitiva.  
@@ -9,7 +11,7 @@
 | Informação | Resultado |
 | --- | ---: |
 | Linhas com referências | 462 |
-| Referências únicas após fusão de «PORMENOR TINTO 2022» | **461** |
+| Referências únicas após fusão de «REFERÊNCIA EXEMPLO TINTO» | **461** |
 | Total de garrafas em stock | **8 522** |
 | Referências sem garrafas/caixa definidas | **35** |
 | Corredor Esquerdo | 198 referências únicas |
@@ -17,7 +19,7 @@
 | Patamar Superior Direito (antes «Patamar Superior») | 113 referências |
 | Patamar Superior Esquerdo (novo) | 0 referências iniciais |
 
-A referência «PORMENOR TINTO 2022» aparece duas vezes no mesmo local (80 + 0 garrafas); unificar numa referência e conservar a proveniência/histórico de ambas as linhas. Não preencher automaticamente as 35 capacidades de caixa desconhecidas. O stock dessas referências continua a ser apresentado em garrafas até ser configurada a capacidade da caixa.
+A referência «REFERÊNCIA EXEMPLO TINTO» aparece duas vezes no mesmo local (80 + 0 garrafas); unificar numa referência e conservar a proveniência/histórico de ambas as linhas. Não preencher automaticamente as 35 capacidades de caixa desconhecidas. O stock dessas referências continua a ser apresentado em garrafas até ser configurada a capacidade da caixa.
 
 ## 2. Ecrãs da versão 1
 
@@ -58,7 +60,7 @@ A designação «Patamar Superior» do Excel é interpretada como «Patamar Supe
 - Na saída, a pessoa confere no ecrã antes de validar. Pode corrigir quantidades durante essa conferência. Apenas depois de validada é emitida a versão final do relatório.
 - A assinatura no ecrã é **assinatura desenhada** e guardada no relatório; não se deve confundir com assinatura digital qualificada.
 - Correção posterior de um movimento confirmado: registar movimento de ajuste relacionado, nunca reescrever silenciosamente o documento antigo.
-- O histórico da aplicação terá **novos tipos: entrada, saída e ajuste de inventário**. Movimentos antigos com etiquetas como «Acidente», «Daniel» ou «Ajuste» conservam o texto original no registo de migração para auditabilidade, sem permitir criar esses tipos antigos pela interface.
+- O histórico da aplicação terá **novos tipos: entrada, saída e ajuste de inventário**. Movimentos antigos com etiquetas como «Acidente», «Pessoa exemplo» ou «Ajuste» conservam o texto original no registo de migração para auditabilidade, sem permitir criar esses tipos antigos pela interface.
 - O perfil **Consulta** pode consultar sem editar. O administrador faz as alterações. Os acessos reais precisam de autenticação no servidor, não apenas ocultação de botões.
 
 ## 4. Entidades da base de dados
@@ -83,7 +85,7 @@ A designação «Patamar Superior» do Excel é interpretada como «Patamar Supe
 
 1. Fazer uma cópia de segurança do ficheiro original, sem lhe alterar fórmulas ou dados.
 2. Ler exclusivamente a folha **Stock**; identificar os grupos de localização pelo cabeçalho da respetiva zona.
-3. Importar referências e códigos automáticos `GAR-0001`, etc. Unir os dois registos de «PORMENOR TINTO 2022», preservando a linha de origem dos movimentos e evitando somar movimentos duas vezes.
+3. Importar referências e códigos automáticos `GAR-0001`, etc. Unir os dois registos de «REFERÊNCIA EXEMPLO TINTO», preservando a linha de origem dos movimentos e evitando somar movimentos duas vezes.
 4. Tratar a coluna «Inventário» de **06/01/2025** como saldo inicial. Um valor vazio pode representar zero, mas deve ser validado na reconciliação.
 5. Transformar cada coluna de movimento do Excel em movimentos datados, com uma linha por referência afetada. Preservar os **sinais reais** de cada célula; entradas negativas e saídas positivas são correções intencionais.
 6. Registar também as etiquetas originais dos movimentos especiais antigos num campo de origem. Não inventar horas para movimentos que no Excel só têm data.
@@ -110,4 +112,4 @@ A designação «Patamar Superior» do Excel é interpretada como «Patamar Supe
 
 ### Sobre o ficheiro de protótipo
 
-O HTML de demonstração atualizado (v3) mostra as 461 referências e os stocks atualmente existentes no Excel, com pesquisa, rascunhos, inventário com mudança de localização, 4 localizações e 27 setores geríveis, setores antigos por atribuir, relatórios com caixas e unidades, campos de quantidade vazios, entradas com relatório opcional, saídas sem criação de referência e relatórios para impressão **apenas nesta sessão**. Não está ligado à Internet, não possui base de dados centralizada, nem autenticação real, nem cópias automáticas. Por isso, **não deve ser usado como sistema oficial de registo**.
+O HTML de demonstração (v3) preserva pesquisa, rascunhos, inventário com mudança de localização, 4 localizações e 27 setores geríveis, setores antigos por atribuir, relatórios com caixas e unidades, campos de quantidade vazios, entradas com relatório opcional, saídas sem criação de referência e relatórios para impressão **apenas nesta sessão**. Nesta estrutura técnica, os dados embutidos foram substituídos por três referências fictícias, mantendo as interações para avaliação. O HTML não possui base de dados centralizada, autenticação real ou cópias automáticas e **não deve ser usado como sistema oficial de registo**. A nova aplicação Django é um componente separado, com o estado de cada funcionalidade descrito no roadmap.

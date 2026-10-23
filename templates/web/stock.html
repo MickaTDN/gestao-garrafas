@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load stock_display %}
+{% block title %}Stock · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">GESTÃO DE STOCK</div><h1>Consultar stock</h1><p class="muted intro-description">Procure uma referência e veja a equivalência em caixas e garrafas.</p></div></div>
+<form method="get" class="toolbar filter-form">
+  {{ form.non_field_errors }}
+  <div class="search"><label for="id_q">{{ form.q.label }}</label>{{ form.q }}{{ form.q.errors }}</div>
+  <div class="filter-select"><label for="id_location">Localização</label>{{ form.location }}{{ form.location.errors }}</div>
+  <div class="filter-select"><label for="id_sector">Setor</label>{{ form.sector }}{{ form.sector.errors }}</div>
+  <button class="btn" type="submit">Pesquisar</button><a class="btn ghost" href="{% url 'web:stock' %}">Limpar</a>
+</form>
+<div class="card table-card">
+  <div class="row between table-summary"><strong>{{ page_obj.paginator.count }} referências</strong><small>40 por página</small></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">Referência</th><th scope="col" class="hide-sm">Localização</th><th scope="col" class="right">Garrafas</th><th scope="col" class="right">Caixas + un.</th><th scope="col" class="hide-sm">Alerta</th><th scope="col"><span class="visually-hidden">Detalhes</span></th></tr></thead>
+    <tbody>{% for reference in page_obj %}<tr>
+      <td><strong>{{ reference.name }}</strong><small>{{ reference.code }}</small></td>
+      <td class="hide-sm">{{ reference.location.name }}<small>{{ reference.sector.name|default:'Setor por definir' }}</small></td>
+      <td class="right qty">{{ reference.current_stock|floatformat:'0g' }}</td>
+      <td class="right">{{ reference|box_units }}</td>
+      <td class="hide-sm">{% if reference.minimum != None %}<span class="chip {% if reference.current_stock <= reference.minimum %}warn{% else %}green{% endif %}">Mín. {{ reference.minimum }}</span>{% else %}<span class="chip">Desligado</span>{% endif %}</td>
+      <td class="right"><a class="btn ghost small" href="{% url 'web:reference-detail' reference.pk %}" aria-label="Abrir {{ reference.code }}">Abrir</a></td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty">Não foram encontradas referências.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% include 'web/pagination.html' %}
+{% endblock %}
