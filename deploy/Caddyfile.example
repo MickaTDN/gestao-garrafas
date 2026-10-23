@@ -1,0 +1,11 @@
+# Future server configuration; replace the domain and configure DNS first.
+# No DNS/domain/account is created by this file. Backend remains on loopback.
+garrafas.example.invalid {
+    request_body {
+        max_size 1MB
+    }
+    reverse_proxy 127.0.0.1:8000 {
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-For {remote_host}
+    }
+}

@@ -7,6 +7,8 @@ permissions:
 jobs:
   django-postgresql:
     runs-on: ubuntu-latest
+    env:
+      PG_TOOL_PREFIX: '["docker", "compose", "exec", "-T", "-e", "PGPASSWORD", "db"]'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,6 +31,11 @@ jobs:
           uv run python manage.py test accounts inventory imports web tests.browser --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
+      - name: Validate prepared server image (no deployment)
+        run: |
+          docker build -f deploy/Dockerfile -t gestao-garrafas-ci .
+          docker run --rm --read-only gestao-garrafas-ci pg_dump --version
+          test "$(docker run --rm --read-only gestao-garrafas-ci id -u)" = "10001"
       - name: Stop services
         if: always()
         run: docker compose down
