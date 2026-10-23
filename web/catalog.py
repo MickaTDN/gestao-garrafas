@@ -50,7 +50,9 @@ def reference_list(request):
 @require_http_methods(["GET", "POST"])
 def reference_create(request):
     form = ReferenceForm(request.POST if request.method == "POST" else None)
-    match_form = ReferenceMatchForm(request.GET if "check_name" in request.GET else None)
+    match_form = ReferenceMatchForm(
+        request.GET if request.method == "GET" and "check_name" in request.GET else None
+    )
     matches = []
     if request.method == "GET" and match_form.is_bound and match_form.is_valid():
         name = match_form.cleaned_data["check_name"]
@@ -60,7 +62,9 @@ def reference_create(request):
         # Show matches even if another field in the creation form is invalid.
         name_form = ReferenceMatchForm({"check_name": request.POST.get("name", "")})
         if name_form.is_valid():
-            matches = services.matching_references(name_form.cleaned_data["check_name"])
+            name = name_form.cleaned_data["check_name"]
+            matches = services.matching_references(name)
+            match_form = ReferenceMatchForm(initial={"check_name": name})
     if request.method == "POST" and form.is_valid():
         try:
             reference = services.save_reference(actor=request.user, data=form.cleaned_data)

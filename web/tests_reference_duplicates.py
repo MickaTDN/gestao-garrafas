@@ -109,8 +109,11 @@ class ReferenceDuplicateTests(TestCase):
         self.assertFalse(AuditEvent.objects.exists())
 
     def test_duplicate_is_shown_even_when_other_fields_are_missing(self):
-        response = self.client.post(self.create_url, {"name": "referência fictícia alfa"})
+        response = self.client.post(self.create_url + "?check_name=Outra+designação", {
+            "name": "referência fictícia alfa",
+        })
         self.assertContains(response, self.original.code, status_code=400)
+        self.assertEqual(response.context["match_form"].initial["check_name"], "referência fictícia alfa")
         self.assertEqual(Reference.objects.count(), 1)
 
     def test_distinct_designation_can_be_created_and_accents_remain_significant(self):
