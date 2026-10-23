@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">CONFIRMAÇÃO</div><h1>{{ title }}</h1><p class="muted intro-description">{{ description }}</p></div></div>
+<div class="card stack">
+  <p>{{ detail }}</p>
+  {% if error %}<div class="banner" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {% if form %}{{ form.non_field_errors }}{% for field in form %}{{ field.as_hidden }}{{ field.errors }}{% endfor %}{% endif %}
+    <div class="row wrapping"><button class="btn danger" type="submit"{% if blocked %} disabled{% endif %}>Confirmar</button><a class="btn secondary" href="{% url back_url %}">Cancelar</a></div>
+  </form>
+</div>
+{% endblock %}

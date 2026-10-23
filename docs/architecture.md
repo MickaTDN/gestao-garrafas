@@ -1,7 +1,10 @@
-# Arquitetura — decisão inicial
+# Arquitetura
 
-Estado: estrutura técnica da primeira etapa. Esta aplicação ainda não substitui o
-registo operacional existente. O [plano V3](../plano_gestao_garrafas_v3.md) continua
+Estado: base técnica e segunda etapa de catálogo/importação reconciliada. A
+publicação dos dados reais exige revisão da pré-visualização e confirmação
+explícita; a existência do importador não prova que essa publicação ocorreu.
+Esta aplicação ainda não substitui todos os fluxos do registo operacional
+existente. O [plano V3](../plano_gestao_garrafas_v3.md) continua
 a definir as funcionalidades aprovadas; a [sequência de entrega](roadmap.md)
 identifica o que já existe e o que falta implementar.
 
@@ -27,7 +30,7 @@ entrega da funcionalidade completa do protótipo.
 | `config` | Configuração por ambiente, URLs e pontos de entrada WSGI/ASGI. |
 | `accounts` | Utilizador próprio, dois perfis e criação explícita de contas. |
 | `inventory` | Referências, localizações, saldos, movimentos e auditoria. |
-| `imports` | Leitura do Excel, relatório de exceções e preparação de lotes. |
+| `imports` | Leitura do Excel, preparação, reconciliação, pré-visualização e publicação confirmada de lotes. |
 | `web` | Consultas e páginas autenticadas; não contém regras de stock. |
 | `templates` / `static` | Apresentação responsiva, sem dados reais embutidos. |
 
@@ -57,6 +60,13 @@ As relações históricas usam proteção contra eliminação. A desativação p
 referências e pessoas; não se apagam registos usados pelo histórico. Validações de
 modelo e restrições de base cobrem identidades únicas e valores admissíveis. As
 regras entre várias linhas ou tabelas pertencem aos serviços transacionais.
+
+A gestão de catálogo não aceita alterações de stock pelos formulários. A criação
+de uma referência começa com saldo zero; editar a designação, capacidade, alerta,
+localização ou setor não recalcula nem altera o saldo. As alterações de
+localização e setor ficam registadas com o operador, incluindo transferências
+sem diferença quantitativa. Uma referência desativada continua a proteger as
+suas relações e o histórico.
 
 `confirm_movement` é o ponto de entrada inicial para confirmar operações:
 verifica o perfil, bloqueia movimento, linhas e referências, valida sinais e
@@ -97,10 +107,10 @@ Os nomes de pessoas novos têm espaços normalizados e uma chave de comparação
 sem diferenças de maiúsculas/minúsculas. Os valores brutos da importação mantêm-se
 separados dessa normalização, inclusive quando um cabeçalho está mal tipado.
 
-## Importação em duas fases
+## Importação reconciliada e confirmação
 
 O anexo é uma fonte de dados, não uma fonte de instruções executáveis. Não se
-executam macros nem se altera o livro original. A primeira etapa lê apenas a
+executam macros nem se altera o livro original. O leitor considera apenas a
 folha `Stock`, usando as fórmulas e os valores em cache existentes; `openpyxl` não
 recalcula fórmulas.
 
@@ -108,15 +118,47 @@ recalcula fórmulas.
    brutos, identificar cabeçalhos, capacidades desconhecidas e exceções, e produzir
    reconciliação por linha. O lote identifica o mesmo ficheiro sem duplicar a sua
    preparação. O modo de preparação não publica referências, saldos ou movimentos.
-2. **Reconciliação e publicação, a desenvolver:** resolver exceções, registar as
-   decisões de migração e publicar um lote aprovado numa transação. A publicação
-   deverá ser idempotente e demonstrar que não duplica movimentos nem perde
-   proveniência ao unir referências duplicadas.
+2. **Reconciliação e pré-visualização:** aplicar decisões explícitas de migração,
+   comparar cada saldo calculado com o saldo oficial e apresentar os resultados.
+   O objeto de pré-visualização conserva as decisões, os totais, as linhas e as
+   impressões digitais da fonte e do estado de destino. Ainda não altera o
+   catálogo, saldos ou histórico operacional.
+3. **Publicação confirmada:** exigir confirmação da pré-visualização e revalidar
+   fonte, decisões e destino antes de uma transação que cria catálogo, saldos e
+   histórico. O lote é bloqueado durante a publicação. Uma repetição do mesmo
+   lote não volta a somar stock nem duplica movimentos. Um ficheiro diferente
+   não pode sobrescrever silenciosamente um catálogo que já tem dados.
 
 Vazios e texto inesperado não são convertidos silenciosamente em zero. Uma soma
 candidata que reproduza o comportamento `SUM` do Excel deve ficar identificada
 como hipótese de reconciliação. Não basta coincidir com o total global: cada
 referência deve reconciliar e cada exceção precisa de uma decisão registada.
+
+Um saldo inicial explicitamente fornecido é distinto de um campo vazio.
+`OpeningBalance.quantity` pode ficar nulo quando a contagem original é
+desconhecida. Nessa situação guarda-se separadamente a quantidade inferida para
+reconciliação, obtida a partir do saldo oficial e da soma dos movimentos
+disponíveis. A base e a interface identificam essa inferência; um resultado
+aritmético zero não transforma uma ausência de contagem numa contagem confirmada.
+
+Ao unir referências duplicadas, cada linha original mantém a sua proveniência.
+Uma linha de movimento agregada pode apontar para múltiplas linhas/células da
+fonte. Conflitos que impeçam identificar uma referência ou a sua capacidade
+bloqueiam a publicação em vez de escolher um valor arbitrário. As capacidades
+desconhecidas e os setores ausentes permanecem vazios.
+
+Cabeçalhos reconhecidos como documentos conservam o valor original e um campo
+próprio de número de documento. Não são convertidos em pessoas; quando o nome
+não existe, a relação de pessoa fica vazia. Uma célula autorizada como anotação
+mantém o texto e a decisão de ausência de impacto, sem criar uma quantidade
+inventada. Os movimentos legados conservam sinais, datas e etiquetas originais.
+
+O saldo atual é atribuído uma única vez a partir do saldo oficial reconciliado.
+Os movimentos históricos são importados para explicar esse saldo, não para serem
+novamente adicionados a ele. As datas sem hora continuam sem hora; saldos
+intermédios que não possam ser demonstrados a partir da fonte não são inventados.
+
+Os contratos e procedimentos da segunda etapa estão em [stage2.md](stage2.md).
 
 O plano e o protótipo contêm uma fotografia anterior; não substituem a validação
 do Excel atualizado. Uma data de inventário inicial não prova a existência de

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Localizações e setores · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">DEFINIÇÕES</div><h1>Localizações e setores</h1><p class="muted intro-description">As referências, incluindo inativas, e o histórico impedem remoções incompatíveis.</p></div><a class="btn" href="{% url 'web:location-create' %}">+ Nova localização</a></div>
+<div class="stack">
+{% for location in locations %}
+<section class="card stack">
+  <div class="row between wrapping"><div><h2>{{ location.name }}</h2><small>{{ location.reference_count }} referências associadas</small></div><div class="row wrapping"><a class="btn secondary small" href="{% url 'web:location-edit' location.pk %}">Editar</a><a class="btn danger small" href="{% url 'web:location-delete' location.pk %}">Remover</a></div></div>
+  <div class="stack">
+  {% for sector in location.sectors.all %}<div class="row between lined wrapping"><div><strong>{{ sector.name }}</strong><small>{{ sector.reference_count }} referências associadas</small></div><div class="row wrapping"><a class="btn ghost small" href="{% url 'web:sector-edit' sector.pk %}">Editar setor</a><a class="btn ghost small" href="{% url 'web:sector-delete' sector.pk %}">Remover setor</a></div></div>{% empty %}<p class="muted">Ainda sem setores.</p>{% endfor %}
+  </div>
+  <div><a class="btn secondary small" href="{% url 'web:sector-create' %}?location={{ location.pk }}">+ Novo setor</a></div>
+</section>
+{% empty %}<div class="card empty">Ainda não existem localizações.</div>{% endfor %}
+</div>
+{% endblock %}

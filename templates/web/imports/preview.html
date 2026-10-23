@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Reconciliação · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">RECONCILIAÇÃO</div><h1>Pré-visualização da importação</h1><p class="muted intro-description">{{ preview.import_batch.source_name }}</p></div></div>
+{% if preview.published_at %}<div class="banner"><strong>Publicado em {{ preview.published_at|date:'d/m/Y H:i' }}.</strong> A validação desta publicação ficou guardada.</div>{% else %}<div class="banner"><strong>Stock ainda não publicado.</strong> Reveja os totais e cada referência antes de confirmar.</div>{% endif %}
+<div class="grid four">
+<div class="card kpi"><small>Referências únicas</small><div class="value">{{ preview.summary.reference_count }}</div></div>
+<div class="card kpi"><small>Stock reconciliado</small><div class="value">{{ preview.summary.total_stock|floatformat:'0g' }}</div><small>Garrafas</small></div>
+<div class="card kpi"><small>Linhas originais preservadas</small><div class="value">{{ preview.summary.row_count }}</div></div>
+<div class="card kpi"><small>Inventários iniciais sem contagem</small><div class="value">{{ preview.summary.unknown_openings }}</div><small>Não são zeros confirmados</small></div>
+</div>
+<div class="card stack more-areas"><h2>Critérios e decisões</h2><p>O saldo atual é reconciliado com o inventário inicial e os movimentos assinados. O stock atual não é somado novamente ao histórico. Setores ausentes mantêm-se por definir.</p><p>Nos inventários iniciais vazios, conserva-se a contagem como desconhecida. O saldo necessário à reconciliação é identificado como inferido e não constitui uma contagem física.</p><p>As anotações não alteram quantidades. Números de documento são preservados separadamente; não identificam pessoas.</p>
+{% for coordinate, decision in preview.decisions.annotations.items %}<p><strong>{{ coordinate }}:</strong> {{ decision.original_value }} · {{ decision.reason }}</p>{% endfor %}
+{% for column, decision in preview.decisions.document_headers.items %}<p><strong>{{ column }}:</strong> documento {{ decision.document_number }} · original {{ decision.original_value }} · {{ decision.reason }}</p>{% endfor %}
+{% for warning in preview.summary.warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
+{% for error in preview.summary.errors %}<p class="errorlist">{{ error }}</p>{% endfor %}
+</div>
+<div class="card table-card more-areas"><div class="table-wrap"><table><thead><tr><th>Referência / origem</th><th>Localização</th><th>Garrafas / caixa</th><th>Contagem inicial</th><th>Base de reconciliação</th><th>Histórico assinado</th><th>Stock oficial</th></tr></thead><tbody>
+{% for row in page_obj %}<tr><td><strong>{{ row.name }}</strong><small>Linhas {{ row.source_rows|join:', ' }}</small></td><td>{{ row.location }}<small>Setor por definir</small></td><td>{{ row.capacity|default_if_none:'Por definir' }}</td><td>{{ row.opening_quantity|default_if_none:'Desconhecida' }}</td><td>{{ row.reconciliation_quantity }}{% if not row.opening_known %}<small>Inclui saldo inferido</small>{% endif %}</td><td>{{ row.movement_total }}</td><td>{{ row.stock }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include 'web/pagination.html' %}
+{% if not preview.published_at and preview.summary.ready %}
+<div class="card stack more-areas"><h2>Confirmação da publicação</h2><p>A publicação cria as referências e o histórico deste lote numa única transação. Confirme apenas depois de rever a reconciliação.</p>
+<form method="post" action="{% url 'web:import-publish' preview.pk %}" class="stack">{% csrf_token %}{{ form.non_field_errors }}{{ form.confirmation_token }}{{ form.confirmation_token.errors }}<div><label for="{{ form.total.id_for_label }}">Escreva o total de garrafas apresentado acima</label>{{ form.total }}{{ form.total.errors }}</div><div class="toggle">{{ form.confirm }}<label for="{{ form.confirm.id_for_label }}">{{ form.confirm.label }}</label></div>{{ form.confirm.errors }}<button class="btn" type="submit">Publicar stock e histórico</button></form></div>
+{% else %}{{ form.non_field_errors }}{% endif %}
+<p class="footer-note">Prévia {{ preview.pk }} · <a href="{% url 'web:import-report' preview.pk %}">Descarregar relatório privado</a> · <a href="{% url 'web:import-list' %}">Voltar aos lotes</a></p>
+{% endblock %}
