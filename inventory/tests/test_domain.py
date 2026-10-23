@@ -19,7 +19,7 @@ from inventory.models import (
     Reference,
     Sector,
 )
-from inventory.services import confirm_movement, resolve_person
+from inventory.services import confirm_movement, reference_state, resolve_person
 
 
 class DomainTests(TestCase):
@@ -173,7 +173,8 @@ class DomainTests(TestCase):
 
     def test_inventory_difference_requires_reason(self):
         movement = self.movement(Movement.Kind.INVENTORY)
-        MovementLine.objects.create(movement=movement, reference=self.reference(), quantity=-1)
+        reference = self.reference()
+        MovementLine.objects.create(movement=movement, reference=reference, quantity=None, units=9, counted_quantity=9, count_basis=reference_state(reference), target_location=reference.location)
         with self.assertRaises(ValidationError):
             confirm_movement(movement.pk, actor=self.admin)
         movement.reason = "Contagem física sintética"
