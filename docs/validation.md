@@ -1,4 +1,6 @@
-# Validação da primeira etapa
+# Validação das entregas
+
+## Validação da primeira etapa
 
 Executada na máquina de desenvolvimento com Python 3.12, as versões resolvidas
 em `uv.lock`, PostgreSQL 17 via `compose.yaml` e Chromium local.
@@ -74,6 +76,57 @@ Até à confirmação explícita dessa prévia, o catálogo e o histórico opera
 permanecem sem dados reais. Este estado não deve ser descrito como importação
 real concluída; a publicação produz o seu próprio relatório de validação.
 
-Os movimentos operacionais da terceira etapa não foram implementados. Os
+Na segunda etapa os movimentos operacionais ainda não estavam implementados. Os
 resultados de CI no GitHub devem ser consultados separadamente dos resultados
 locais acima.
+
+## Validação da terceira etapa
+
+Executada em 2026-10-23, com Python 3.12, Django 5.2 LTS, PostgreSQL 17 e
+Chromium. A suíte completa `manage.py test accounts inventory imports web
+tests.browser --noinput` executou **201 testes, todos aprovados e sem casos
+ignorados**, numa base de testes descartável e sintética. Inclui os 131 casos
+anteriores e 70 novos casos.
+
+- Entradas/saídas simples e com várias referências, quantidades introduzidas
+  separadamente, capacidades desconhecidas, vazios e zeros explícitos.
+- Guardar, editar, reabrir e cancelar rascunhos sem alterar stock; controlo de
+  proprietário e revisão, conferência obrigatória e confirmação única.
+- Stock insuficiente, referências inativas, reativação explícita, duplicados
+  globais, permissões, CSRF e campos/identificadores/tokens/formsets forjados.
+- Inventários parciais/completos, contagens positivas/negativas/nulas em relação
+  ao saldo, zero físico, referências por contar, pesquisa e paginação de âmbito.
+- Mudanças de stock durante a contagem e após conferência, inclusive stock
+  alterado e reposto no mesmo valor; nova conferência explícita.
+- Transferências sem diferença quantitativa, validação de setor, rollback de
+  stock/localização/snapshots/auditoria após falha de escrita intermédia.
+- Correções com motivo e relação, sem reescrever o original; imutabilidade ORM e
+  SQL de movimentos, linhas, fontes, transferências e eventos de auditoria.
+
+Os **10 novos testes transacionais PostgreSQL** usam conexões separadas para
+saídas concorrentes com várias referências, dupla confirmação, inventários em
+conflito, inventário versus entrada, edição/cancelamento versus confirmação e
+observação real da espera por bloqueio de linha. Também verificam falha tardia,
+validações e proteções SQL. Continuam os casos anteriores de concorrência de
+saídas, catálogo e importação/publicação sintética.
+
+Os **8 testes Chromium** incluem os dois casos anteriores e seis fluxos novos:
+entrada, saída e inventário, cada um em computador (1366×900) e telemóvel
+(390×844). Verificam campos inicialmente vazios, totais calculados no navegador,
+persistência de rascunho, conferência, confirmação, saldos, transferências,
+ausência de erros JavaScript e ausência de transbordo horizontal. Screenshots
+sintéticos foram revistos localmente, fora do Git. Estes testes não substituem
+os testes da assinatura/PWA e de dispositivos previstos para a Etapa 4.
+
+Ruff, `manage.py check`, ausência de alterações de modelo sem migração,
+`git diff --check`, recursos estáticos e `check --deploy --fail-level WARNING`
+passaram. As migrações novas foram aplicadas exclusivamente na base sintética e
+nas bases de testes. A CI executa estas verificações; o resultado remoto deve
+ser consultado no PR da Etapa 3, separadamente desta execução local.
+
+A impressão digital integral das tabelas protegidas foi comparada antes/depois:
+pré-visualização privada, lote, proveniência, catálogo, livro, localizações,
+setores e registo de migrações mantiveram-se idênticos. A base reservada continua
+com uma pré-visualização não publicada, sem referências ou movimentos
+operacionais. O Excel não foi reimportado, os ficheiros privados não foram
+alterados e não houve publicação, operações reais, deploy ou merge.

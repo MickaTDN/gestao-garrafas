@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">ÁREA DO ADMINISTRADOR</div><h1>Os meus rascunhos</h1><p class="muted">Sem efeitos no stock. Reabra para continuar, conferir ou cancelar.</p></div></div>
+<div class="toolbar"><a class="btn" href="{% url 'web:entry' %}">Nova entrada</a><a class="btn secondary" href="{% url 'web:exit' %}">Nova saída</a><a class="btn secondary" href="{% url 'web:inventory' %}">Novo inventário</a></div>
+<div class="stack">{% for movement in page_obj %}<article class="card row wrapping between"><div><h2>{{ movement }}</h2><p>{{ movement.date|date:'d/m/Y' }} · {{ movement.draft_person_name|default:'Pessoa por indicar' }} · {{ movement.lines.count }} referências</p></div><div class="row wrapping"><a class="btn" href="{% url 'web:operation-edit' movement.pk %}">Continuar / editar</a><a class="btn danger" href="{% url 'web:operation-cancel' movement.pk %}">Cancelar</a></div></article>{% empty %}<div class="card empty">Não tem rascunhos pendentes.</div>{% endfor %}</div>
+{% include 'web/pagination.html' %}
+{% endblock %}

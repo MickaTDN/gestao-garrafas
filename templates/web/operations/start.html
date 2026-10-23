@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">NOVA OPERAÇÃO</div><h1>{{ title }}</h1><p class="muted">Comece um rascunho. O stock só muda após conferência e confirmação.</p></div></div>
+<div class="toolbar"><a class="btn secondary" href="{% url 'web:drafts' %}">Os meus rascunhos</a><a class="btn ghost" href="{% url 'web:entry' %}">Entrada</a><a class="btn ghost" href="{% url 'web:exit' %}">Saída</a><a class="btn ghost" href="{% url 'web:inventory' %}">Inventário</a></div>
+{% if kind == 'inventory' %}
+<form method="get" class="toolbar filter-form">{{ filter_form.as_p }}<button class="btn secondary">Filtrar âmbito do inventário completo</button></form>
+<p class="banner">Completo: inclui todas as referências ativas abrangidas pelos filtros acima, fixadas na criação. Parcial: escolha as referências no rascunho. Todas as referências incluídas terão de ser contadas, mesmo quando a contagem é zero.</p>
+{% endif %}
+<form method="post" class="card stack">{% csrf_token %}{{ form.as_p }}<button class="btn" type="submit">Criar rascunho</button></form>
+{% endblock %}

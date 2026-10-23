@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import catalog, import_views, views
+from . import catalog, import_views, operations, views
 
 app_name = "web"
 
@@ -10,9 +10,17 @@ urlpatterns = [
     path("stock/<int:pk>/", views.reference_detail, name="reference-detail"),
     path("historico/", views.history, name="history"),
     path("definicoes/", views.settings, name="settings"),
-    path("entradas/", views.planned_feature, {"section": "entry"}, name="entry"),
-    path("saidas/", views.planned_feature, {"section": "exit"}, name="exit"),
-    path("inventario/", views.planned_feature, {"section": "inventory"}, name="inventory"),
+    path("entradas/", operations.start, {"kind": "entry"}, name="entry"),
+    path("saidas/", operations.start, {"kind": "exit"}, name="exit"),
+    path("inventario/", operations.start, {"kind": "inventory"}, name="inventory"),
+    path("rascunhos/", operations.drafts, name="drafts"),
+    path("operacoes/<int:pk>/editar/", operations.edit, name="operation-edit"),
+    path("operacoes/<int:pk>/conferir/", operations.review, name="operation-review"),
+    path("operacoes/<int:pk>/cancelar/", operations.cancel, name="operation-cancel"),
+    path("operacoes/<int:pk>/nova-referencia/", operations.new_reference, name="operation-reference"),
+    path("operacoes/<int:pk>/reativar/<int:reference_pk>/", operations.reactivate, name="operation-reactivate"),
+    path("operacoes/<int:pk>/corrigir/", operations.correction, name="operation-correction"),
+    path("operacoes/<int:pk>/", operations.detail, name="operation-detail"),
     path("referencias/", catalog.reference_list, name="references"),
     path("referencias/nova/", catalog.reference_create, name="reference-create"),
     path("referencias/<int:pk>/editar/", catalog.reference_edit, name="reference-edit"),

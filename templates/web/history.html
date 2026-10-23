@@ -18,9 +18,8 @@
     {% if movement.document_number %}<p><strong>Documento:</strong> {{ movement.document_number }}{% if not movement.person %} · Pessoa não identificada na fonte{% endif %}</p>{% endif %}
     {% for note in movement.source_metadata.annotations %}<p><strong>Observação {{ note.coordinate }}:</strong> {{ note.value }}<br><small>{{ note.decision }}</small></p>{% endfor %}
     {% if movement.reason %}<p>{{ movement.reason }}</p>{% endif %}
-    <div class="table-wrap"><table><thead><tr><th scope="col">Referência</th><th scope="col" class="right">Variação (garrafas)</th><th scope="col" class="right">Stock após</th></tr></thead><tbody>
-    {% for line in movement.lines.all %}<tr><td>{{ line.reference_name }}</td><td class="right">{% if line|annotation_only %}Anotação sem impacto{% else %}{% if line.quantity > 0 %}+{% endif %}{{ line.quantity }}{% endif %}</td><td class="right">{{ line.stock_after|default_if_none:'—' }}</td></tr>{% endfor %}
-    </tbody></table></div>
+    {% include 'web/operations/movement_body.html' %}
+    <p><a href="{% url 'web:operation-detail' movement.pk %}">Abrir movimento e auditoria</a></p>
     {% if movement.import_batch_id %}<small>Origem Excel · coluna {{ movement.source_column|default_if_none:'—' }} · data preservada sem acrescentar hora.</small>{% endif %}
   </article>
 {% empty %}<div class="card empty">Ainda não existem movimentos confirmados para estes filtros.</div>{% endfor %}

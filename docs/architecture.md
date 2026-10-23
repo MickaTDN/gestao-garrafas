@@ -1,6 +1,6 @@
 # Arquitetura
 
-Estado: base técnica e segunda etapa de catálogo/importação reconciliada. A
+Estado: base técnica, catálogo/importação reconciliada e operações da Etapa 3. A
 publicação dos dados reais exige revisão da pré-visualização e confirmação
 explícita; a existência do importador não prova que essa publicação ocorreu.
 Esta aplicação ainda não substitui todos os fluxos do registo operacional
@@ -21,9 +21,9 @@ compilação frontend. As consultas funcionam com formulários GET e paginação
 adicionar-se interação progressiva quando os formulários operacionais o exigirem,
 mantendo as mesmas regras no servidor.
 
-As áreas operacionais ainda por implementar são identificadas como tal na
-interface. A existência de um modelo ou de uma página reservada não equivale à
-entrega da funcionalidade completa do protótipo.
+Entradas, saídas, rascunhos, contagens e correções relacionadas têm formulários
+operacionais. A interface identifica os PDFs como futuros e não oferece assinatura.
+A entrega não autoriza publicação inicial de dados nem uso operacional oficial.
 
 | Módulo | Responsabilidade |
 | --- | --- |
@@ -68,12 +68,13 @@ localização e setor ficam registadas com o operador, incluindo transferências
 sem diferença quantitativa. Uma referência desativada continua a proteger as
 suas relações e o histórico.
 
-`confirm_movement` é o ponto de entrada inicial para confirmar operações:
+`confirm_movement` é o ponto de entrada para confirmar operações:
 verifica o perfil, bloqueia movimento, linhas e referências, valida sinais e
 quantidades e atualiza todos os saldos numa única transação. As referências são
 bloqueadas por ordem estável para reduzir conflitos entre operações concorrentes.
 Uma saída sem stock ou uma linha inválida reverte a operação completa. Rascunhos
-não alteram saldos. A operação ainda não está exposta em formulários de escrita.
+não alteram saldos. Os formulários delegam o ciclo de rascunho/conferência em
+`inventory.operations`, sem aceitar stock ou impacto assinado do navegador.
 
 Na confirmação conservam-se designação, capacidade, quantidades introduzidas e
 saldos antes/depois. Alterar a capacidade futura de uma referência não pode
@@ -90,6 +91,14 @@ desativar as proteções. Os triggers também não substituem o serviço que val
 operação e concilia os saldos. Produção exigirá uma conta de aplicação com
 privilégios restritos, uma conta separada para migrações e controlo de operação e
 auditoria.
+
+As decisões de revisão otimista, tokens de conferência, contagem física separada
+porque o ajuste pode ter outro sinal, âmbito dos inventários e bloqueios estão em
+[decisão 3](decisions/0003-operational-transactions.md). Os procedimentos e limites
+estão em [stage3.md](stage3.md). A confirmação guarda o utilizador responsável e
+snapshots dos nomes de pessoas; transferências conservam rótulos de localização e
+setor. O histórico apresenta estes dados e permite criar um novo ajuste relacionado.
+Triggers adicionais protegem transferências confirmadas e a auditoria de acréscimo.
 
 ## Datas, pessoas e histórico legado
 

@@ -63,6 +63,7 @@ class Reference(models.Model):
     name = models.CharField(max_length=250)
     box_capacity = models.PositiveIntegerField(null=True, blank=True)
     current_stock = models.PositiveIntegerField(default=0)
+    stock_version = models.PositiveBigIntegerField(default=0, editable=False)
     location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="references")
     sector = models.ForeignKey(Sector, on_delete=models.PROTECT, null=True, blank=True, related_name="references")
     active = models.BooleanField(default=True)
@@ -158,7 +159,7 @@ class HistoryQuerySet(models.QuerySet):
         objs = list(objs)
         if update_conflicts:
             raise ValidationError("O histórico não permite upserts; use a importação auditada.")
-        if self.model.__name__ == "MovementLine":
+        if self.model.__name__ in ("MovementLine", "LocationChange"):
             movement_ids = {obj.movement_id for obj in objs}
             if Movement.objects.filter(pk__in=movement_ids, status="confirmed").exists():
                 raise ValidationError("As linhas de um movimento confirmado são imutáveis.")
@@ -182,6 +183,7 @@ class Movement(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Rascunho"
         CONFIRMED = "confirmed", "Confirmado"
+        CANCELLED = "cancelled", "Cancelado"
 
     class Validation(models.TextChoices):
         SIMPLE = "simple", "Confirmação simples"
@@ -205,6 +207,15 @@ class Movement(models.Model):
     reason = models.TextField(blank=True)
     correction_of = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="corrections")
 
+    workflow_version = models.PositiveSmallIntegerField(default=0, editable=False)
+    draft_person_name = models.CharField(max_length=200, blank=True)
+    person_name = models.CharField(max_length=200, blank=True)
+    inventory_scope = models.CharField(max_length=10, choices=[("partial", "Parcial"), ("full", "Completo")], default="partial")
+    revision = models.PositiveIntegerField(default=0, editable=False)
+    review_token = models.UUIDField(null=True, blank=True, editable=False)
+    review_snapshot = models.JSONField(default=dict, blank=True, editable=False)
+    confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="confirmed_movements")
+
     objects = HistoryQuerySet.as_manager()
 
     class Meta:
@@ -213,7 +224,7 @@ class Movement(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["import_batch", "source_column"], condition=Q(kind="legacy"), name="one_legacy_movement_per_source_column"),
             models.CheckConstraint(condition=Q(kind__in=["entry", "exit", "inventory", "legacy"]), name="movement_valid_kind"),
-            models.CheckConstraint(condition=Q(status__in=["draft", "confirmed"]), name="movement_valid_status"),
+            models.CheckConstraint(condition=Q(status__in=["draft", "confirmed", "cancelled"]), name="movement_valid_status"),
             models.CheckConstraint(condition=~Q(kind="legacy") | (Q(import_batch__isnull=False) & Q(occurred_at__isnull=True)), name="legacy_requires_source_no_time"),
         ]
 
@@ -236,13 +247,18 @@ class Movement(models.Model):
 class MovementLine(models.Model):
     movement = models.ForeignKey(Movement, on_delete=models.PROTECT, related_name="lines")
     reference = models.ForeignKey(Reference, on_delete=models.PROTECT, related_name="movement_lines")
-    quantity = models.IntegerField(help_text="Impacto assinado em garrafas; preservar o sinal no histórico.")
+    quantity = models.IntegerField(null=True, blank=True, help_text="Impacto assinado em garrafas; preservar o sinal no histórico.")
     reference_name = models.CharField(max_length=250, blank=True)
     stock_before = models.IntegerField(null=True, blank=True)
     stock_after = models.IntegerField(null=True, blank=True)
     box_capacity = models.PositiveIntegerField(null=True, blank=True)
     boxes = models.PositiveIntegerField(null=True, blank=True)
     units = models.PositiveIntegerField(null=True, blank=True)
+    counted_quantity = models.PositiveIntegerField(null=True, blank=True)
+    count_basis = models.JSONField(default=dict, blank=True)
+    reason = models.TextField(blank=True)
+    target_location = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True, related_name="planned_lines")
+    target_sector = models.ForeignKey(Sector, on_delete=models.PROTECT, null=True, blank=True, related_name="planned_lines")
     legacy_row = models.ForeignKey(LegacyRow, on_delete=models.PROTECT, null=True, blank=True, related_name="movement_lines")
 
     objects = HistoryQuerySet.as_manager()
@@ -331,6 +347,22 @@ class LocationChange(models.Model):
     changed_at = models.DateTimeField(default=timezone.now, editable=False)
     reason = models.TextField(blank=True)
 
+    before_snapshot = models.JSONField(default=dict, blank=True)
+    after_snapshot = models.JSONField(default=dict, blank=True)
+
+    objects = HistoryQuerySet.as_manager()
+
+    def _check_mutable(self):
+        ids = {self.movement_id}
+        if self.pk:
+            ids.update(LocationChange.objects.filter(pk=self.pk).values_list("movement_id", flat=True))
+        if Movement.objects.filter(pk__in=ids, status="confirmed").exists():
+            raise ValidationError("As transferências de movimentos confirmados são imutáveis.")
+
+    def delete(self, *args, **kwargs):
+        self._check_mutable()
+        return super().delete(*args, **kwargs)
+
     def clean(self):
         for suffix in ("before", "after"):
             sector = getattr(self, f"sector_{suffix}")
@@ -338,7 +370,12 @@ class LocationChange(models.Model):
                 raise ValidationError({f"sector_{suffix}": "O setor não pertence à localização."})
 
     def save(self, *args, **kwargs):
+        self._check_mutable()
         self.clean()
+        if not self.pk:
+            for suffix, field in (("before", "before_snapshot"), ("after", "after_snapshot")):
+                location, sector = getattr(self, f"location_{suffix}"), getattr(self, f"sector_{suffix}")
+                setattr(self, field, {"location": location.name, "sector": sector.name if sector else None})
         return super().save(*args, **kwargs)
 
 
@@ -352,7 +389,28 @@ class Document(models.Model):
     created_at = models.DateTimeField(default=timezone.now, editable=False)
 
 
+class AppendOnlyQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("A auditoria é apenas de acréscimo.")
+
+    def delete(self):
+        raise ValidationError("A auditoria é apenas de acréscimo.")
+
+    def bulk_update(self, *args, **kwargs):
+        raise ValidationError("A auditoria é apenas de acréscimo.")
+
+
 class AuditEvent(models.Model):
+    objects = AppendOnlyQuerySet.as_manager()
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("A auditoria é apenas de acréscimo.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("A auditoria é apenas de acréscimo.")
+
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
     action = models.CharField(max_length=100)
     movement = models.ForeignKey(Movement, on_delete=models.PROTECT, null=True, blank=True, related_name="audit_events")

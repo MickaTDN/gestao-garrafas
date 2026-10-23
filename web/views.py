@@ -47,7 +47,7 @@ def home(request):
         "reference_count": totals["reference_count"],
         "alert_count": alerts.count(),
         "alerts": alerts.order_by("name")[:5],
-        "draft_count": Movement.objects.filter(status="draft").count(),
+        "draft_count": Movement.objects.filter(status="draft", created_by=request.user).count() if request.user.is_administrator else 0,
         "locations": locations,
     })
 
@@ -89,7 +89,7 @@ def reference_detail(request, pk):
 @require_GET
 def history(request):
     form = HistoryFilterForm(request.GET)
-    movements = Movement.objects.filter(status="confirmed").select_related("person").prefetch_related("lines__sources").order_by("-date", "-pk")
+    movements = Movement.objects.filter(status="confirmed").select_related("person", "created_by", "confirmed_by", "correction_of").prefetch_related("lines__sources", "location_changes__location_before", "location_changes__location_after", "location_changes__sector_before", "location_changes__sector_after").order_by("-date", "-pk")
     valid = form.is_valid()
     if valid:
         query = form.cleaned_data

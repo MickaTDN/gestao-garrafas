@@ -40,13 +40,16 @@ duplicados e permissões de catálogo. A publicação dos dados reais é uma aç
 separada: depende de apresentar a pré-visualização e obter confirmação, além de
 uma regra de transição que evite alterações concorrentes no Excel e na aplicação.
 
-## Etapa 3 — operações reais
+## Etapa 3 — operações
 
-Construir os formulários de entradas, saídas, rascunhos e inventário sobre os
-serviços transacionais. Incluir revisão, correção antes da confirmação e
-transferências de localização/setor com auditoria. Testar duas operações
-concorrentes sobre a mesma referência, além dos fluxos e permissões de cada
-perfil em computador e telemóvel.
+Implementados formulários de entradas, saídas, rascunhos próprios e inventários
+parciais/completos sobre os serviços transacionais. Incluem conferência, edição,
+cancelamento, transferências com auditoria e correções através de novos movimentos
+relacionados. As contagens físicas são separadas dos ajustes; vazios permanecem
+por contar. Mudanças de stock exigem nova conferência, sem sobrescrita silenciosa.
+Ver [stage3.md](stage3.md) e a [decisão 3](decisions/0003-operational-transactions.md).
+A validação é simples; assinatura e geração de documentos ficam na Etapa 4.
+Desenvolvimento e testes ocorrem apenas com dados sintéticos em bases isoladas.
 
 Critério de conclusão: os rascunhos não alteram stock, a confirmação tem efeito
 uma única vez, nunca há saldo negativo e falhas revertem o movimento completo.
@@ -70,7 +73,7 @@ segredos e procedimentos de operação. A PWA não implica escritas de stock off
 | Aspeto V3 em computador e telemóvel | Estrutura visual reutilizada nas páginas iniciais. | 1, com regressão visual nas etapas seguintes. |
 | Autenticação e perfis Administrador/Consulta | Utilizador e autorização no servidor; criação explícita de contas. | 1; gestão de utilizadores pela interface ainda pendente. |
 | Base permanente e migrações | Esquema PostgreSQL; persistência local por volume. | 1; alojamento de produção em 4. |
-| Painel: stock, referências, alertas, rascunhos e acessos rápidos | Consulta dos registos já presentes na base; áreas futuras identificadas. | 1; acompanhamento dos fluxos em 3. |
+| Painel: stock, referências, alertas, rascunhos e acessos rápidos | Consulta dos registos presentes; rascunhos do próprio administrador e acessos aos fluxos. | 1; acompanhamento dos fluxos em 3. |
 | Stock por designação/código, localização e setor | Consulta paginada funcional. | 1. |
 | Ficha com garrafas e equivalência caixas/unidades | Consulta da base; capacidade desconhecida permanece vazia. | 1. |
 | Criar, editar e desativar referências sem apagar histórico | Formulários de gestão para administradores; stock fora dos campos editáveis. | 2. |
@@ -79,21 +82,21 @@ segredos e procedimentos de operação. A PWA não implica escritas de stock off
 | Uma localização e um setor da mesma localização; setor antigo por definir | Modelo e validação; sem atribuição inventada na migração. | 1 para estrutura, 2 para gestão. |
 | Quatro localizações físicas e respetivos setores V3 | Migração de configuração sem catálogo de produtos reais. | 1. |
 | Adicionar/remover localizações e setores apenas quando livres, incluindo referências inativas | Formulários de gestão, confirmação de eliminação e relações protegidas. | 2. |
-| Pessoas pesquisáveis e criação sem duplicados de espaços/maiúsculas | Modelo e resolução normalizada; pesquisa e integração nos formulários pendentes. | 3. |
-| Entradas com várias referências e criação de referência sem abandonar movimento | Modelo preparado; formulário pendente. | 3. |
-| Campos de caixas e garrafas inicialmente vazios | Mantido como requisito de formulário; não entregue por um simples valor zero no modelo. | 3. |
-| Mostrar stock em caixas, unidades soltas e total antes/depois de adicionar referência | Consulta inicial; integração no movimento pendente. | 3. |
-| Rascunhos persistentes sem efeito no saldo | Estado no modelo e regra no serviço; guardar/reabrir pelo formulário pendente. | 3. |
-| Saídas apenas de referências existentes e sem exceder stock | Serviço inicial valida referência e saldo numa transação; formulário pendente. | 3. |
-| Revisão da saída e correção de quantidades antes de validar | Modelo suporta rascunho; conferência visual pendente. | 3. |
-| Confirmação simples ou assinatura desenhada na saída | Campo de validação e metadados privados; captura e verificação do ficheiro pendentes. | 3–4. |
-| Relatório opcional na entrada e obrigatório na saída | Opção no modelo; serviço impõe opção para saída. Geração pendente. | 4. |
+| Pessoas pesquisáveis e criação sem duplicados de espaços/maiúsculas | Pesquisa pelo nome nos formulários e criação normalizada, sem duplicados simples. | 3. |
+| Entradas com várias referências e criação de referência sem abandonar movimento | Formulário com várias linhas; guarda antes de criar ou reativar referência, com proteção contra duplicados. | 3. |
+| Campos de caixas e garrafas inicialmente vazios | Campos vazios nos formulários e persistência de NULL separada de zero explícito. | 3. |
+| Mostrar stock em caixas, unidades soltas e total antes/depois de adicionar referência | Stock atual e previsto com equivalência, calculados progressivamente e validados no servidor. | 3. |
+| Rascunhos persistentes sem efeito no saldo | Guardar, reabrir, editar e cancelar os próprios rascunhos; revisão otimista e auditoria. | 3. |
+| Saídas apenas de referências existentes e sem exceder stock | Formulário completo; confirmação repete validação de estado e stock sob bloqueio. | 3. |
+| Revisão da saída e correção de quantidades antes de validar | Página de conferência, regresso à edição e invalidação de conferências antigas. | 3. |
+| Confirmação simples ou assinatura desenhada na saída | Validação simples implementada; assinatura não selecionável até à Etapa 4. | 3–4. |
+| Relatório opcional na entrada e obrigatório na saída | Escolha explícita na confirmação de entrada; saída sempre marcada. PDFs pendentes. | 4. |
 | Relatórios com caixas/unidades por referência, total e stock final | Campos de snapshot preparados; apresentação/PDF pendentes. | 4. |
 | Conservar capacidade e quantidades introduzidas para documentos antigos | Serviço prepara snapshots sem depender da configuração futura. | 1 para base, 4 para documentos. |
-| Inventário parcial/completo com contagem e motivo quando há diferença | Tipo e motivo preparados no serviço; seleção e contagem pendentes. | 3. |
-| Mudar localização/setor no inventário, inclusive sem diferença de stock | Mudança pelo catálogo com auditoria na etapa 2; fluxo de inventário pendente. | 3 para inventário. |
-| Histórico de ajustes e mudanças de localização | Movimentos importados e alterações de catálogo auditáveis; ajustes operacionais pendentes. | 2 para migração, 3 para ajustes. |
-| Movimentos confirmados imutáveis; ajustes posteriores relacionados | Proteções ORM e triggers PostgreSQL sobre movimentos e linhas; campo de relação preparado. Os triggers não existem no modo SQLite. | 1 para base; fluxo completo em 3. |
+| Inventário parcial/completo com contagem e motivo quando há diferença | Seleção filtrada, paginação, contagem física, motivo, zero explícito e conflitos com nova conferência. | 3. |
+| Mudar localização/setor no inventário, inclusive sem diferença de stock | Transferências no inventário, inclusive sem diferença quantitativa, atómicas com o stock. | 3 para inventário. |
+| Histórico de ajustes e mudanças de localização | Histórico de operações, contagens, transferências, responsáveis e correções relacionadas. | 2 para migração, 3 para ajustes. |
+| Movimentos confirmados imutáveis; ajustes posteriores relacionados | Proteções ORM e PostgreSQL sobre livro, proveniência e transferências; auditoria de acréscimo e ajustes relacionados. | 1 para base; fluxo completo em 3. |
 | Histórico por data/período, referência e pessoa | Consulta funcional; depende da confirmação da publicação dos dados reais. | 1 para consulta, 2 para migração. |
 | Reabrir e imprimir PDFs históricos | Metadados de documentos preparados; acesso e geração pendentes. | 4. |
 | Excel: ler Stock sem alterar original | Leitura e relatório de preparação. | 1. |
