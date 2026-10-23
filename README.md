@@ -11,11 +11,17 @@ de referências, localizações e setores e importação reconciliada, com
 pré-visualização e confirmação explícita antes da publicação. O processo está
 descrito em [docs/stage2.md](docs/stage2.md).
 
-Os formulários de entradas, saídas e inventário continuam reservados à terceira
-etapa. PDFs, captura de assinatura, exportação e PWA são entregas posteriores.
-As páginas dessas áreas identificam o estado de implementação. O serviço
-transacional inicial de confirmação permanece disponível para testes, sem
-expor operações de stock pela interface nesta etapa.
+A terceira etapa acrescenta entradas, saídas, rascunhos próprios, inventários
+parciais/completos, transferências e correções relacionadas, com conferência e
+confirmação atómicas. Consulte [docs/stage3.md](docs/stage3.md). PDFs, captura de
+assinatura, exportação, PWA, alojamento e backups permanecem na Etapa 4.
+A aplicação ainda não é um registo operacional oficial. A publicação inicial
+controlada dos dados reais continua a exigir autorização separada.
+
+**Se existe uma pré-visualização privada pendente, use outra base de desenvolvimento.**
+Não execute as migrações ou operações seguintes na base reservada à publicação.
+Os testes usam exclusivamente dados sintéticos; nunca reutilize dados privados
+como fixtures nem publique um lote apenas para experimentar os formulários.
 
 ## Executar em desenvolvimento
 
