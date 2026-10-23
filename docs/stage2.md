@@ -138,6 +138,21 @@ servidor sobre o registo bloqueado. O histórico permanece consultável e a
 referência pode ser reativada. A consulta normal de stock e o painel principal
 incluem apenas referências ativas. O stock não é um campo editável destes formulários.
 
+Antes de criar uma referência, é possível pesquisar a designação em todo o
+catálogo, incluindo referências inativas e localizações diferentes. A comparação
+ignora maiúsculas/minúsculas, espaços iniciais/finais e sequências de espaços;
+os acentos continuam significativos. As correspondências apresentam código,
+localização e estado. Referências inativas sugerem a reativação do registo
+original, através de uma página de confirmação, sem mudar o código ou o histórico.
+
+A verificação é repetida no serviço de criação, sob o bloqueio partilhado do
+catálogo, para impedir duplicados mesmo em pedidos simultâneos ou forjados.
+Não existe uma opção para criar uma segunda referência com a mesma designação.
+Várias correspondências históricas são assinaladas para revisão e permanecem
+separadas. Esta regra de criação manual não introduz uma restrição global na
+base nem altera, funde ou impede a preservação de referências históricas
+legítimas em localizações diferentes durante a importação.
+
 As alterações de localização e setor não mudam o saldo e ficam auditadas. O setor
 tem de pertencer à localização escolhida. A gestão de localizações e setores
 protege os que tenham referências associadas, incluindo referências inativas.

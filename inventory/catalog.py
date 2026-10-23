@@ -25,6 +25,26 @@ def _name(value):
     return value
 
 
+def matching_references(name):
+    """Match globally without rewriting historical names or folding accents."""
+    key = " ".join(name.split()).casefold()
+    if not key:
+        return []
+    return [
+        reference
+        for reference in Reference.objects.select_related("location").order_by("code")
+        if " ".join(reference.name.split()).casefold() == key
+    ]
+
+
+class DuplicateReferenceError(ValidationError):
+    def __init__(self, matches):
+        self.matches = matches
+        super().__init__({
+            "name": "Já existem referências com esta designação. Reveja os registos existentes antes de criar uma nova referência.",
+        })
+
+
 def _reference_state(reference):
     return {
         "code": reference.code,
@@ -53,6 +73,9 @@ def save_reference(*, actor, data, reference_id=None):
     require_administrator(actor)
     catalogue_lock()
     if reference_id is None:
+        matches = matching_references(_name(data["name"]))
+        if matches:
+            raise DuplicateReferenceError(matches)
         reference = Reference(code=_next_reference_code(), current_stock=0)
         before = None
     else:

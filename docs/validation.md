@@ -39,7 +39,7 @@ aos fluxos definidos no [roadmap](roadmap.md).
 ## Validação da segunda etapa
 
 O conjunto completo `manage.py test accounts inventory imports web tests.browser
---noinput` executou **120 testes, todos aprovados e sem casos ignorados**, em
+--noinput` executou **131 testes, todos aprovados e sem casos ignorados**, em
 PostgreSQL. Inclui os testes anteriores, publicação sintética reconciliada,
 fusão de duplicados com proveniência, preservação de sinais, documentos e
 observações, saldos iniciais desconhecidos, idempotência, rollback e rejeição de
@@ -53,6 +53,13 @@ exatamente zero. A desativação é recusada também por chamada direta ao servi
 e por pedido HTTP forjado; o stock é novamente verificado depois de abrir a
 página de confirmação. Os testes confirmam a reativação, a preservação do
 histórico e a exclusão de referências inativas do stock normal e do painel.
+
+A criação manual também é testada contra designações equivalentes por espaços
+e maiúsculas/minúsculas, incluindo referências inativas e outras localizações.
+Os casos verificam a apresentação de todas as correspondências, a preservação
+dos registos históricos, a confirmação de reativação e a serialização de duas
+criações simultâneas. Um teste de importação sintética confirma que referências
+históricas com o mesmo nome em localizações diferentes continuam separadas.
 
 Os dois testes de navegador usam Chromium: consulta em dimensões de computador
 e telemóvel e criação/edição de referência por administrador em telemóvel.

@@ -10,6 +10,7 @@ from inventory.models import Location, Reference, Sector
 from .catalog_forms import (
     LocationForm,
     ReferenceForm,
+    ReferenceMatchForm,
     ReferenceSearchForm,
     ReferenceStateForm,
     SectorForm,
@@ -49,11 +50,24 @@ def reference_list(request):
 @require_http_methods(["GET", "POST"])
 def reference_create(request):
     form = ReferenceForm(request.POST if request.method == "POST" else None)
+    match_form = ReferenceMatchForm(request.GET if "check_name" in request.GET else None)
+    matches = []
+    if request.method == "GET" and match_form.is_bound and match_form.is_valid():
+        name = match_form.cleaned_data["check_name"]
+        matches = services.matching_references(name)
+        form = ReferenceForm(initial={"name": name})
+    if request.method == "POST":
+        # Show matches even if another field in the creation form is invalid.
+        name_form = ReferenceMatchForm({"check_name": request.POST.get("name", "")})
+        if name_form.is_valid():
+            matches = services.matching_references(name_form.cleaned_data["check_name"])
     if request.method == "POST" and form.is_valid():
         try:
             reference = services.save_reference(actor=request.user, data=form.cleaned_data)
         except ValidationError as error:
             _errors(form, error)
+            if isinstance(error, services.DuplicateReferenceError):
+                matches = error.matches
         else:
             messages.success(request, "Referência criada com stock inicial de zero garrafas.")
             return redirect("web:reference-detail", pk=reference.pk)
@@ -61,6 +75,7 @@ def reference_create(request):
         "section": "references", "form": form, "title": "Nova referência",
         "description": "O código é atribuído automaticamente. O stock é alterado apenas pelos movimentos.",
         "back_url": "web:references",
+        "match_form": match_form, "matching_references": matches,
     }, status=400 if request.method == "POST" else 200)
 
 

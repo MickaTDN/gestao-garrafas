@@ -2,6 +2,26 @@
 {% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">GESTÃO DO CATÁLOGO</div><h1>{{ title }}</h1>{% if description %}<p class="muted intro-description">{{ description }}</p>{% endif %}</div></div>
+{% if match_form %}
+<form method="get" class="card stack" style="margin-bottom:15px">
+  <h2>Verificar referências existentes</h2>
+  <p class="muted">A pesquisa inclui referências ativas e inativas em todas as localizações.</p>
+  {{ match_form.as_p }}
+  <button class="btn secondary" type="submit">Pesquisar referências existentes</button>
+</form>
+{% endif %}
+{% if matching_references %}
+<div class="card stack" style="margin-bottom:15px">
+  <div class="banner" role="alert">Já existem referências com esta designação. Não será criada outra referência automaticamente.</div>
+  {% if matching_references|length > 1 %}<p><strong>Situação para revisão:</strong> existem várias correspondências históricas. Confirme os códigos e as localizações; os registos não serão fundidos nem alterados automaticamente.</p>{% endif %}
+  <div class="table-wrap"><table><thead><tr><th>Código / designação</th><th>Localização</th><th>Estado</th><th>Revisão</th></tr></thead><tbody>
+  {% for match in matching_references %}<tr><td><strong>{{ match.code }}</strong><small>{{ match.name }}</small></td><td>{{ match.location.name }}</td><td>{% if match.active %}Ativa{% else %}Inativa{% endif %}</td><td><a href="{% url 'web:reference-detail' match.pk %}">Consultar referência e histórico</a>{% if not match.active %}<p><a href="{% url 'web:reference-toggle' match.pk %}">Rever reativação da referência original</a></p>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="muted">A reativação exige confirmação e preserva o código e todo o histórico. Se pretende criar uma referência distinta, reveja a designação.</p>
+</div>
+{% elif match_form.is_bound and not match_form.errors %}
+<p class="banner" role="status">Não foram encontradas correspondências. A designação será novamente verificada ao guardar.</p>
+{% endif %}
 <form method="post" class="card stack">
   {% csrf_token %}
   {{ form.non_field_errors }}

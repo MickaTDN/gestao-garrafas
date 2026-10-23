@@ -60,6 +60,10 @@ class ReferenceForm(StyledFieldsMixin, forms.ModelForm):
         return data
 
 
+class ReferenceMatchForm(StyledFieldsMixin, forms.Form):
+    check_name = forms.CharField(max_length=250, label="Designação a pesquisar")
+
+
 class ReferenceSearchForm(forms.Form):
     q = forms.CharField(required=False, max_length=200, label="Designação ou código")
     state = forms.ChoiceField(
