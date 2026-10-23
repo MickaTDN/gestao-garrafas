@@ -82,7 +82,7 @@ class OperationTests(TestCase):
         self.assertEqual((line.stock_before, line.stock_after, self.stock()), (20, 34, 34))
         self.assertTrue(confirmed.report_requested)
         self.assertEqual(confirmed.confirmed_by, self.admin)
-        self.assertFalse(confirmed.documents.exists())
+        self.assertTrue(confirmed.documents.filter(kind="pdf").exists())
 
     def test_entry_multiple_references_and_unknown_capacity(self):
         draft = self.fill(self.draft(refs=[self.first, self.second]), [(2, None), (None, 3)])
@@ -100,7 +100,7 @@ class OperationTests(TestCase):
             (self.stock(), draft.validation, draft.lines.get().quantity), (12, "simple", -8)
         )
         self.assertTrue(draft.report_requested)
-        self.assertFalse(draft.documents.exists())
+        self.assertTrue(draft.documents.filter(kind="pdf").exists())
 
     def test_exit_multiple_references(self):
         self.confirm(self.fill(self.draft("exit", [self.first, self.second]), [(1, 2), (0, 4)]))
@@ -394,11 +394,11 @@ class OperationTests(TestCase):
             operations.create_draft(actor=self.viewer, kind="entry")
         self.assertEqual(self.stock(), 20)
 
-    def test_signed_validation_is_unavailable_even_with_forged_document(self):
+    def test_signed_validation_requires_valid_bytes_even_with_forged_document(self):
         draft = self.fill(self.draft("exit"))
         draft.validation = "signed"
         draft.save()
-        with self.assertRaisesMessage(ValidationError, "Etapa 4"):
+        with self.assertRaisesMessage(ValidationError, "Assinatura"):
             confirm_movement(draft.pk, actor=self.admin)
 
     def test_forged_line_id_or_inactive_add_and_full_remove_rejected(self):

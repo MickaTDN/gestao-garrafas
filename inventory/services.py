@@ -80,15 +80,18 @@ def locked_lines(movement):
     return lines, references
 
 
-def movement_plans(movement, lines, references):
+def movement_plans(movement, lines, references, *, signed=False):
     """Validate everything before writing. Caller holds locks, including catalogue lock."""
     if not lines:
         raise ValidationError("Adicione pelo menos uma referência.")
     if movement.kind in ("entry", "exit") and not movement.person_id:
         raise ValidationError("Indique a pessoa responsável.")
-    if movement.validation == Movement.Validation.SIGNED:
-        raise ValidationError("A assinatura desenhada só estará disponível na Etapa 4.")
-    if movement.kind == "exit" and movement.validation != Movement.Validation.SIMPLE:
+    if movement.validation == Movement.Validation.SIGNED and not signed:
+        raise ValidationError("É necessária uma assinatura válida antes da confirmação.")
+    if movement.kind == "exit" and movement.validation not in (
+        Movement.Validation.SIMPLE,
+        Movement.Validation.SIGNED,
+    ):
         raise ValidationError("Confirme a conferência da saída antes de validar.")
     if movement.correction_of_id:
         if (
@@ -178,7 +181,15 @@ def movement_plans(movement, lines, references):
 
 
 @transaction.atomic
-def confirm_movement(movement_id, *, actor, review_token=None, report_requested=None):
+def confirm_movement(
+    movement_id,
+    *,
+    actor,
+    review_token=None,
+    report_requested=None,
+    validation=None,
+    signature_data=None,
+):
     """Lock parent and stock in stable order; confirm exactly once, all lines or none."""
     # Same order as catalogue/import: advisory lock -> movement -> lines -> refs.
     from .catalog import catalogue_lock
@@ -187,8 +198,21 @@ def confirm_movement(movement_id, *, actor, review_token=None, report_requested=
     catalogue_lock()
     movement = Movement.objects.select_for_update().get(pk=movement_id)
     owned_draft(movement, actor)
+    from .documents import create_confirmation_documents, validate_signature
+
+    signature = None
+    if validation is not None:
+        if movement.kind != "exit" or validation not in ("simple", "signed"):
+            raise ValidationError("Método de validação inválido.")
+        movement.validation = validation
+    if movement.validation == "signed":
+        if movement.kind != "exit":
+            raise ValidationError("A assinatura só é utilizada nas saídas.")
+        signature = validate_signature(signature_data)
+    elif signature_data:
+        raise ValidationError("Selecione validação por assinatura para a associar à saída.")
     lines, references = locked_lines(movement)
-    plans = movement_plans(movement, lines, references)
+    plans = movement_plans(movement, lines, references, signed=signature is not None)
     if movement.workflow_version:
         if movement.kind == "entry":
             if type(report_requested) is not bool:
@@ -209,6 +233,8 @@ def confirm_movement(movement_id, *, actor, review_token=None, report_requested=
             plan["after"],
         )
         line.box_capacity, line.reference_name = ref.box_capacity, ref.name
+        if movement.kind != "inventory":
+            line.target_location, line.target_sector = ref.location, ref.sector
         line.save()
         location, sector = plan["location"], plan["sector"]
         if (ref.location_id, ref.sector_id) != (location.pk, sector.pk if sector else None):
@@ -243,6 +269,7 @@ def confirm_movement(movement_id, *, actor, review_token=None, report_requested=
     movement.confirmed_by = actor
     movement.person_name = movement.person.name if movement.person_id else ""
     movement.report_requested = movement.report_requested or movement.kind == Movement.Kind.EXIT
+    create_confirmation_documents(movement, actor=actor, signature=signature)
     movement.save(
         update_fields=[
             "status",
@@ -250,6 +277,7 @@ def confirm_movement(movement_id, *, actor, review_token=None, report_requested=
             "created_by",
             "confirmed_by",
             "person_name",
+            "validation",
             "report_requested",
         ]
     )
