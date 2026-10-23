@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from inventory.catalog import save_reference
+from inventory.catalog import save_reference, set_reference_active
 from inventory.models import (
     AuditEvent,
     Location,
@@ -125,12 +125,103 @@ class CatalogTests(TestCase):
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
         self.assertFalse(AuditEvent.objects.exists())
+        self.reference.current_stock = 0
+        self.reference.save(update_fields=["current_stock"])
         for _ in range(2):
             self.assertEqual(self.client.post(self.url("reference-toggle", self.reference), {"active": "0"}).status_code, 302)
         self.reference.refresh_from_db()
         self.assertFalse(self.reference.active)
-        self.assertEqual(self.reference.current_stock, 13)
+        self.assertEqual(self.reference.current_stock, 0)
         self.assertEqual(AuditEvent.objects.filter(action="reference.state_changed").count(), 1)
+
+    def test_service_refuses_deactivation_with_stock_without_mutating_data(self):
+        with self.assertRaisesMessage(
+            ValidationError,
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
+        ):
+            set_reference_active(actor=self.admin, reference_id=self.reference.pk, active=False)
+        self.reference.refresh_from_db()
+        self.assertTrue(self.reference.active)
+        self.assertEqual(self.reference.current_stock, 13)
+        self.assertFalse(AuditEvent.objects.exists())
+
+    def test_http_refuses_deactivation_and_ignores_forged_stock(self):
+        response = self.client.post(self.url("reference-toggle", self.reference), {
+            "active": "0", "current_stock": "0",
+        })
+        self.assertContains(
+            response,
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
+            status_code=400,
+        )
+        self.reference.refresh_from_db()
+        self.assertTrue(self.reference.active)
+        self.assertEqual(self.reference.current_stock, 13)
+        self.assertFalse(AuditEvent.objects.exists())
+
+    def test_confirmation_with_stock_shows_message_and_disables_button(self):
+        response = self.client.get(self.url("reference-toggle", self.reference))
+        self.assertContains(response,
+                            "Não é possível desativar esta referência porque ainda existem garrafas em stock.")
+        self.assertContains(response, '<button class="btn danger" type="submit" disabled>Confirmar</button>', html=True)
+        self.reference.refresh_from_db()
+        self.assertTrue(self.reference.active)
+
+    def test_deactivation_rechecks_stock_after_confirmation_page_was_opened(self):
+        self.reference.current_stock = 0
+        self.reference.save(update_fields=["current_stock"])
+        self.assertEqual(self.client.get(self.url("reference-toggle", self.reference)).status_code, 200)
+        Reference.objects.filter(pk=self.reference.pk).update(current_stock=1)
+        response = self.client.post(self.url("reference-toggle", self.reference), {"active": "0"})
+        self.assertContains(response,
+                            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
+                            status_code=400)
+        self.reference.refresh_from_db()
+        self.assertTrue(self.reference.active)
+        self.assertEqual(self.reference.current_stock, 1)
+
+    def test_zero_stock_deactivation_preserves_history_and_filters_active_views(self):
+        self.reference.current_stock = 0
+        self.reference.minimum = 1
+        self.reference.save(update_fields=["current_stock", "minimum"])
+        other = Reference.objects.create(
+            code="SYN-ACTIVE", name="Outra referência ativa sintética",
+            location=self.location, current_stock=5, minimum=5,
+        )
+        movement = Movement.objects.create(kind="inventory", reason="Histórico sintético preservado")
+        line = MovementLine.objects.create(
+            movement=movement, reference=self.reference, quantity=-13,
+            reference_name=self.reference.name, stock_before=13, stock_after=0,
+        )
+        movement.status = "confirmed"
+        movement.save(update_fields=["status"])
+        response = self.client.post(self.url("reference-toggle", self.reference), {"active": "0"})
+        self.assertEqual(response.status_code, 302)
+        self.reference.refresh_from_db()
+        self.assertFalse(self.reference.active)
+        self.assertTrue(Movement.objects.filter(pk=movement.pk, status="confirmed").exists())
+        line.refresh_from_db()
+        self.assertEqual((line.quantity, line.reference_name), (-13, self.reference.name))
+        self.client.force_login(self.viewer)
+        stock = self.client.get(self.url("stock"), {"q": self.reference.code})
+        self.assertEqual(stock.context["page_obj"].paginator.count, 0)
+        home = self.client.get(self.url("home"))
+        self.assertEqual(home.context["reference_count"], 1)
+        self.assertEqual(home.context["total_stock"], other.current_stock)
+        self.assertEqual(home.context["alert_count"], 1)
+        location = next(loc for loc in home.context["locations"] if loc["name"] == self.location.name)
+        self.assertEqual(location["reference_count"], 1)
+        history = self.client.get(self.url("history"), {"q": self.reference.code})
+        self.assertContains(history, "Histórico sintético preservado")
+        self.assertContains(history, self.reference.name)
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.post(self.url("reference-toggle", self.reference), {"active": "1"}).status_code, 302)
+        self.reference.refresh_from_db()
+        self.assertTrue(self.reference.active)
+        self.assertEqual(self.reference.current_stock, 0)
+        self.assertEqual(self.client.get(self.url("stock"), {"q": self.reference.code}).context["page_obj"].paginator.count, 1)
+        self.assertEqual(self.client.get(self.url("home")).context["reference_count"], 2)
+        self.assertTrue(MovementLine.objects.filter(pk=line.pk).exists())
 
     def test_inactive_references_can_be_found_and_reactivated(self):
         self.reference.active = False

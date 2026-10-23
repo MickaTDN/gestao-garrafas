@@ -39,13 +39,20 @@ aos fluxos definidos no [roadmap](roadmap.md).
 ## Validação da segunda etapa
 
 O conjunto completo `manage.py test accounts inventory imports web tests.browser
---noinput` executou **112 testes, todos aprovados e sem casos ignorados**, em
+--noinput` executou **120 testes, todos aprovados e sem casos ignorados**, em
 PostgreSQL. Inclui os testes anteriores, publicação sintética reconciliada,
 fusão de duplicados com proveniência, preservação de sinais, documentos e
 observações, saldos iniciais desconhecidos, idempotência, rollback e rejeição de
 prévias alteradas ou desatualizadas. Inclui ainda os formulários de catálogo,
 as permissões de ambos os perfis, proteção de stock contra campos forjados,
 relações protegidas e confirmação explícita/CSRF na publicação.
+
+O reforço inclui confirmações simultâneas de uma ou duas prévias do mesmo lote,
+publicação concorrente com criação de catálogo e desativação apenas com stock
+exatamente zero. A desativação é recusada também por chamada direta ao serviço
+e por pedido HTTP forjado; o stock é novamente verificado depois de abrir a
+página de confirmação. Os testes confirmam a reativação, a preservação do
+histórico e a exclusão de referências inativas do stock normal e do painel.
 
 Os dois testes de navegador usam Chromium: consulta em dimensões de computador
 e telemóvel e criação/edição de referência por administrador em telemóvel.

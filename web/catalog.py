@@ -90,14 +90,25 @@ def reference_toggle(request, pk):
     reference = get_object_or_404(Reference, pk=pk)
     form = ReferenceStateForm(request.POST if request.method == "POST" else None, initial={"active": "0" if reference.active else "1"})
     if request.method == "POST" and form.is_valid():
-        reference = services.set_reference_active(actor=request.user, reference_id=pk, active=form.cleaned_data["active"])
-        messages.success(request, "Referência ativada." if reference.active else "Referência desativada; histórico conservado.")
-        return redirect("web:reference-detail", pk=reference.pk)
+        try:
+            reference = services.set_reference_active(actor=request.user, reference_id=pk, active=form.cleaned_data["active"])
+        except ValidationError as error:
+            _errors(form, error)
+            reference.refresh_from_db()
+        else:
+            messages.success(request, "Referência ativada." if reference.active else "Referência desativada; histórico conservado.")
+            return redirect("web:reference-detail", pk=reference.pk)
+    blocked = reference.active and reference.current_stock != 0
     return render(request, "web/catalog/confirm.html", {
         "section": "references", "title": "Desativar referência" if reference.active else "Ativar referência",
         "description": reference.name, "form": form,
         "detail": "O stock, os movimentos e os dados da referência permanecem guardados.",
         "back_url": "web:references",
+        "blocked": blocked,
+        "error": (
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock."
+            if blocked and request.method == "GET" else None
+        ),
     }, status=400 if request.method == "POST" else 200)
 
 

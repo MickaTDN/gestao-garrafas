@@ -98,6 +98,10 @@ def set_reference_active(*, actor, reference_id, active):
     require_administrator(actor)
     catalogue_lock()
     reference = Reference.objects.select_for_update().get(pk=reference_id)
+    if not active and reference.current_stock != 0:
+        raise ValidationError(
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock."
+        )
     if reference.active != active:
         before = reference.active
         reference.active = active

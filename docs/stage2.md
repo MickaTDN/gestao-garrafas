@@ -132,8 +132,11 @@ permissões de escrita através de pedidos HTTP diretos.
 Os formulários de referência permitem designação, capacidade de caixa opcional,
 alerta individual e mínimo, localização, setor e estado ativo/inativo. Um alerta
 desligado conserva o mínimo nulo. Ativar um alerta exige um mínimo válido,
-incluindo zero quando escolhido explicitamente. Desativar uma referência não
-apaga o histórico. O stock não é um campo editável destes formulários.
+incluindo zero quando escolhido explicitamente. Só é possível desativar uma
+referência quando o stock atual é exatamente zero; a validação é feita no
+servidor sobre o registo bloqueado. O histórico permanece consultável e a
+referência pode ser reativada. A consulta normal de stock e o painel principal
+incluem apenas referências ativas. O stock não é um campo editável destes formulários.
 
 As alterações de localização e setor não mudam o saldo e ficam auditadas. O setor
 tem de pertencer à localização escolhida. A gestão de localizações e setores
