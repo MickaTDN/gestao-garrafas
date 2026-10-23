@@ -18,6 +18,7 @@
       {% if user.is_administrator %}
       <a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>
       <a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>
+      <a class="nav-btn {% if section == 'drafts' %}active{% endif %}" href="{% url 'web:drafts' %}"><span class="ico" aria-hidden="true">✎</span>Rascunhos</a>
       <a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>
       {% endif %}
       <a class="nav-btn {% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><span class="ico" aria-hidden="true">◷</span>Histórico</a>
@@ -39,6 +40,7 @@
     </header>
     <div class="app-content">
       {% for message in messages %}<div class="banner" role="status">{{ message }}</div>{% endfor %}
+      <p class="muted"><small>Em desenvolvimento · uso oficial depende da Etapa 4 e da publicação inicial controlada.</small></p>
       {% block content %}{% endblock %}
     </div>
   </main>
@@ -52,5 +54,6 @@
   <a class="{% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><b aria-hidden="true">⚙</b>Definições</a>
   {% endif %}
 </nav>
+{% block scripts %}{% endblock %}
 </body>
 </html>
