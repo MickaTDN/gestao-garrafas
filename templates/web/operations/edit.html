@@ -8,7 +8,7 @@
 {% if movement.kind == 'inventory' %}<p class="banner">Inventário {{ movement.get_inventory_scope_display|lower }} · {{ counted }} / {{ total_lines }} referências contadas. Vazio = ainda não contado; introduza 0 para confirmar uma contagem de zero. Se o stock mudou desde a contagem, confira os novos valores e use «Conferi novamente».</p>{% endif %}
 <form method="get" class="toolbar filter-form" aria-label="Pesquisar referências">{{ filter_form.as_p }}<button class="btn secondary">Pesquisar referências</button></form>
 <form method="post" id="operation-form" class="stack" data-kind="{{ movement.kind }}">{% csrf_token %}
-<div class="card stack">{{ header.as_p }}<datalist id="people">{% for person in people %}<option value="{{ person.name }}"></option>{% endfor %}</datalist><small>Pesquise uma pessoa pelo nome ou introduza um novo nome; diferenças de espaços e maiúsculas não criam duplicados.</small></div>
+<div class="card stack">{{ header.as_p }}<datalist id="people">{% for person in people %}<option value="{{ person.name }}"></option>{% endfor %}</datalist>{% if movement.kind != 'inventory' %}<small>Pesquise uma pessoa pelo nome ou introduza um novo nome; diferenças de espaços e maiúsculas não criam duplicados.</small>{% endif %}</div>
 {{ formset.management_form }}{{ formset.non_form_errors }}
 <div class="stack" id="operation-lines">
 {% for line, form in pairs %}

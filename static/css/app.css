@@ -21,3 +21,5 @@ a.nav-btn,a.action,a.btn,.mobile-nav a{text-decoration:none}a.action{color:var(-
 #operation-form .toolbar,.card form{max-width:100%}.card .btn{white-space:normal}
 .operation-line h2,.operation-line p{overflow-wrap:anywhere}
 @media(max-width:760px){#operation-form .toolbar{display:grid;grid-template-columns:1fr}.operation-line .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.operation-line .form-grid select{font-size:12px;padding:8px 4px}.filter-form p{width:100%;margin:0}.card form button{width:100%}}
+
+[hidden]{display:none!important}#signature-canvas{display:block;width:100%;height:auto;aspect-ratio:3/1;border:1px dashed #aac4b6;border-radius:10px;background:#fff;touch-action:none}

@@ -1,8 +1,11 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">CONFERÊNCIA ANTES DA CONFIRMAÇÃO</div><h1>{{ movement }}</h1><p>{{ movement.date|date:'d/m/Y' }} · {{ movement.person.name|default:'Inventário físico' }}</p></div></div>
-<p class="banner">Reveja todas as referências. O stock será novamente validado na confirmação. {% if movement.kind == 'exit' %}Validação simples; assinatura desenhada disponível apenas na Etapa 4. Dados do relatório obrigatório serão guardados, sem gerar PDF nesta etapa.{% endif %}</p>
+<p class="banner">Reveja todas as referências. O stock será novamente validado na confirmação. {% if movement.kind == 'exit' %}Escolha confirmação simples ou assinatura desenhada. O relatório PDF desta saída é obrigatório.{% endif %}</p>
 <div class="stack">{% for plan in plans %}<article class="card stack"><h2>{{ plan.line.reference.code }} · {{ plan.line.reference.name }}</h2><p>Caixas introduzidas: {{ plan.line.boxes|default_if_none:'vazio' }} · Garrafas soltas introduzidas: {{ plan.line.units|default_if_none:'vazio' }} · Capacidade: {{ plan.line.box_capacity|default_if_none:'por definir' }}</p>{% if movement.kind == 'inventory' %}<p>Contagem física: {{ plan.line.counted_quantity }} · Motivo: {{ plan.line.reason|default:movement.reason|default:'Sem diferença quantitativa' }}</p><p>Localização final: {{ plan.line.target_location }} · {{ plan.line.target_sector.name|default:'Sem setor definido' }}</p>{% endif %}<p>Stock anterior: <strong>{{ plan.before }}</strong> · Variação: <strong>{{ plan.quantity }}</strong> · Stock final previsto: <strong>{{ plan.after }}</strong></p></article>{% endfor %}</div>
 <div class="toolbar"><a class="btn secondary" href="{% url 'web:operation-edit' movement.pk %}">Corrigir referências ou quantidades</a></div>
-<form method="post" class="card stack">{% csrf_token %}{{ form.as_p }}<button class="btn" type="submit">Confirmar {{ movement.get_kind_display|lower }}</button></form>
+<form method="post" class="card stack">{% csrf_token %}{{ form.as_p }}{% if movement.kind == 'exit' %}<section id="signature-panel" class="stack" hidden><h2>Assinatura desenhada</h2><p>Assine com o rato ou dedo. Esta assinatura não é uma assinatura digital qualificada.</p><canvas id="signature-canvas" width="900" height="300" aria-label="Área para desenhar a assinatura"></canvas><button type="button" class="btn secondary" id="signature-clear">Limpar assinatura</button></section>{% endif %}<button class="btn" type="submit">Confirmar {{ movement.get_kind_display|lower }}</button></form>
 {% endblock %}
+
+{% block scripts %}<script src="{% static 'js/signature.js' %}" defer></script>{% endblock %}

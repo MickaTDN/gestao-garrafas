@@ -102,7 +102,18 @@ class ReviewForm(OperationForm):
         label="Conferi todas as referências e quantidades e confirmo esta operação."
     )
     report_requested = forms.TypedChoiceField(
-        label="Pretende um relatório desta entrada quando os PDFs estiverem disponíveis?",
+        label="Pretende gerar e guardar o relatório PDF desta entrada?",
         choices=[("", "Escolha uma opção"), ("yes", "Sim"), ("no", "Não")],
         coerce=lambda value: value == "yes",
     )
+
+    validation = forms.ChoiceField(
+        label="Validação da saída",
+        choices=[("simple", "Confirmação simples"), ("signed", "Assinatura desenhada")],
+        initial="simple",
+        required=False,
+    )
+    signature_data = forms.CharField(required=False, max_length=350000, widget=forms.HiddenInput)
+
+    def clean_validation(self):
+        return self.cleaned_data.get("validation") or "simple"
