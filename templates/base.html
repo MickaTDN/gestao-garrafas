@@ -1,0 +1,56 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Gestão de Garrafas{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Saltar para o conteúdo</a>
+<div class="app-root">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">GG</div><div><strong>Gestão de Garrafas</strong><span>Gestão de stock</span></div></div>
+    <nav class="menu" aria-label="Navegação principal">
+      <a class="nav-btn {% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><span class="ico" aria-hidden="true">⌂</span>Início</a>
+      <a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>
+      {% if user.is_administrator %}
+      <a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>
+      <a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>
+      <a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>
+      {% endif %}
+      <a class="nav-btn {% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><span class="ico" aria-hidden="true">◷</span>Histórico</a>
+      {% if user.is_administrator %}
+      <a class="nav-btn {% if section == 'references' %}active{% endif %}" href="{% url 'web:references' %}"><span class="ico" aria-hidden="true">≡</span>Referências</a>
+      <a class="nav-btn {% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><span class="ico" aria-hidden="true">⚙</span>Definições</a>
+      {% endif %}
+    </nav>
+    <div class="sidefoot"><strong>Base permanente</strong><p>A consulta utiliza os dados guardados no servidor.</p></div>
+  </aside>
+  <main class="stage" id="main-content">
+    <header class="topbar">
+      <strong>GESTÃO DE GARRAFAS</strong>
+      <div class="topbar-right">
+        <span class="hide-sm">{{ user.username }}</span>
+        <span class="chip">{% if user.is_administrator %}Administrador{% else %}Consulta{% endif %}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn ghost small" type="submit">Sair</button></form>
+      </div>
+    </header>
+    <div class="app-content">
+      {% for message in messages %}<div class="banner" role="status">{{ message }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+<nav class="mobile-nav" aria-label="Navegação móvel">
+  <a class="{% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><b aria-hidden="true">⌂</b>Início</a>
+  <a class="{% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><b aria-hidden="true">▦</b>Stock</a>
+  <a class="{% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><b aria-hidden="true">◷</b>Histórico</a>
+  {% if user.is_administrator %}
+  <a class="{% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><b aria-hidden="true">↘</b>Entradas</a>
+  <a class="{% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><b aria-hidden="true">↗</b>Saídas</a>
+  {% endif %}
+</nav>
+</body>
+</html>

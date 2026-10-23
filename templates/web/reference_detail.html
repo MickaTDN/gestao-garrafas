@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% load stock_display %}
+{% block title %}{{ reference.code }} · Gestão de Garrafas{% endblock %}
+{% block content %}
+<div class="intro"><div><div class="eyebrow">{{ reference.code }}</div><h1>{{ reference.name }}</h1><p class="muted intro-description">Ficha da referência</p></div></div>
+<div class="card stack">
+  <div class="counts"><div class="countbox"><strong>{{ reference.current_stock|floatformat:'0g' }}</strong><span>garrafas em stock</span></div><div class="countbox"><strong>{{ reference|box_units }}</strong><span>caixas completas + soltas</span></div></div>
+  <dl class="detail-grid"><div><dt>Localização</dt><dd>{{ reference.location.name }}</dd></div><div><dt>Setor</dt><dd>{{ reference.sector.name|default:'Por definir' }}</dd></div><div><dt>Garrafas por caixa</dt><dd>{{ reference.box_capacity|default_if_none:'Por definir' }}</dd></div><div><dt>Stock mínimo</dt><dd>{% if reference.minimum != None %}{{ reference.minimum }} garrafas{% else %}Alerta desligado{% endif %}</dd></div><div><dt>Estado</dt><dd>{% if reference.active %}Ativa{% else %}Inativa{% endif %}</dd></div></dl>
+  <div class="row wrapping"><a class="btn secondary" href="{% url 'web:stock' %}">Voltar ao stock</a><a class="btn secondary" href="{% url 'web:history' %}?q={{ reference.code|urlencode }}">Consultar histórico</a></div>
+</div>
+{% endblock %}

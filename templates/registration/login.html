@@ -1,0 +1,21 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Entrar · Gestão de Garrafas</title><link rel="stylesheet" href="{% static 'css/app.css' %}"></head>
+<body class="login-body">
+<main class="card login-card">
+  <div class="brand login-brand"><div class="brand-mark">GG</div><div><strong>Gestão de Garrafas</strong><span>Gestão de stock</span></div></div>
+  <h1>Bem-vindo</h1><p class="muted login-intro">Entre com a sua conta para consultar o stock.</p>
+  {% if form.errors %}<div class="banner" role="alert">Não foi possível iniciar sessão. Verifique o utilizador e a palavra-passe.</div>{% endif %}
+  {% if next and not form.errors %}<p class="banner">Inicie sessão para aceder a esta área.</p>{% endif %}
+  <form method="post" class="stack">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div><label for="id_username">Utilizador</label><input class="input" id="id_username" name="username" autocomplete="username" autocapitalize="none" required autofocus value="{{ form.username.value|default:'' }}"></div>
+    <div><label for="id_password">Palavra-passe</label><input class="input" type="password" id="id_password" name="password" autocomplete="current-password" required></div>
+    <button class="btn" type="submit">Entrar</button>
+  </form>
+  <p class="footer-note">O acesso é atribuído pelo administrador.</p>
+</main>
+</body>
+</html>
