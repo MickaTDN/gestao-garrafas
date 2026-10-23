@@ -39,7 +39,7 @@ aos fluxos definidos no [roadmap](roadmap.md).
 ## Validação da segunda etapa
 
 O conjunto completo `manage.py test accounts inventory imports web tests.browser
---noinput` executou **111 testes, todos aprovados e sem casos ignorados**, em
+--noinput` executou **112 testes, todos aprovados e sem casos ignorados**, em
 PostgreSQL. Inclui os testes anteriores, publicação sintética reconciliada,
 fusão de duplicados com proveniência, preservação de sinais, documentos e
 observações, saldos iniciais desconhecidos, idempotência, rollback e rejeição de

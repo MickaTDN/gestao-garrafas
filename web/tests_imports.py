@@ -161,3 +161,17 @@ class ImportConfirmationTests(TestCase):
         detail = self.client.get(reverse("web:reference-detail", args=[reference.pk]))
         self.assertContains(detail, "Contagem desconhecida na fonte")
         self.assertContains(detail, "Saldo inferido para reconciliação: 12")
+
+    def test_other_previews_of_published_batch_show_actual_publication(self):
+        second = build_preview(self.batch.pk, self.decisions, actor=self.admin)
+        publish_preview(self.preview.pk, actor=self.admin,
+                        confirmation_token=self.preview.confirmation_token)
+        response = self.client.get(reverse("web:import-preview", args=[second.pk]))
+        self.assertRedirects(response, self.url)
+        response = self.client.get(reverse("web:import-report", args=[second.pk]))
+        self.assertRedirects(response, reverse("web:import-report", args=[self.preview.pk]))
+        response = self.client.post(reverse("web:import-publish", args=[second.pk]),
+                                    self.confirmation(confirmation_token=str(second.confirmation_token)))
+        self.assertRedirects(response, self.url)
+        self.assertEqual(Reference.objects.count(), 1)
+        self.assertEqual(Movement.objects.count(), 1)

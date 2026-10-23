@@ -38,11 +38,20 @@ def preview_context(request, preview, form=None):
     }
 
 
+def published_version(preview):
+    if preview.published_at or preview.import_batch.status != ImportBatch.Status.IMPORTED:
+        return preview
+    return preview.import_batch.previews.filter(published_at__isnull=False).first() or preview
+
+
 @never_cache
 @administrator_required
 @require_GET
 def import_preview(request, pk):
     preview = get_object_or_404(ImportPreview.objects.select_related("import_batch"), pk=pk)
+    published = published_version(preview)
+    if published.pk != preview.pk:
+        return redirect("web:import-preview", pk=published.pk)
     return render(request, "web/imports/preview.html", preview_context(request, preview))
 
 
@@ -50,7 +59,10 @@ def import_preview(request, pk):
 @administrator_required
 @require_GET
 def import_report(request, pk):
-    preview = get_object_or_404(ImportPreview, pk=pk)
+    preview = get_object_or_404(ImportPreview.objects.select_related("import_batch"), pk=pk)
+    published = published_version(preview)
+    if published.pk != preview.pk:
+        return redirect("web:import-report", pk=published.pk)
     data = {
         "preview_id": str(preview.pk), "published": bool(preview.published_at),
         "summary": preview.summary, "rows": preview.rows,
@@ -73,12 +85,12 @@ def import_publish(request, pk):
             form.add_error("total", "O total deve corresponder exatamente à pré-visualização.")
         else:
             try:
-                publish_preview(preview.pk, actor=request.user,
-                                confirmation_token=form.cleaned_data["confirmation_token"])
+                result = publish_preview(preview.pk, actor=request.user,
+                                         confirmation_token=form.cleaned_data["confirmation_token"])
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
                 messages.success(request, "Lote publicado e reconciliação validada.")
-                return redirect("web:import-preview", pk=preview.pk)
+                return redirect("web:import-preview", pk=result["preview_id"])
     return render(request, "web/imports/preview.html",
                   preview_context(request, preview, form), status=400)
