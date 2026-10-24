@@ -175,7 +175,7 @@ function Assert-GGEnvironment {
 function Get-GGEnvironmentText {
     param($State)
     foreach ($path in @($State.Home,$State.Source)) {
-        if ($path -match "[`r`n`"'$]" -or -not [IO.Path]::IsPathRooted($path)) { throw 'A pasta contem caracteres nao suportados pelo perfil seguro.' }
+        if ($path -match "[`r`n`"]" -or -not [IO.Path]::IsPathRooted($path)) { throw 'A pasta contem caracteres nao suportados pelo perfil seguro.' }
     }
     if ($State.Home.StartsWith('\\') -or $State.Source.StartsWith('\\')) { throw 'As pastas do piloto devem ser locais.' }
     $source = $State.Source.Replace('\','/').Replace("'","\'")
