@@ -85,6 +85,16 @@ se implementa Stock Vendas offline. Testes de shell Windows CI e de payload Linu
 não substituem a aceitação num PC Windows 11 real autorizado. Ver
 [windows11.md](windows11.md) e [decisão 5](decisions/0005-windows-local.md).
 
+## Etapa 6 — Android pelo Wi-Fi autorizado
+
+Perfil HTTPS local preparado, independente do piloto loopback, com a mesma PWA e
+PostgreSQL para PC/Android. Reutiliza entradas, saídas, inventários/transferências,
+assinaturas e PDFs existentes. Inclui configuração sintética nova, proxy restrito,
+certificados por dispositivo, CSRF/cookies seguros e aviso de perda de servidor.
+Não sincroniza movimentos offline nem publica dados reais. Depende de configuração
+DNS/PKI/MDM/firewall e aceitação física pela informática; não há instalação real.
+Ver [android-wifi.md](android-wifi.md) e [decisão 6](decisions/0006-android-local-wifi.md).
+
 ## Matriz de requisitos aprovados
 
 | Requisito | Estado nesta entrega | Etapa de conclusão |

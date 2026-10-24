@@ -249,3 +249,20 @@ não é ligada nem montada. Ver [guia Windows](windows11.md) e
 Android por Wi-Fi continua fechado até autorização da informática e preparação
 de HTTPS, hosts/CSRF, firewall limitada à rede e dispositivos autorizados. Não
 existe segundo stock offline nem nova aplicação Stock Vendas nesta etapa.
+
+## Etapa 6 — Android por Wi-Fi local
+
+Perfil `config.android_wifi` sintético distinto, baseado no contrato de isolamento
+Windows. Reutiliza imagem, bootstrap e serviços; proxy Nginx não privilegiado
+publica só HTTPS no IPv4 LAN específico. Duas redes internas separam proxy/base;
+Django/PostgreSQL não publicam portas. Host/origem exatos, cookies seguros e
+middleware restringem cabeçalhos HTTPS ao IP exclusivo do proxy. Certificado
+clientAuth por dispositivo, CRL e allowlist complementam contas individuais e
+firewall empresarial, inclusive quando Docker Desktop oculta o IP por NAT.
+
+Não há nova aplicação/base Android nem sincronização offline. PWA verifica
+servidor/base além de `navigator.onLine`, bloqueia escrita sem ligação conhecida e
+apresenta orientação para resultado desconhecido quando a resposta se perde.
+Confirmação continua no serviço transacional existente, com efeito uma única vez.
+Instalação empresarial/Android físico e dados reais continuam pendentes. Ver
+[guia Android](android-wifi.md) e [decisão 6](decisions/0006-android-local-wifi.md).
