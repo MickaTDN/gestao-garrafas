@@ -21,6 +21,7 @@ function Invoke-GGNative {
             $output = $process.StandardOutput.ReadToEndAsync()
             $errors = $process.StandardError.ReadToEndAsync()
             if (-not $process.WaitForExit(20000)) { $process.Kill(); throw 'O Docker nao respondeu em 20 segundos. Confirme o estado com a informatica.' }
+            $null = $errors.GetAwaiter().GetResult()
             if ($process.ExitCode -ne 0) { throw 'O comando Docker falhou. Confirme o Docker Desktop e as permissoes com a informatica.' }
             return $output.GetAwaiter().GetResult()
         } finally { $process.Dispose() }
@@ -225,7 +226,7 @@ function New-GGInstallation {
     $state.ComposeHash = (Get-FileHash -LiteralPath (Join-Path $HomePath 'compose.yaml') -Algorithm SHA256).Hash
     $text = Get-GGEnvironmentText $state
     Write-GGFile (Join-Path $HomePath 'pilot.env') $text
-    Copy-Item -Path (Join-Path $source 'scripts\windows\*') -Destination $HomePath
+    foreach ($file in Get-ChildItem -LiteralPath (Join-Path $source 'scripts\windows') -File) { Copy-Item -LiteralPath $file.FullName -Destination $HomePath }
     Write-GGFile (Join-Path $HomePath 'installation.json') ($state | ConvertTo-Json)
     return $state
 }

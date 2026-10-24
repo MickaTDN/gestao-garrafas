@@ -14,7 +14,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY . .
-RUN DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))') APP_ENV=production DJANGO_DEBUG=0 python manage.py collectstatic --noinput \
+RUN find /app -path /app/.venv -prune -o -type d -exec chmod 0755 {} + -o -type f -exec chmod 0644 {} + \
+ && DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))') APP_ENV=production DJANGO_DEBUG=0 python manage.py collectstatic --noinput \
  && groupadd --gid 10001 garrafas && useradd --uid 10001 --gid 10001 --create-home garrafas \
  && mkdir -p /backups && chown 10001:10001 /backups && chmod 0700 /backups
 USER 10001:10001

@@ -17,3 +17,15 @@ staticfiles
 .ruff_cache
 test-results
 playwright-report
+
+# Nested user data must not enter an installation image either.
+attachments
+**/*.xlsx
+**/*.xls
+**/*.csv
+**/*.sqlite3*
+**/*.dump
+**/*.backup
+**/*.tar.gz*
+**/.env
+**/.env.*
