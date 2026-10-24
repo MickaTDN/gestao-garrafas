@@ -1,0 +1,84 @@
+# A NEW synthetic pilot. No default Compose project, external volumes or host database.
+x-app: &app
+  image: ${GG_PILOT_IMAGE:?Imagem exclusiva do piloto}
+  build:
+    context: ${GG_SOURCE_ROOT:?Pasta do codigo revisto}
+    dockerfile: deploy/Dockerfile
+  environment: &environment
+    DJANGO_SETTINGS_MODULE: config.windows_local
+    GG_WINDOWS_PILOT: synthetic-v1
+    GG_PILOT_ID: ${GG_PILOT_ID:?Identificador exclusivo}
+    APP_ENV: windows-local
+    DJANGO_DEBUG: "0"
+    DB_HOST: db
+    DB_NAME: garrafas_windows_synthetic
+    BACKUP_ROOT: /backups
+    BACKUP_RETENTION_COUNT: "14"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=128m
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [pilot]
+  secrets: [django_key, db_app_password]
+  volumes:
+    - pilot_backups:/backups
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+    environment:
+      POSTGRES_DB: garrafas_windows_synthetic
+      POSTGRES_USER: gg_pilot_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [db_owner_password]
+    volumes:
+      - pilot_database:/var/lib/postgresql/data
+    networks: [pilot]
+    # Deliberately NO ports. PostgreSQL is reachable only by this pilot's containers.
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U gg_pilot_owner -d garrafas_windows_synthetic]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+    stop_grace_period: 45s
+
+  app:
+    <<: *app
+    ports:
+      - "127.0.0.1:${GG_HTTP_PORT:-8765}:8000"
+    healthcheck:
+      test: [CMD, python, /app/deploy/windows/pilot.py, health]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    restart: "no"
+    stop_grace_period: 45s
+
+  initialize:
+    <<: *app
+    profiles: [setup]
+    environment:
+      <<: *environment
+      GG_BOOTSTRAP_OWNER: "1"
+    secrets: [django_key, db_app_password, db_owner_password]
+    command: [python, /app/deploy/windows/pilot.py, initialize]
+
+volumes:
+  pilot_database:
+  pilot_backups:
+networks:
+  pilot:
+    internal: true
+secrets:
+  django_key:
+    file: ${GG_SECRET_ROOT:?Pasta privada}/django_key
+  db_app_password:
+    file: ${GG_SECRET_ROOT:?Pasta privada}/db_app_password
+  db_owner_password:
+    file: ${GG_SECRET_ROOT:?Pasta privada}/db_owner_password
