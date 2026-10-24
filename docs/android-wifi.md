@@ -167,6 +167,13 @@ quantitativo se o mesmo pedido for repetido.
 Testes automatizados: Django/PostgreSQL, regressões Chromium, perfil/CSRF/cookies,
 PowerShell 5.1 com Docker simulado e stack sintética TLS/mTLS real em viewport
 Android. PKI confiada só em NSS/HOME temporário, sem ignorar erros HTTPS.
+O proxy exige mTLS real nos testes (incluindo recusas/revogação). Para os fluxos
+PWA, um adaptador **só de teste em loopback** apresenta o certificado HTTPS confiável
+ao Chromium e o certificado de dispositivo ao proxy real; o túnel de certificados
+do Playwright apresenta um certificado próprio que o service worker rejeita.
+Ambas as ligações TLS são verificadas. O adaptador não faz parte da instalação,
+não é uma solução de acesso empresarial e não valida o seletor de certificados
+nativo Android. Essa verificação continua obrigatória no aparelho físico.
 Ver [validação](validation.md). Estes testes não validam Android Keystore, MDM,
 Windows Firewall ou WSL2/Docker Desktop reais. Antes de uso, testar fisicamente:
 

@@ -20,6 +20,7 @@ from playwright.sync_api import sync_playwright
 from pypdf import PdfReader
 
 from tests.wifi.certificates import certificates
+from tests.wifi.tls_device import tls_device
 from tests.windows.smoke_stack import ROOT, free_port, make_state, run
 
 # Playwright's reserved loopback name avoids external DNS inside its mTLS transport.
@@ -202,6 +203,10 @@ def main(image):
                     break
                 time.sleep(0.1)
 
+            print(
+                "PASS real proxy: trusted TLS, device mTLS/CRL, network default-deny, hosts and CSRF",
+                flush=True,
+            )
             password = secrets.token_urlsafe(32)
             shell(
                 "from accounts.models import User; from inventory.models import ImportBatch; assert not ImportBatch.objects.exists(); "
@@ -225,30 +230,27 @@ def main(image):
                     "sql:" + str(nss),
                 ]
             )
-            # The Playwright certificate transport also validates the private test CA.
+            # Trust remains confined to this temporary browser profile.
             old_ca = os.environ.get("NODE_EXTRA_CA_CERTS")
             old_no_proxy = {key: os.environ.get(key) for key in ("NO_PROXY", "no_proxy")}
             os.environ["NODE_EXTRA_CA_CERTS"] = str(tls / "ca.crt")
             os.environ.update(NO_PROXY="*", no_proxy="*")
             try:
-                with sync_playwright() as playwright:
+                with tls_device(tls, HOST, port), sync_playwright() as playwright:
                     browser = playwright.chromium.launch(
                         executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
                         headless=True,
-                        args=["--no-sandbox", f"--host-resolver-rules=MAP {HOST} 127.0.0.1"],
+                        args=[
+                            "--no-sandbox",
+                            f"--host-resolver-rules=MAP {HOST} 127.0.0.2",
+                            "--no-proxy-server",
+                        ],
                         env={**os.environ, "HOME": str(browser_home)},
                     )
                     context = browser.new_context(
                         viewport={"width": 393, "height": 851},
                         is_mobile=True,
                         has_touch=True,
-                        client_certificates=[
-                            {
-                                "origin": url,
-                                "certPath": tls / "device.crt",
-                                "keyPath": tls / "device.key",
-                            }
-                        ],
                     )
                     page = context.new_page()
                     page.set_default_timeout(12000)
@@ -263,13 +265,16 @@ def main(image):
                         page.wait_for_url(url + "/stock/")
 
                     login("wifi-synthetic-admin")
+                    print("PASS HTTPS Android viewport: individual login", flush=True)
                     assert page.evaluate("window.isSecureContext")
                     assert all(
                         c["secure"]
                         for c in context.cookies()
                         if c["name"] in ("sessionid", "csrftoken")
                     )
-                    page.evaluate("async () => { await navigator.serviceWorker.ready; }")
+                    page.evaluate(
+                        "async () => { await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('PWA registration timed out')), 12000))]); }"
+                    )
                     page.reload()
                     page.wait_for_function("navigator.serviceWorker.controller !== null")
                     session = context.new_cdp_session(page)
@@ -277,6 +282,7 @@ def main(image):
                         session.send("Page.getInstallabilityErrors")["installabilityErrors"] == []
                     )
                     session.detach()
+                    print("PASS HTTPS PWA: public-only worker and installability", flush=True)
 
                     def stocks():
                         return json.loads(
