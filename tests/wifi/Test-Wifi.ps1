@@ -96,6 +96,17 @@ Export-ModuleMember -Function *
         $global:WifiCalls.Clear();Refuses { & $script -Action Start -HomePath $homePath }
         Assert ($global:WifiCalls.Count -eq 0);[IO.File]::WriteAllText($file,$text,(New-Object Text.UTF8Encoding $false))
     }
+    Test 'Coordinated state and environment edits cannot enable a wildcard bind' {
+        $stateFile=Join-Path $homePath 'wifi-installation.json';$envFile=Join-Path $homePath 'wifi.env'
+        $oldState=[IO.File]::ReadAllText($stateFile);$oldEnv=[IO.File]::ReadAllText($envFile)
+        $edited=$oldState | ConvertFrom-Json;$edited.Config.BindIP='0.0.0.0'
+        [IO.File]::WriteAllText($stateFile,($edited | ConvertTo-Json -Depth 5))
+        [IO.File]::WriteAllText($envFile,$oldEnv.Replace('GG_BIND_IP=192.168.50.20','GG_BIND_IP=0.0.0.0'))
+        $global:WifiCalls.Clear();Refuses { & $script -Action Start -HomePath $homePath }
+        Assert ($global:WifiCalls.Count -eq 0)
+        [IO.File]::WriteAllText($stateFile,$oldState,(New-Object Text.UTF8Encoding $false))
+        [IO.File]::WriteAllText($envFile,$oldEnv,(New-Object Text.UTF8Encoding $false))
+    }
     Test 'Changed TLS blocks Start but Stop preserves volumes and remains available' {
         Add-Content (Join-Path $homePath 'tls\server-chain.crt') 'changed'
         Refuses { & $script -Action Start -HomePath $homePath }

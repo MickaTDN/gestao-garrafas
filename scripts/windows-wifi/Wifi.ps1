@@ -42,20 +42,7 @@ function Expected-Env($State) {
 function Invoke-Wifi($State,[string[]]$Arguments) {
     Invoke-GGNative -Arguments (@('compose','--project-name',$State.Project,'--file',(Join-Path $State.Source 'deploy\wifi\compose.yaml'),'--env-file',(Join-Path $State.Home 'wifi.env'))+$Arguments)
 }
-function File-Hashes($HomeDirectory,$SourceDirectory) {
-    $paths=@((Join-Path $SourceDirectory 'deploy\wifi\compose.yaml'),(Join-Path $SourceDirectory 'deploy\windows\compose.yaml'),(Join-Path $HomeDirectory 'nginx.conf'),(Join-Path $HomeDirectory 'clients.conf'))
-    foreach ($file in @('server-chain.crt','server.key','device-ca.crt','device-ca.crl')) { $paths+=Join-Path $HomeDirectory "tls\$file" }
-    return @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
-}
-
-$HomePath=[IO.Path]::GetFullPath($HomePath)
-Assert-GGSeparatePaths -HomePath $HomePath -SourceRoot $sourceRoot
-if ($HomePath.StartsWith('\\')) { throw 'Use uma pasta privada NTFS local.' }
-$stateFile=Join-Path $HomePath 'wifi-installation.json'
-if ($Action -eq 'Prepare') {
-    if (-not $ITApproved) { throw 'Prepare exige -ITApproved apenas depois de autorizacao da informatica para certificados, DNS e rede.' }
-    if (Test-Path -LiteralPath $HomePath) { throw 'Use uma pasta NOVA. Nao se adota o piloto local nem outra instalacao.' }
-    $cfg=Get-Content -LiteralPath $Configuration -Raw -Encoding UTF8 | ConvertFrom-Json
+function Assert-WifiConfiguration($cfg) {
     if ($cfg.Host.Length -gt 253 -or $cfg.Host -notmatch '^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z0-9]+$') { throw 'Nome DNS aprovado invalido.' }
     $hostIP=$null
     if ([Net.IPAddress]::TryParse($cfg.Host,[ref]$hostIP)) { throw 'Use o DNS do certificado, nao um IP como hostname.' }
@@ -70,6 +57,22 @@ if ($Action -eq 'Prepare') {
     if ($networkNumber % 8 -ne 0 -or (IPv4-Number $cfg.ProxyIP) -ne ($networkNumber+2) -or (IPv4-Number $cfg.AppIP) -ne ($networkNumber+3)) { throw 'Rede /29 deve ter proxy no segundo IP util e aplicacao no terceiro, sem sobreposicao.' }
     if (@($cfg.AllowedClients).Count -eq 0) { throw 'A lista de origens autorizadas nao pode estar vazia.' }
     foreach ($client in $cfg.AllowedClients) { Assert-PrivateIPv4 $client }
+}
+function File-Hashes($HomeDirectory,$SourceDirectory) {
+    $paths=@((Join-Path $SourceDirectory 'deploy\wifi\compose.yaml'),(Join-Path $SourceDirectory 'deploy\windows\compose.yaml'),(Join-Path $HomeDirectory 'nginx.conf'),(Join-Path $HomeDirectory 'clients.conf'))
+    foreach ($file in @('server-chain.crt','server.key','device-ca.crt','device-ca.crl')) { $paths+=Join-Path $HomeDirectory "tls\$file" }
+    return @($paths | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
+}
+
+$HomePath=[IO.Path]::GetFullPath($HomePath)
+Assert-GGSeparatePaths -HomePath $HomePath -SourceRoot $sourceRoot
+if ($HomePath.StartsWith('\\')) { throw 'Use uma pasta privada NTFS local.' }
+$stateFile=Join-Path $HomePath 'wifi-installation.json'
+if ($Action -eq 'Prepare') {
+    if (-not $ITApproved) { throw 'Prepare exige -ITApproved apenas depois de autorizacao da informatica para certificados, DNS e rede.' }
+    if (Test-Path -LiteralPath $HomePath) { throw 'Use uma pasta NOVA. Nao se adota o piloto local nem outra instalacao.' }
+    $cfg=Get-Content -LiteralPath $Configuration -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-WifiConfiguration $cfg
     Assert-GGSeparatePaths -HomePath $cfg.TlsSource -SourceRoot $sourceRoot
     foreach ($file in @('server-chain.crt','server.key','device-ca.crt','device-ca.crl')) {
         if (-not (Test-Path -LiteralPath (Join-Path $cfg.TlsSource $file) -PathType Leaf)) { throw "Falta ficheiro TLS aprovado: $file" }
@@ -101,6 +104,7 @@ if ([IO.File]::ReadAllText((Join-Path $HomePath 'wifi.env')) -ne (Expected-Env $
 # Stop remains available even when a certificate expires or is being replaced.
 Assert-GGHost -Port $state.Config.Port -RuntimeOnly
 if ($Action -eq 'Stop') { Invoke-Wifi $state @('stop','--timeout','45','proxy','app','db'); return }
+Assert-WifiConfiguration $state.Config
 if ($Action -eq 'RenewTLS') {
     if (-not $ITApproved) { throw 'Renovar TLS exige -ITApproved apos revisao da informatica.' }
     $currentHashes=File-Hashes $HomePath $sourceRoot

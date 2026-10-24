@@ -238,9 +238,10 @@ e três de ligação/POST interrompido/adaptação ao toque. PostgreSQL 17 foi c
 projeto/volume exclusivo de regressão, com segredo e porta loopback próprios.
 Não foi usada a ligação da base reservada nem lido/importado o Excel.
 
-**40 testes PowerShell 5.1 aprovados no CI Windows:** 24 da Etapa 5 e 16 do
+**41 testes PowerShell 5.1 no CI Windows:** 24 da Etapa 5 e 17 do
 assistente Wi-Fi. Docker/PKI são simulados nos testes Wi-Fi; validam parsing,
-autorização explícita, IPv4/DNS/rede, pasta/namespace novos, recusa de alterações,
+autorização explícita, IPv4/DNS/rede, pasta/namespace novos, recusa de alterações
+conjuntas ao estado/ambiente que tentem publicar num wildcard,
 arranque sem build/migração, paragem preservadora e renovação TLS sem reabertura.
 Não comprovam confiança de certificados ou firewall/Windows/Android reais.
 
