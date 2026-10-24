@@ -178,8 +178,8 @@ function Get-GGEnvironmentText {
         if ($path -match "[`r`n`"'$]" -or -not [IO.Path]::IsPathRooted($path)) { throw 'A pasta contem caracteres nao suportados pelo perfil seguro.' }
     }
     if ($State.Home.StartsWith('\\') -or $State.Source.StartsWith('\\')) { throw 'As pastas do piloto devem ser locais.' }
-    $source = $State.Source.Replace('\','/')
-    $secrets = (Join-Path $State.Home 'secrets').Replace('\','/')
+    $source = $State.Source.Replace('\','/').Replace("'","\'")
+    $secrets = (Join-Path $State.Home 'secrets').Replace('\','/').Replace("'","\'")
     return "GG_PILOT_ID=$($State.Instance)`nGG_PILOT_IMAGE=$($State.Project):stage5`nGG_HTTP_PORT=$($State.Port)`nGG_SOURCE_ROOT='$source'`nGG_SECRET_ROOT='$secrets'`n"
 }
 
@@ -190,6 +190,23 @@ function Get-GGPilotStatus {
     $status = $raw | ConvertFrom-Json
     if ($status.mode -ne 'synthetic-v1' -or $status.instance -ne $State.Instance -or -not $status.seeded) { throw 'O servidor nao corresponde a este piloto.' }
     return $status
+}
+
+function Wait-GGHttp {
+    param([int]$Port)
+    for ($attempt=0; $attempt -lt 12; $attempt++) {
+        $response=$null
+        try {
+            $request=[Net.HttpWebRequest]::Create(('http://127.0.0.1:{0}/entrar/' -f $Port))
+            $request.Proxy=$null
+            $request.AllowAutoRedirect=$false
+            $request.Timeout=2000
+            $response=$request.GetResponse()
+            if ([int]$response.StatusCode -eq 200) { return }
+        } catch { } finally { if ($null -ne $response) { $response.Dispose() } }
+        Start-Sleep -Seconds 1
+    }
+    throw 'A aplicacao nao respondeu na porta local. Preserve o piloto e contacte a informatica.'
 }
 
 function New-GGShortcuts {
@@ -240,6 +257,7 @@ function Install-GGPilot {
     Invoke-GGCompose $state -Arguments @('--profile','setup','run','--rm','initialize')
     Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','180','app')
     $status = Get-GGPilotStatus $state
+    Wait-GGHttp -Port $state.Port
     $state.Installed = $true
     Write-GGFile (Join-Path $state.Home 'installation.json') ($state | ConvertTo-Json)
     if (-not $NoShortcuts) { New-GGShortcuts $state.Home }
@@ -255,6 +273,7 @@ function Start-GGPilot {
     if (-not $state.Installed) { throw 'Instalacao incompleta. Execute Instalar.cmd para retomar; nao apague a pasta nem os volumes.' }
     Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','180','db','app')
     $null = Get-GGPilotStatus $state
+    Wait-GGHttp -Port $state.Port
     if (-not $NoBrowser) { Start-Process ("http://127.0.0.1:{0}/" -f $state.Port) }
 }
 
@@ -303,6 +322,7 @@ function Recover-GGPilot {
     Invoke-GGCompose $state -Arguments @('--profile','setup','run','--rm','--volume',$mount,'initialize','python','/app/deploy/windows/pilot.py','recover')
     Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','180','app')
     $null = Get-GGPilotStatus $state
+    Wait-GGHttp -Port $state.Port
     $state.Installed = $true
     Write-GGFile (Join-Path $state.Home 'installation.json') ($state | ConvertTo-Json)
     Write-Host 'Copia recuperada numa instalacao independente. Valide-a antes de mudar atalhos; a origem e os seus atalhos nao foram substituidos.'

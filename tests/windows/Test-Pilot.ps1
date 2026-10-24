@@ -24,6 +24,7 @@ try {
     $module = Import-Module (Join-Path $root 'scripts\windows\Common.psm1') -Force -PassThru -DisableNameChecking
     # Only this disposable test process replaces module functions; no production test bypass.
     & $module {
+        function script:Wait-GGHttp { param([int]$Port) }
         function script:Get-GGSystem { [pscustomobject]@{Build=22631;Client=$true;RamBytes=16GB;FreeBytes=40GB;X64=$true} }
         $script:Calls = New-Object System.Collections.Generic.List[object]
         $script:Endpoint = 'npipe:////./pipe/dockerDesktopLinuxEngine'
@@ -72,7 +73,7 @@ try {
         Assert-True ($a -ne $b)
         Assert-True ($a -match '^[A-Za-z0-9_-]{64}$')
     }
-    $homePath=Join-Path $temporary ('piloto com espa'+[char]0xE7+'os')
+    $homePath=Join-Path $temporary ("piloto com espa"+[char]0xE7+"os O'Neill `$")
     $state=New-GGInstallation -HomePath $homePath -SourceRoot $root
     & $module {param($path) $script:TestState=Join-Path $path 'installation.json'} $homePath
     Test 'New installation uses unique namespace and synthetic mode' {

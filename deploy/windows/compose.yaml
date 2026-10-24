@@ -19,7 +19,7 @@ x-app: &app
     - /tmp:rw,noexec,nosuid,size=128m
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
-  networks: [pilot]
+  networks: [pilot, browser]
   secrets: [django_key, db_app_password]
   volumes:
     - pilot_backups:/backups
@@ -75,6 +75,7 @@ volumes:
 networks:
   pilot:
     internal: true
+  browser: {}
 secrets:
   django_key:
     file: ${GG_SECRET_ROOT:?Pasta privada}/django_key

@@ -58,8 +58,9 @@ def make_state(home, image, port):
         # container UID 10001. Windows uses private NTFS ACLs instead.
         path.chmod(0o444)
     env_file = home / "pilot.env"
+    escaped_secret_root = str(secret_root).replace("'", "\\'")
     env_file.write_text(
-        f"GG_PILOT_ID={instance}\nGG_PILOT_IMAGE={image}\nGG_HTTP_PORT={port}\nGG_SOURCE_ROOT='{ROOT}'\nGG_SECRET_ROOT='{secret_root}'\n"
+        f"GG_PILOT_ID={instance}\nGG_PILOT_IMAGE={image}\nGG_HTTP_PORT={port}\nGG_SOURCE_ROOT='{ROOT}'\nGG_SECRET_ROOT='{escaped_secret_root}'\n"
     )
     env_file.chmod(0o600)
     command = [
@@ -146,7 +147,7 @@ def main(image):
     with tempfile.TemporaryDirectory(prefix="gg-windows-stack-") as temporary:
         root = Path(temporary)
         try:
-            instance, project, source = make_state(root / "source", image, free_port())
+            instance, project, source = make_state(root / "source O'Neill $", image, free_port())
             config = json.loads(compose(source, "config", "--format", "json"))
             assert not config["services"]["db"].get("ports")
             assert config["networks"]["pilot"]["internal"] is True
