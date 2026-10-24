@@ -17,25 +17,53 @@
     }
   });
   const offline = document.querySelector('#offline-banner');
+  let serverAvailable = navigator.onLine;
+  let checking;
   const connectivity = () => {
-    if (offline) offline.hidden = navigator.onLine;
+    const available = navigator.onLine && serverAvailable;
+    if (offline) offline.hidden = available;
     document.querySelectorAll('form[method="post"] button[type="submit"], form[method="post"] button:not([type])').forEach(control => {
-      if (!navigator.onLine && !control.disabled) {
+      if (!available && !control.disabled) {
         control.dataset.offlineDisabled = '1';
         control.disabled = true;
-      } else if (navigator.onLine && control.dataset.offlineDisabled) {
+      } else if (available && control.dataset.offlineDisabled) {
         control.disabled = false;
         delete control.dataset.offlineDisabled;
       }
     });
   };
-  window.addEventListener('online', connectivity);
-  window.addEventListener('offline', connectivity);
+  const probe = () => {
+    if (checking) return checking;
+    checking = (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        if (!navigator.onLine) throw new Error('offline');
+        const response = await fetch('/ligacao/', {
+          cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal: controller.signal
+        });
+        serverAvailable = response.status === 204;
+      } catch (_) { serverAvailable = false; }
+      finally { clearTimeout(timeout); connectivity(); }
+      return serverAvailable;
+    })().finally(() => { checking = null; });
+    return checking;
+  };
+  window.addEventListener('online', probe);
+  window.addEventListener('offline', () => { serverAvailable = false; connectivity(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) probe(); });
   document.addEventListener('submit', event => {
-    if (!navigator.onLine && event.target.method.toLowerCase() === 'post') {
+    const form = event.target;
+    if (form.method.toLowerCase() !== 'post') return;
+    // Keep native form submission, named actions, validation and navigation semantics.
+    // A probe cannot prove a subsequent transaction will succeed; check known state.
+    if (!navigator.onLine || !serverAvailable) {
       event.preventDefault();
       connectivity();
+      probe();
     }
   });
   connectivity();
+  probe();
+  setInterval(() => { if (!document.hidden) probe(); }, 10000);
 })();

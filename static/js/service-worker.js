@@ -11,7 +11,14 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin) return;
+  if (request.method === 'POST' && request.mode === 'navigate') {
+    // One attempt only; a lost response may follow a committed transaction.
+    // Return generic guidance, never manufacture success, cache or replay the POST.
+    event.respondWith(fetch(request).catch(() => caches.match('/offline/')));
+    return;
+  }
+  if (request.method !== 'GET') return;
   if (PUBLIC.has(url.pathname) && !url.search) {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(request).then(cached => cached || fetch(request))));
   } else if (request.mode === 'navigate') {

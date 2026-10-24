@@ -5,6 +5,7 @@ from accounts.views import ProtectedLoginView
 from web import pwa
 
 urlpatterns = [
+    path("ligacao/", pwa.connection_status, name="connection-status"),
     path("manifest.webmanifest", pwa.manifest, name="manifest"),
     path("service-worker.js", pwa.service_worker, name="service-worker"),
     path("offline/", pwa.offline, name="offline"),
