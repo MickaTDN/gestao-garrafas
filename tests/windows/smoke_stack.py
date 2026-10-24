@@ -53,7 +53,10 @@ def make_state(home, image, port):
     for name in ("django_key", "db_owner_password", "db_app_password"):
         path = secret_root / name
         path.write_text(secrets.token_urlsafe(48) + "\n")
-        path.chmod(0o600)
+        # Compose bind-mounted secrets retain host modes on Linux. The enclosing
+        # temporary directories are 0700; the read-only file must be readable by
+        # container UID 10001. Windows uses private NTFS ACLs instead.
+        path.chmod(0o444)
     env_file = home / "pilot.env"
     env_file.write_text(
         f"GG_PILOT_ID={instance}\nGG_PILOT_IMAGE={image}\nGG_HTTP_PORT={port}\nGG_SOURCE_ROOT='{ROOT}'\nGG_SECRET_ROOT='{secret_root}'\n"
