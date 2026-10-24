@@ -229,6 +229,7 @@ def main(image):
             )
             archive = root / "copy.tar.gz"
             compose(source, "cp", f"app:/backups/{archives[-1]}", str(archive))
+            archive.chmod(0o444)  # read-only bind for container UID, private parent remains 0700
             instance2, project2, recovered = make_state(root / "recovered", image, free_port())
             compose(recovered, "up", "--detach", "--wait", "--wait-timeout", "120", "db")
             compose(
