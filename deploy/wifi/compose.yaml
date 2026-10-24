@@ -16,6 +16,7 @@ x-app: &app
     GG_HTTPS_PORT: ${GG_HTTPS_PORT:-8443}
     GG_PROXY_SUBNET: ${GG_PROXY_SUBNET:?Rede Docker /29 livre}
     GG_PROXY_IP: ${GG_PROXY_IP:?IP exclusivo do proxy}
+    GG_APP_IP: ${GG_APP_IP:?IP exclusivo da aplicação}
     BACKUP_ROOT: /backups
   read_only: true
   tmpfs: ["/tmp:rw,noexec,nosuid,size=128m"]

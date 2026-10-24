@@ -8,6 +8,7 @@ import argparse
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -100,6 +101,16 @@ def main(image):
             compose("up", "-d", "--wait", "--wait-timeout", "180", "app")
             compose("run", "--rm", "--no-deps", "proxy", "nginx", "-t")
             compose("up", "-d", "proxy")
+            for container in compose("ps", "--quiet").splitlines():
+                data = json.loads(run(["docker", "inspect", container]))[0]
+                labels = data["Config"]["Labels"]
+                assert labels["com.docker.compose.project"] == project
+                bindings = data["HostConfig"]["PortBindings"] or {}
+                if labels["com.docker.compose.service"] == "proxy":
+                    assert list(bindings) == ["8443/tcp"]
+                    assert all(item["HostIp"] == "127.0.0.1" for item in bindings["8443/tcp"])
+                else:
+                    assert not bindings
             url = f"https://{HOST}:{port}"
             tls = home / "tls"
 
@@ -150,6 +161,14 @@ def main(image):
             )
             assert curl("/stock/").stdout == "302"
             assert curl(extra=("--request", "POST", "--data", "username=x")).stdout == "403"
+            jar = root / "csrf-cookies"
+            assert curl(extra=("--cookie-jar", str(jar))).stdout == "200"
+            token = re.search(
+                r'name="csrfmiddlewaretoken" value="([^"]+)"', (root / "curl-body").read_text()
+            )[1]
+            post = ("--cookie", str(jar), "--data-urlencode", "csrfmiddlewaretoken=" + token)
+            assert curl(extra=(*post, "--header", "Origin: https://evil.invalid")).stdout == "403"
+            assert curl(extra=(*post, "--header", "Origin: " + url)).stdout == "200"
             # Removing server trust must fail; no -k / ignore_https_errors anywhere.
             bad = subprocess.run(
                 [
@@ -411,7 +430,7 @@ def main(image):
                     assert stocks() == [30, 0, 9]
                     page.unroute("**/ligacao/")
                     page.evaluate("window.dispatchEvent(new Event('online'))")
-                    page.wait_for_function("document.querySelector('#offline-banner').hidden")
+                    page.locator("#offline-banner").wait_for(state="hidden")
                     # Lose only the response AFTER PostgreSQL has committed. Never replay.
                     context.set_offline(True)
                     page.wait_for_function(
@@ -438,6 +457,12 @@ def main(image):
                     )
                     assert result == "unknown"
                     assert stocks() == [29, 0, 9]
+                    assert (
+                        shell(
+                            "from inventory.models import Movement; print(Movement.objects.filter(status='confirmed').count())"
+                        ).splitlines()[-1]
+                        == "3"
+                    )
                     page.unroute("**/operacoes/*/conferir/")
                     page.goto(inventory_review)
                     assert stocks() == [29, 0, 9]

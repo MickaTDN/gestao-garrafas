@@ -108,9 +108,13 @@ se um certificado mudou. Nunca usar prune/reset ou remover volumes para recupera
 
 `Diagnose` verifica serviços, marcador sintético e configuração/certificados Nginx,
 sem imprimir segredos; não prova confiança Android/firewall. Validar no browser.
-Certificado/CRL expirados ou revogação impedem acesso. Na renovação, parar, obter
-ficheiros aprovados e rever configuração/hashes com informática; o assistente
-recusa mudanças silenciosas. Não regenerar segredos nem adotar volumes para renovar.
+Certificado/CRL expirados ou revogação impedem acesso. Renovação: colocar os quatro
+ficheiros aprovados novos em `TlsSource`, sem mudar DNS/origens/Compose, e executar
+`Wifi.ps1 -Action RenewTLS -ITApproved`. Para o proxy, copia os ficheiros, valida
+Nginx e atualiza os hashes; **não o reinicia**. A informática verifica confiança e
+revogação antes de `Start`. Sem aprovação ou se a validação falhar, não há reabertura
+automática. Não regenerar segredos nem adotar volumes para renovar. Mudanças de
+endereço/arquitetura exigem revisão própria, não são uma renovação TLS.
 
 | Sintoma | Verificação segura |
 | --- | --- |

@@ -103,6 +103,15 @@ Export-ModuleMember -Function *
         Assert (($global:WifiCalls -join '') -match '"stop"')
         Assert (($global:WifiCalls -join '') -notmatch 'down|prune|--volumes')
     }
+    Test 'TLS renewal requires separate explicit approval' { Refuses { & $script -Action RenewTLS -HomePath $homePath } }
+    Test 'Approved TLS renewal preserves identity and does not restart the proxy' {
+        $before=Get-Content (Join-Path $homePath 'wifi-installation.json') -Raw | ConvertFrom-Json
+        $global:WifiCalls.Clear();& $script -Action RenewTLS -HomePath $homePath -ITApproved
+        $after=Get-Content (Join-Path $homePath 'wifi-installation.json') -Raw | ConvertFrom-Json
+        Assert ($before.Project -eq $after.Project -and $before.Instance -eq $after.Instance)
+        Assert (($global:WifiCalls -join '') -notmatch '"up"|"initialize"|"migrate"|--volumes')
+        Assert (($global:WifiCalls -join '') -match '"nginx","-t"')
+    }
     Write-Host "$passed Wi-Fi PowerShell tests passed (Docker/TLS mocked; no deployment)."
 } finally {
     Remove-Module Common -ErrorAction SilentlyContinue

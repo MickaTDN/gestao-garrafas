@@ -43,7 +43,7 @@ class WifiConnectivityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(self.database_call(lambda: Movement.objects.get().status), "draft")
         page.context.unroute("**/ligacao/")
         page.evaluate("window.dispatchEvent(new Event('online'))")
-        page.wait_for_function("document.querySelector('#offline-banner').hidden")
+        page.locator("#offline-banner").wait_for(state="hidden")
         page.get_by_role("button", name="Confirmar entrada", exact=True).click()
         self.assertIn("CONFIRMADO", page.locator("body").inner_text())
         self.assertEqual(self.stocks(), [17, 5])

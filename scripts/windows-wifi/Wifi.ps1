@@ -1,7 +1,7 @@
 # PowerShell 5.1. No elevation, certificate installation, DNS or firewall changes.
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('Prepare','Install','Start','Stop','Diagnose','Account','Backup')][string]$Action,
+    [Parameter(Mandatory=$true)][ValidateSet('Prepare','Install','Start','Stop','Diagnose','Account','Backup','RenewTLS')][string]$Action,
     [string]$HomePath=(Join-Path $env:LOCALAPPDATA 'GestaoGarrafas\WifiSintetico'),
     [string]$Configuration,
     [string]$Username,
@@ -101,6 +101,21 @@ if ([IO.File]::ReadAllText((Join-Path $HomePath 'wifi.env')) -ne (Expected-Env $
 # Stop remains available even when a certificate expires or is being replaced.
 Assert-GGHost -Port $state.Config.Port -RuntimeOnly
 if ($Action -eq 'Stop') { Invoke-Wifi $state @('stop','--timeout','45','proxy','app','db'); return }
+if ($Action -eq 'RenewTLS') {
+    if (-not $ITApproved) { throw 'Renovar TLS exige -ITApproved apos revisao da informatica.' }
+    $currentHashes=File-Hashes $HomePath $sourceRoot
+    if (($state.Hashes[0..3] -join '|') -cne ($currentHashes[0..3] -join '|')) { throw 'A renovacao de TLS nao aceita alterar Compose, hostname ou lista de origens.' }
+    Assert-GGSeparatePaths -HomePath $state.Config.TlsSource -SourceRoot $sourceRoot
+    Invoke-Wifi $state @('stop','--timeout','45','proxy')
+    foreach ($file in @('server-chain.crt','server.key','device-ca.crt','device-ca.crl')) {
+        Copy-Item -LiteralPath (Join-Path $state.Config.TlsSource $file) -Destination (Join-Path $HomePath "tls\$file")
+    }
+    Invoke-Wifi $state @('run','--rm','--no-deps','proxy','nginx','-t')
+    $state.Hashes=File-Hashes $HomePath $sourceRoot
+    Write-GGFile $stateFile ($state | ConvertTo-Json -Depth 5)
+    Write-Host 'TLS revisto e validado; proxy continua parado. Execute Start apenas apos validacao de confianca/revogacao pela informatica.'
+    return
+}
 if (($state.Hashes -join '|') -cne ((File-Hashes $HomePath $sourceRoot) -join '|')) { throw 'Configuracao/certificados alterados. Pare o perfil e peca revisao a informatica; nao se aceita uma alteracao silenciosa.' }
 foreach ($secret in @('django_key','db_owner_password','db_app_password')) { if (-not (Test-Path -LiteralPath (Join-Path $HomePath "secrets\$secret"))) { throw 'Segredo em falta; nao regenerar.' } }
 if ($Action -eq 'Install') {
