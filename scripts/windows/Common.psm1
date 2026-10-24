@@ -312,6 +312,7 @@ function Backup-GGPilot {
     $state = Get-GGInstallation $HomePath
     Assert-GGHost -Port $state.Port -RuntimeOnly
     $null = Get-GGPilotStatus $state
+    Assert-GGSeparatePaths -HomePath $Destination -SourceRoot $state.Source
     if (Test-Path -LiteralPath $Destination) { throw 'O destino ja existe; nao sera substituido.' }
     Invoke-GGCompose $state -Arguments @('exec','-T','app','python','manage.py','backup_data','--synthetic')
     # Export complete archive files to a NEW directory, without accepting shell commands.

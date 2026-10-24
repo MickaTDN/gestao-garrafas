@@ -21,3 +21,11 @@ staticfiles/
 test-results/
 playwright-report/
 *.log
+
+# Private Windows pilot state and database/document archives.
+**/installation.json
+**/pilot.env
+**/secrets/
+*.tar.gz
+*.tar.gz.gpg
+*.lnk

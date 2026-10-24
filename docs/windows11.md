@@ -139,7 +139,7 @@ as bases. Não executar `down -v`, `volume rm` ou `system prune` sobre o piloto.
 Os scripts do utilizador não contêm comandos de remoção/reset.
 
 **Backup manual do piloto:** com a aplicação ligada, abrir **Backup.cmd** na pasta
-privada. Escolher uma pasta nova num suporte local NTFS autorizado; uma pasta
+privada. Escolher uma pasta nova num suporte local NTFS autorizado e fora da pasta do código; uma pasta
 existente não é substituída. Usa o comando de backup sintético da Etapa 4 e copia
 os arquivos para essa pasta com ACL privada. A cópia noutro diretório do mesmo
 disco não protege contra perda do computador. O piloto tem apenas dados fictícios;

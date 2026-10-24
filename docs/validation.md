@@ -193,10 +193,10 @@ externos ou reservados/SQLite, hosts apenas locais, ausência de proxies/CSRF Wi
 segredos de ficheiro, seleção de owner apenas na preparação, cookies HTTP limitados
 a este perfil e ausência de comandos destrutivos/de bypass nos assistentes.
 
-**23 testes PowerShell 5.1** exercitam parsing, diagnóstico com Docker simulado,
+**24 testes PowerShell 5.1** exercitam parsing, diagnóstico com Docker simulado,
 recusa de contexto remoto, requisitos, segredos distintos, ACL NTFS, caminhos com
 espaços/acentos/apóstrofo/dólar, repetição sem regenerar segredos, pasta desconhecida,
-instalação incompleta, separação entre código/segredos, arranque sem migrações/build, paragem que conserva volumes,
+instalação incompleta, separação entre código/segredos/backups, arranque sem migrações/build, paragem que conserva volumes,
 configuração alterada, segredo em falta, criação interativa sem credenciais
 predefinidas, recusa de restauro sobre origem e atalhos por utilizador. Executam-se
 num runner Windows descartável; não se instala Docker/WSL nem se testa um PC real.

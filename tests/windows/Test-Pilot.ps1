@@ -167,6 +167,11 @@ try {
         Assert-True ($calls -notmatch 'password-env|password=')
         Assert-Throws {New-GGPilotAccount -HomePath $homePath -Username 'bad;command'}
     }
+    Test 'Backups cannot be exported into the source checkout' {
+        $unsafe=Join-Path $root 'must-not-create-backup'
+        Assert-Throws {Backup-GGPilot -HomePath $homePath -Destination $unsafe}
+        Assert-True (-not (Test-Path -LiteralPath $unsafe))
+    }
     Test 'Recovery refuses the original installation directory' {
         Assert-Throws {Recover-GGPilot -Archive (Join-Path $temporary 'any.tar.gz') -NewHomePath $homePath -SourceRoot $root}
     }
