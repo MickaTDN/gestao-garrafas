@@ -292,7 +292,8 @@ function New-GGPilotAccount {
     Assert-GGHost -Port $state.Port -RuntimeOnly
     $null = Get-GGPilotStatus $state
     if ($Username -notmatch '^[A-Za-z0-9_.@+-]{1,150}$') { throw 'Indique um identificador simples, sem espacos, com ate 150 caracteres.' }
-    Invoke-GGCompose $state -Arguments @('exec','app','python','manage.py','create_user',$Username,'--role','admin')
+    # Keep the real terminal attached: getpass prompts must not be line-buffered.
+    Invoke-GGNative -Arguments @((Get-GGComposeArguments $state) + @('exec','app','python','manage.py','create_user',$Username,'--role','admin'))
 }
 
 function Backup-GGPilot {
