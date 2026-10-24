@@ -119,7 +119,8 @@ try {
         Start-GGPilot -HomePath $homePath -NoBrowser
         $calls=(& $module {$script:Calls|ConvertTo-Json -Depth 5})
         Assert-True ($calls -match 'up')
-        Assert-True ($calls -notmatch 'initialize|migrate|build')
+        Assert-True ($calls -notmatch '"initialize"|"migrate"|"build"')
+        Assert-True ($calls -match '--no-build')
     }
     Test 'Stop preserves volumes and is scoped to pilot app and db' {
         & $module {$script:Calls.Clear()}

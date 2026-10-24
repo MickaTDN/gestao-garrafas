@@ -271,7 +271,7 @@ function Start-GGPilot {
     Assert-GGHost -Port $state.Port -RuntimeOnly
     Assert-GGEnvironment $state
     if (-not $state.Installed) { throw 'Instalacao incompleta. Execute Instalar.cmd para retomar; nao apague a pasta nem os volumes.' }
-    Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','180','db','app')
+    Invoke-GGCompose $state -Arguments @('up','--no-build','--pull','never','--detach','--wait','--wait-timeout','180','db','app')
     $null = Get-GGPilotStatus $state
     Wait-GGHttp -Port $state.Port
     if (-not $NoBrowser) { Start-Process ("http://127.0.0.1:{0}/" -f $state.Port) }
