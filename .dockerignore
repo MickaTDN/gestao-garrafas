@@ -29,3 +29,9 @@ attachments
 **/*.tar.gz*
 **/.env
 **/.env.*
+
+# Windows per-user pilot state is never part of an application image.
+**/secrets
+**/installation.json
+**/pilot.env
+**/*.previous

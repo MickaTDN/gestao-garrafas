@@ -172,12 +172,22 @@ function Assert-GGEnvironment {
     if ($actual -ne $expected) { throw 'O ambiente do piloto foi alterado. Execucao recusada sem modificar volumes.' }
 }
 
+function Assert-GGSeparatePaths {
+    param([string]$HomePath,[string]$SourceRoot)
+    $homeFull=[IO.Path]::GetFullPath($HomePath).TrimEnd([char]92,[char]47)
+    $sourceFull=[IO.Path]::GetFullPath($SourceRoot).TrimEnd([char]92,[char]47)
+    if ($homeFull.Equals($sourceFull,[StringComparison]::OrdinalIgnoreCase) -or $homeFull.StartsWith($sourceFull+'\',[StringComparison]::OrdinalIgnoreCase) -or $sourceFull.StartsWith($homeFull+'\',[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A pasta privada e a pasta do codigo devem ser separadas, sem uma conter a outra. Nenhum segredo deve entrar na imagem.'
+    }
+}
+
 function Get-GGEnvironmentText {
     param($State)
     foreach ($path in @($State.Home,$State.Source)) {
         if ($path -match "[`r`n`"]" -or -not [IO.Path]::IsPathRooted($path)) { throw 'A pasta contem caracteres nao suportados pelo perfil seguro.' }
     }
     if ($State.Home.StartsWith('\\') -or $State.Source.StartsWith('\\')) { throw 'As pastas do piloto devem ser locais.' }
+    Assert-GGSeparatePaths -HomePath $State.Home -SourceRoot $State.Source
     $source = $State.Source.Replace('\','/').Replace("'","\'")
     $secrets = (Join-Path $State.Home 'secrets').Replace('\','/').Replace("'","\'")
     return "GG_PILOT_ID=$($State.Instance)`nGG_PILOT_IMAGE=$($State.Project):stage5`nGG_HTTP_PORT=$($State.Port)`nGG_SOURCE_ROOT='$source'`nGG_SECRET_ROOT='$secrets'`n"
@@ -224,6 +234,7 @@ function New-GGShortcuts {
 function New-GGInstallation {
     param([string]$HomePath=(Get-GGDefaultHome),[string]$SourceRoot=$script:BundleRoot,[int]$Port=8765)
     Assert-GGHost -Port $Port
+    Assert-GGSeparatePaths -HomePath $HomePath -SourceRoot $SourceRoot
     if (Test-Path -LiteralPath (Join-Path $HomePath 'installation.json')) {
         $state = Get-GGInstallation $HomePath
         Assert-GGEnvironment $state

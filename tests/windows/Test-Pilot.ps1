@@ -95,6 +95,11 @@ try {
         Assert-True ($again.Instance -eq $state.Instance)
         Assert-True ((Get-FileHash -LiteralPath $before.Path).Hash -eq $before.Hash)
     }
+    Test 'Private secrets cannot be placed in the image build context' {
+        $unsafe=Join-Path $root 'must-not-create-pilot'
+        Assert-Throws {New-GGInstallation -HomePath $unsafe -SourceRoot $root}
+        Assert-True (-not (Test-Path -LiteralPath $unsafe))
+    }
     Test 'Unknown existing directory is never adopted' {
         $foreign=Join-Path $temporary 'foreign';$null=New-Item -ItemType Directory -Path $foreign
         Set-Content -LiteralPath (Join-Path $foreign 'keep.txt') -Value 'synthetic existing file'

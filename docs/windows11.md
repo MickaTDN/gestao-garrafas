@@ -45,7 +45,10 @@ executar à força ou usar ferramentas portáteis para contornar a política.
 ## Instalação, passo a passo, depois da aprovação
 
 1. Obter o código revisto do PR/versão aprovada. Guardar numa pasta local NTFS do
-   utilizador, fora de OneDrive/partilhas/pastas temporárias, e conservar essa pasta.
+   utilizador, fora de OneDrive/partilhas/pastas temporárias, por exemplo
+   `%USERPROFILE%\Aplicacoes\GestaoGarrafas-codigo`, e conservar essa pasta.
+   A pasta do código e a pasta privada do piloto têm de ser separadas: uma não
+   pode conter a outra, para impedir que segredos entrem no contexto da imagem.
    Não incluir Excel, dados reais ou ficheiros privados no checkout.
 2. Abrir o Docker Desktop e aguardar pelo backend Linux. A informática decide os
    recursos WSL2: como referência, 4–6 GB para o conjunto inicial, deixando memória
