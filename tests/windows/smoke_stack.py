@@ -18,16 +18,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(args, *, capture=True, env=None):
-    result = subprocess.run(
-        args,
-        cwd=ROOT,
-        env=env,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.PIPE,
-        timeout=300,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            cwd=ROOT,
+            env=env,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.PIPE,
+            timeout=300,
+        )
+    except subprocess.CalledProcessError as error:
+        # CI-only synthetic output. User scripts never dump Docker environments/secrets.
+        detail = ((error.stdout or "") + " " + (error.stderr or ""))[-1800:]
+        detail = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print("::error title=Windows pilot integration::" + detail, flush=True)
+        raise
     return result.stdout.strip() if capture else ""
 
 

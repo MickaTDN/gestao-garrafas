@@ -274,8 +274,11 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as error:
         # Never print connection strings, passwords, signatures or raw SQL.
+        print("Categoria de diagnostico: " + type(error).__name__, file=sys.stderr)
+        if isinstance(error, RuntimeError):
+            print(str(error), file=sys.stderr)
         print(
             "Falha no piloto Windows. Confirme perfil, marcador e permissoes; preserve os volumes e segredos.",
             file=sys.stderr,
