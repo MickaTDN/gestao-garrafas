@@ -8,7 +8,12 @@ try {
         $source = $state.Source
         $homePath = $PSScriptRoot
     } else { $homePath = Get-GGDefaultHome }
-    $null = Install-GGPilot -SourceRoot $source -HomePath $homePath -Port $Port
+    $installed = Install-GGPilot -SourceRoot $source -HomePath $homePath -Port $Port
+    if ((Read-Host 'Deseja criar agora o seu administrador? (S/N)') -eq 'S') {
+        $username = Read-Host 'Escolha o identificador (nao existe conta predefinida)'
+        New-GGPilotAccount -HomePath $installed.Home -Username $username
+    }
+    Write-Host ('Pasta privada do piloto: ' + $installed.Home)
     Write-Host 'Use o atalho Gestao de Garrafas - Piloto. Para criar o primeiro administrador, abra CriarUtilizador.cmd na pasta do piloto.'
     exit 0
 } catch {

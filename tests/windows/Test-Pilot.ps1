@@ -128,6 +128,11 @@ try {
         Assert-True ($calls -match [regex]::Escape($state.Project))
         Assert-True ($calls -notmatch 'down|prune|remove|--volumes')
     }
+    Test 'Stop remains available when disk is low or CIM is unavailable' {
+        & $module {function script:Get-GGSystem {throw 'Synthetic restricted CIM'}}
+        Stop-GGPilot -HomePath $homePath
+        & $module {function script:Get-GGSystem {[pscustomobject]@{Build=22631;Client=$true;RamBytes=16GB;FreeBytes=40GB;X64=$true}}}
+    }
     Test 'Forged environment refuses all mutation commands' {
         $path=Join-Path $homePath 'pilot.env';$text=[IO.File]::ReadAllText($path)
         [IO.File]::WriteAllText($path,$text+"DB_HOST=unapproved.invalid`n")

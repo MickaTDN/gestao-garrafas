@@ -85,10 +85,11 @@ function Get-GGPreflight {
 }
 
 function Assert-GGHost {
-    param([int]$Port=8765)
+    param([int]$Port=8765,[switch]$RuntimeOnly)
     $report = Get-GGPreflight -Port $Port
-    if (-not $report.Ready) {
-        $failed = @($report.Checks | Where-Object {-not $_.OK} | ForEach-Object {$_.Code}) -join ', '
+    $failures = @($report.Checks | Where-Object {-not $_.OK -and (-not $RuntimeOnly -or $_.Code -notin @('MEMORIA','DISCO','SISTEMA_NAO_VERIFICADO','WINDOWS11'))})
+    if ($failures.Count -gt 0) {
+        $failed = @($failures | ForEach-Object {$_.Code}) -join ', '
         throw "Diagnostico bloqueado: $failed. Execute Diagnostico.cmd e contacte a informatica; nada foi instalado no Windows."
     }
 }
@@ -248,7 +249,7 @@ function Install-GGPilot {
 function Start-GGPilot {
     param([string]$HomePath=(Get-GGDefaultHome),[switch]$NoBrowser)
     $state = Get-GGInstallation $HomePath
-    Assert-GGHost -Port $state.Port
+    Assert-GGHost -Port $state.Port -RuntimeOnly
     Assert-GGEnvironment $state
     if (-not $state.Installed) { throw 'Instalacao incompleta. Execute Instalar.cmd para retomar; nao apague a pasta nem os volumes.' }
     Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','180','db','app')
@@ -259,7 +260,7 @@ function Start-GGPilot {
 function Stop-GGPilot {
     param([string]$HomePath=(Get-GGDefaultHome))
     $state = Get-GGInstallation $HomePath
-    Assert-GGHost -Port $state.Port
+    Assert-GGHost -Port $state.Port -RuntimeOnly
     Assert-GGEnvironment $state
     Invoke-GGCompose $state -Arguments @('stop','--timeout','45','app','db')
     Write-Host 'Piloto parado. Base de dados, documentos, backups e segredos conservados.'
@@ -268,7 +269,7 @@ function Stop-GGPilot {
 function New-GGPilotAccount {
     param([string]$HomePath=(Get-GGDefaultHome),[string]$Username)
     $state = Get-GGInstallation $HomePath
-    Assert-GGHost -Port $state.Port
+    Assert-GGHost -Port $state.Port -RuntimeOnly
     $null = Get-GGPilotStatus $state
     if ($Username -notmatch '^[A-Za-z0-9_.@+-]{1,150}$') { throw 'Indique um identificador simples, sem espacos, com ate 150 caracteres.' }
     Invoke-GGCompose $state -Arguments @('exec','app','python','manage.py','create_user',$Username,'--role','admin')
@@ -277,7 +278,7 @@ function New-GGPilotAccount {
 function Backup-GGPilot {
     param([string]$HomePath=(Get-GGDefaultHome),[string]$Destination)
     $state = Get-GGInstallation $HomePath
-    Assert-GGHost -Port $state.Port
+    Assert-GGHost -Port $state.Port -RuntimeOnly
     $null = Get-GGPilotStatus $state
     if (Test-Path -LiteralPath $Destination) { throw 'O destino ja existe; nao sera substituido.' }
     Invoke-GGCompose $state -Arguments @('exec','-T','app','python','manage.py','backup_data','--synthetic')
