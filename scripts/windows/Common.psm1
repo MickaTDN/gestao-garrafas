@@ -343,3 +343,5 @@ function Recover-GGPilot {
 }
 
 Export-ModuleMember -Function Get-GGPreflight,Get-GGDefaultHome,Get-GGInstallation,New-GGInstallation,Install-GGPilot,Start-GGPilot,Stop-GGPilot,New-GGPilotAccount,Backup-GGPilot,New-GGShortcuts,New-GGSecret,Recover-GGPilot
+# Shared safeguards for the independent Wi-Fi assistant; local behaviour is unchanged.
+Export-ModuleMember -Function Assert-GGHost,Assert-GGSeparatePaths,Protect-GGDirectory,Write-GGFile,Invoke-GGNative

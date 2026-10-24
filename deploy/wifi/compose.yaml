@@ -1,0 +1,103 @@
+# Independent synthetic rehearsal. NEVER add external/shared volumes here.
+x-app: &app
+  image: ${GG_PILOT_IMAGE:?Imagem sintética revista}
+  build:
+    context: ${GG_SOURCE_ROOT:?Pasta do código}
+    dockerfile: deploy/Dockerfile
+  environment: &environment
+    DJANGO_SETTINGS_MODULE: config.android_wifi
+    GG_ANDROID_WIFI: synthetic-wifi-v1
+    GG_WINDOWS_PILOT: synthetic-v1
+    GG_PILOT_ID: ${GG_PILOT_ID:?Nova instalação}
+    APP_ENV: windows-local
+    DB_HOST: db
+    DB_NAME: garrafas_windows_synthetic
+    GG_WIFI_HOST: ${GG_WIFI_HOST:?DNS aprovado}
+    GG_HTTPS_PORT: ${GG_HTTPS_PORT:-8443}
+    GG_PROXY_SUBNET: ${GG_PROXY_SUBNET:?Rede Docker /29 livre}
+    GG_PROXY_IP: ${GG_PROXY_IP:?IP exclusivo do proxy}
+    BACKUP_ROOT: /backups
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=128m"]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [pilot, backend]
+  secrets: [django_key, db_app_password]
+  volumes: [pilot_backups:/backups]
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    extends:
+      file: ../windows/compose.yaml
+      service: db
+  app:
+    <<: *app
+    networks:
+      pilot: {}
+      backend:
+        ipv4_address: ${GG_APP_IP:?IP interno exclusivo da aplicação}
+    # NO ports, including loopback. Only proxy reaches Gunicorn.
+    healthcheck:
+      test: [CMD, env, DJANGO_SETTINGS_MODULE=config.windows_local, python, /app/deploy/windows/pilot.py, status]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    restart: "no"
+    stop_grace_period: 45s
+  initialize:
+    <<: *app
+    networks: [pilot]
+    profiles: [setup]
+    environment:
+      <<: *environment
+      DJANGO_SETTINGS_MODULE: config.windows_local
+      GG_BOOTSTRAP_OWNER: "1"
+    secrets: [django_key, db_app_password, db_owner_password]
+    command: [python, /app/deploy/windows/pilot.py, initialize]
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.28-alpine@sha256:7377697a821c131a924a7105fafbe7414db4e9fcc77a6f08f776f33f141ec3f8
+    command: [nginx, -g, "daemon off;"]
+    entrypoint: []
+    user: "101:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    ports:
+      - "${GG_BIND_IP:?IPv4 LAN específica aprovada}:${GG_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ${GG_WIFI_PRIVATE_ROOT:?Pasta privada fora do código}/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${GG_WIFI_PRIVATE_ROOT:?Pasta privada fora do código}/tls:/run/tls:ro
+      - ${GG_WIFI_PRIVATE_ROOT:?Pasta privada fora do código}/clients.conf:/etc/nginx/clients.conf:ro
+    networks:
+      backend:
+        ipv4_address: ${GG_PROXY_IP:?IP exclusivo}
+      edge: {}
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: "no"
+    stop_grace_period: 45s
+
+networks:
+  pilot:
+    internal: true
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${GG_PROXY_SUBNET:?Rede interna exclusiva /29}
+  edge: {}
+volumes:
+  pilot_database:
+  pilot_backups:
+secrets:
+  django_key:
+    file: ${GG_SECRET_ROOT:?Segredos privados novos}/django_key
+  db_app_password:
+    file: ${GG_SECRET_ROOT:?Segredos privados novos}/db_app_password
+  db_owner_password:
+    file: ${GG_SECRET_ROOT:?Segredos privados novos}/db_owner_password
