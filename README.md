@@ -27,6 +27,16 @@ Não execute as migrações ou operações seguintes na base reservada à public
 Os testes usam exclusivamente dados sintéticos; nunca reutilize dados privados
 como fixtures nem publique um lote apenas para experimentar os formulários.
 
+## Windows 11 — piloto local (Etapa 5)
+
+Use o [guia Windows](docs/windows11.md), depois de a informática aprovar Docker
+Desktop/WSL2 e a execução dos scripts. `scripts/windows/Diagnostico.cmd` só verifica
+pré-requisitos; `Instalar.cmd` prepara uma stack nova com dados fictícios e atalhos
+por utilizador. PostgreSQL não publica portas e a aplicação fica em 127.0.0.1.
+Não usa a `.env`, o Compose de desenvolvimento ou a base reservada à importação.
+Não executar instruções Linux ou alterar políticas do Windows para contornar
+bloqueios. Nada foi instalado num computador real por esta entrega.
+
 ## Executar em desenvolvimento
 
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.

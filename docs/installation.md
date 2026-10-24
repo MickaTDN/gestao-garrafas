@@ -5,6 +5,10 @@ backups de produção e não publica dados reais. As instruções seguintes dest
 a uma instalação futura autorizada. Não as executar sobre a base privada que
 conserva a pré-visualização pendente.
 
+Para **Windows 11 local**, seguir [windows11.md](windows11.md), não este
+procedimento Linux/servidor. A Etapa 5 reutiliza a imagem em Docker Desktop aprovado
+pela informática, com projeto sintético separado e acesso apenas por loopback.
+
 ## Requisitos
 
 - Linux mantido, Docker/Compose v2 para a imagem, ou Python 3.12 + uv 0.12.23.
