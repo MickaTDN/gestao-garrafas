@@ -124,7 +124,7 @@ function Write-GGFile {
     param([string]$Path,[string]$Value)
     $temporary = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
     [IO.File]::WriteAllText($temporary,$Value,(New-Object Text.UTF8Encoding $false))
-    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary,$Path,$null) } else { [IO.File]::Move($temporary,$Path) }
+    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary,$Path,($Path+'.previous')) } else { [IO.File]::Move($temporary,$Path) }
 }
 
 function Get-GGDefaultHome {

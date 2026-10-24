@@ -10,7 +10,7 @@ function Test([string]$name,[scriptblock]$body) {
     try { & $body; $script:Passed++; Write-Host ('PASS '+$name) }
     catch { $script:Failed.Add($name); $message=($name+': '+$_.Exception.Message).Replace("`r",' ').Replace("`n",' '); Write-Host ('FAIL '+$message); Write-Host ('::error title=Windows safeguard test::'+$message) }
 }
-$temporary = Join-Path $env:TEMP ('gg-pilot-tests-'+[guid]::NewGuid().ToString('N'))
+$temporary = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('Temp\gg-pilot-tests-'+[guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $temporary
 $oldDockerHost = $env:DOCKER_HOST
 try {
@@ -171,7 +171,7 @@ try {
         $shell=New-Object -ComObject WScript.Shell
         foreach($link in $links){
             $shortcut=$shell.CreateShortcut($link.FullName)
-            Assert-True ($shortcut.TargetPath.StartsWith($homePath))
+            Assert-True ($shortcut.TargetPath.StartsWith($homePath,[StringComparison]::OrdinalIgnoreCase)) ('Unexpected shortcut target: '+$shortcut.TargetPath+' expected under '+$homePath)
             Assert-True ([string]::IsNullOrEmpty($shortcut.Arguments))
         }
     }
