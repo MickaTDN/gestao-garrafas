@@ -8,7 +8,7 @@ function Assert-True($condition,$message='Assertion failed') { if (-not $conditi
 function Assert-Throws([scriptblock]$action) { $thrown=$false; try { & $action } catch {$thrown=$true}; Assert-True $thrown 'Expected refusal did not occur' }
 function Test([string]$name,[scriptblock]$body) {
     try { & $body; $script:Passed++; Write-Host ('PASS '+$name) }
-    catch { $script:Failed.Add($name); Write-Host ('FAIL '+$name+': '+$_.Exception.Message) }
+    catch { $script:Failed.Add($name); $message=($name+': '+$_.Exception.Message).Replace("`r",' ').Replace("`n",' '); Write-Host ('FAIL '+$message); Write-Host ('::error title=Windows safeguard test::'+$message) }
 }
 $temporary = Join-Path $env:TEMP ('gg-pilot-tests-'+[guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $temporary
@@ -179,6 +179,10 @@ try {
         $text=Get-Content (Join-Path $root 'scripts\windows\Common.psm1') -Raw
         Assert-True ($text -notmatch 'Set-ExecutionPolicy|Enable-WindowsOptionalFeature|New-NetFirewallRule|system.*prune')
     }
+} catch {
+    $message=$_.Exception.Message.Replace("`r",' ').Replace("`n",' ')
+    Write-Host ('::error title=Windows harness::'+$message)
+    throw
 } finally {
     $env:DOCKER_HOST=$oldDockerHost
     Remove-Item Function:\docker -ErrorAction SilentlyContinue
