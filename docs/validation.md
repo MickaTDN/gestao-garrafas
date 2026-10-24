@@ -229,3 +229,60 @@ Pendente: aceitação física Windows 11/Docker Desktop/WSL2 por informática, p
 corporativas, consola interativa/partilha de ficheiros, proxy/CA, arranque após
 suspensão/reinício, suporte externo de backup, impressoras e eventual Wi-Fi Android
 com HTTPS autorizado. Não se afirma que o runner Windows CI prove esses pontos.
+
+## Validação da sexta etapa
+
+**286 testes Django aprovados, nenhum ignorado**, incluindo 15 casos Chromium.
+Os 275 anteriores mantêm-se e acrescentam-se oito casos de segurança/perfil Wi-Fi
+e três de ligação/POST interrompido/adaptação ao toque. PostgreSQL 17 foi criado num novo
+projeto/volume exclusivo de regressão, com segredo e porta loopback próprios.
+Não foi usada a ligação da base reservada nem lido/importado o Excel.
+
+**41 testes PowerShell 5.1 no CI Windows:** 24 da Etapa 5 e 17 do
+assistente Wi-Fi. Docker/PKI são simulados nos testes Wi-Fi; validam parsing,
+autorização explícita, IPv4/DNS/rede, pasta/namespace novos, recusa de alterações
+conjuntas ao estado/ambiente que tentem publicar num wildcard,
+arranque sem build/migração, paragem preservadora e renovação TLS sem reabertura.
+Não comprovam confiança de certificados ou firewall/Windows/Android reais.
+
+O ensaio independente do payload da Etapa 5 volta a verificar loopback exclusivo,
+PostgreSQL sem portas, instalação sintética/grants, operação com conta restrita,
+PDF/assinatura, persistência, backup/restauro noutra stack vazia e recusa de
+sobrescrita. Não partilha volumes com o ensaio Wi-Fi ou com bases anteriores.
+
+O ensaio HTTPS usa outra stack/PKI efémeras, com o Compose real Wi-Fi. Verifica:
+
+- Portas efetivas: nenhuma em Django/PostgreSQL; só HTTPS loopback de teste no
+  proxy, redes internas e projeto/volumes novos. A instalação futura usa IP LAN
+  específico aprovado; esse IP/firewall empresarial não são simulados como instalados.
+- Certificado servidor confiável; recusa quando não há confiança. mTLS com
+  certificado de dispositivo real de teste, recusa de ausente/revogado, CRL,
+  allowlist/default-deny, host estranho e cabeçalhos de encaminhamento forjados.
+- CSRF sem token e com origem errada recusados; origem correta e token aceites.
+  Login individual, cookies seguros, perfil Consulta sem acesso de escrita.
+- Chromium com viewport/touch Android: elegibilidade PWA, entradas e saídas com
+  várias referências/caixas/unidades, capacidade desconhecida, assinatura com
+  eventos de toque, PDF privado com imagem, inventário completo/zero/transferência.
+- Servidor indisponível com browser ainda online: aviso e bloqueio. Perda de Wi-Fi,
+  preservação de rascunho, resposta perdida **depois** do commit, estado desconhecido
+  e repetição explícita sem segundo efeito no saldo. Apenas três operações confirmadas.
+- Cache exclusiva de recursos públicos, sem stock/documentos/formulários privados.
+
+Para testar a PWA, um adaptador efémero em `127.0.0.2` fornece o certificado de
+dispositivo ao proxy; o browser recebe o certificado HTTPS verdadeiramente confiado
+num NSS/HOME temporário. Valida CA e hostname também na ligação ao proxy. É uma
+limitação do ensaio: o túnel client-cert do Playwright usa certificado próprio
+recusado pelo service worker. Não se desativa TLS, não se altera trust do host,
+não se entrega esse adaptador à instalação nem se afirma testar o seletor nativo
+de certificados Android. Fica explícito no [guia](android-wifi.md).
+
+Ruff, `check`, coerência de migrações e imagem continuam verificados. O resultado
+final da CI fica ligado no PR #6, cuja base é a branch da Etapa 5, não `main`.
+IDs/montagens de contentores anteriores são verificados sem consultar dados.
+Não houve publicação real, instalação no PC, mudança de política/firewall/DNS,
+alojamento externo, sincronização offline, Stock Vendas ou merge.
+
+Pendente: DNS/IP/PKI/MDM/firewall aprovados, seleção/renovação/revogação de certificado
+em Chrome e PWA Android físicos, NAT/IPv6/VPN/segmentação reais, repouso/reinício,
+PDF/impressão e restauro em suporte autorizado. Os testes Linux/Chromium e Windows
+CI não substituem essa aceitação nem autorizam utilização operacional oficial.

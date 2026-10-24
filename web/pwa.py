@@ -3,12 +3,23 @@ import json
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.templatetags.static import static
 from django.views.decorators.http import require_GET
 
 PUBLIC_FILES = ["css/app.css", "js/pwa.js", "icons/icon-192.png", "icons/icon-512.png"]
+
+
+@login_required
+@require_GET
+def connection_status(request):
+    """Network presence alone does not prove that the PC/database is available."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+    return HttpResponse(status=204)
 
 
 @require_GET

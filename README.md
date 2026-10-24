@@ -37,6 +37,13 @@ Não usa a `.env`, o Compose de desenvolvimento ou a base reservada à importaç
 Não executar instruções Linux ou alterar políticas do Windows para contornar
 bloqueios. Nada foi instalado num computador real por esta entrega.
 
+## Android por Wi-Fi — ensaio sintético (Etapa 6)
+
+O [guia Android/Wi-Fi](docs/android-wifi.md) prepara outro perfil local, com HTTPS,
+certificado de dispositivo e a mesma PWA/base para PC e Android. Depende de DNS,
+certificados e firewall aprovados pela informática. Não abre o piloto loopback,
+não usa dados reais e não instala nada no PC/Android. Não há movimentos offline.
+
 ## Executar em desenvolvimento
 
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.

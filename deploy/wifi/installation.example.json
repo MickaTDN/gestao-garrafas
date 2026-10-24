@@ -1,0 +1,10 @@
+{
+  "Host": "garrafas.wifi.example.invalid",
+  "BindIP": "192.168.50.20",
+  "Port": 8443,
+  "ProxySubnet": "172.29.86.0/29",
+  "ProxyIP": "172.29.86.2",
+  "AppIP": "172.29.86.3",
+  "AllowedClients": ["192.168.50.31"],
+  "TlsSource": "C:\\ConfiguracaoPrivadaAprovada\\TLS"
+}

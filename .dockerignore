@@ -35,3 +35,11 @@ attachments
 **/installation.json
 **/pilot.env
 **/*.previous
+**/wifi.env
+**/wifi-installation.json
+**/*.key
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.crt
+**/*.crl

@@ -45,7 +45,7 @@
       </div>
     </header>
     <div class="app-content">
-      <div class="banner" id="offline-banner" hidden role="status">Sem ligação. Não é possível confirmar operações offline.</div>
+      <div class="banner" id="offline-banner" hidden role="status">Sem ligação ao servidor ou sessão expirada. Não é possível confirmar operações. Os rascunhos já guardados permanecem no servidor. Verifique a ligação e a sessão.</div>
       {% for message in messages %}<div class="banner" role="status">{{ message }}</div>{% endfor %}
       <p class="muted"><small>Em desenvolvimento · publicação inicial e infraestrutura de produção ainda pendentes.</small></p>
       {% block content %}{% endblock %}

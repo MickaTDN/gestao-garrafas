@@ -28,7 +28,7 @@ jobs:
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput
-          uv run python manage.py test accounts inventory imports web tests.browser tests.windows.test_profile --noinput
+          uv run python manage.py test accounts inventory imports web tests.browser tests.windows.test_profile tests.wifi.test_security tests.wifi.browser --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
       - name: Validate prepared server image (no deployment)
@@ -38,6 +38,10 @@ jobs:
           test "$(docker run --rm --read-only gestao-garrafas-ci id -u)" = "10001"
       - name: Windows local payload on isolated Linux containers
         run: uv run python tests/windows/smoke_stack.py --image gestao-garrafas-ci
+      - name: Android Wi-Fi HTTPS payload on a new synthetic stack (no TLS bypass)
+        run: |
+          sudo apt-get update && sudo apt-get install -y libnss3-tools
+          uv run python -m tests.wifi.smoke_stack --image gestao-garrafas-ci
       - name: Stop services
         if: always()
         run: docker compose down
@@ -49,3 +53,6 @@ jobs:
       - name: Windows PowerShell 5.1 parsing, safeguards, NTFS and shortcuts (Docker mocked)
         shell: powershell
         run: .\tests\windows\Test-Pilot.ps1
+      - name: Wi-Fi assistant PowerShell 5.1 (Docker and PKI mocked)
+        shell: powershell
+        run: .\tests\wifi\Test-Wifi.ps1
