@@ -13,6 +13,22 @@ class WifiConnectivityBrowserTests(StaticLiveServerTestCase):
     page = fixtures.OperationalBrowserTests.page
     stocks = fixtures.OperationalBrowserTests.stocks
 
+    def test_touch_stock_no_horizontal_overflow(self):
+        context = self.browser.new_context(
+            viewport={"width": 393, "height": 851}, is_mobile=True, has_touch=True
+        )
+        self.addCleanup(context.close)
+        page = context.new_page()
+        page.goto(self.live_server_url + reverse("web:stock"))
+        page.get_by_label("Utilizador", exact=True).fill(self.admin.username)
+        page.get_by_label("Palavra-passe", exact=True).fill(self.password)
+        page.get_by_role("button", name="Entrar", exact=True).click()
+        page.wait_for_load_state("load")
+        details = page.evaluate(
+            "() => ({width:document.documentElement.scrollWidth,inner:innerWidth,offenders:[...document.querySelectorAll('body *')].map(e=>({tag:e.tagName,cls:e.className,right:e.getBoundingClientRect().right})).filter(e=>e.right>393).slice(0,30)})"
+        )
+        self.assertLessEqual(details["width"], 393, details)
+
     def review(self):
         page = self.page("entry", 393)
         page.evaluate("async () => { await navigator.serviceWorker.ready; }")

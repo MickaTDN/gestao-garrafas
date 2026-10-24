@@ -5,16 +5,20 @@ All destructive cleanup below is limited to this randomly allocated test namespa
 """
 
 import argparse
+import http.client
 import io
 import json
 import os
 import re
 import secrets
 import shutil
+import socket
+import ssl
 import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 from pypdf import PdfReader
@@ -237,7 +241,8 @@ def main(image):
             os.environ.update(NO_PROXY="*", no_proxy="*")
             try:
                 with tls_device(tls, HOST, port), sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(
+                    context = playwright.chromium.launch_persistent_context(
+                        str(root / "chromium-profile"),
                         executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
                         headless=True,
                         args=[
@@ -246,8 +251,6 @@ def main(image):
                             "--no-proxy-server",
                         ],
                         env={**os.environ, "HOME": str(browser_home)},
-                    )
-                    context = browser.new_context(
                         viewport={"width": 393, "height": 851},
                         is_mobile=True,
                         has_touch=True,
@@ -272,15 +275,21 @@ def main(image):
                         for c in context.cookies()
                         if c["name"] in ("sessionid", "csrftoken")
                     )
+                    registration = page.evaluate(
+                        "async () => { try { const r=await navigator.serviceWorker.register('/service-worker.js'); return {ok:true, state:r.installing?.state || r.active?.state}; } catch(error) { return {ok:false,error:error.name,message:error.message}; } }"
+                    )
+                    assert registration["ok"], registration
                     page.evaluate(
                         "async () => { await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('PWA registration timed out')), 12000))]); }"
                     )
                     page.reload()
                     page.wait_for_function("navigator.serviceWorker.controller !== null")
                     session = context.new_cdp_session(page)
-                    assert (
-                        session.send("Page.getInstallabilityErrors")["installabilityErrors"] == []
-                    )
+                    assert session.send("Page.getAppManifest")["errors"] == []
+                    install_errors = session.send("Page.getInstallabilityErrors")[
+                        "installabilityErrors"
+                    ]
+                    assert install_errors == [], install_errors
                     session.detach()
                     print("PASS HTTPS PWA: public-only worker and installability", flush=True)
 
@@ -325,7 +334,8 @@ def main(image):
                     page.locator('[name="report_requested"]').select_option("yes")
                     page.locator('[name="confirm"]').check()
                     page.get_by_role("button", name="Confirmar entrada", exact=True).click()
-                    page.get_by_text("CONFIRMADO", exact=True).wait_for()
+                    page.wait_for_url(re.compile(r"/operacoes/\d+/$"))
+                    assert "CONFIRMADO" in page.locator("body").inner_text()
                     assert stocks() == [32, 0, 10]
 
                     create("exit", ["SYN-WIN-001", "SYN-WIN-003"])
@@ -375,7 +385,8 @@ def main(image):
                         "form => Object.fromEntries(new FormData(form))"
                     )
                     page.get_by_role("button", name="Confirmar saída", exact=True).click()
-                    page.get_by_text("CONFIRMADO", exact=True).wait_for()
+                    page.wait_for_url(re.compile(r"/operacoes/\d+/$"))
+                    assert "CONFIRMADO" in page.locator("body").inner_text()
                     assert stocks() == [30, 0, 9]
                     pdf_url = page.get_by_role(
                         "link", name="Abrir / imprimir PDF", exact=True
@@ -395,7 +406,7 @@ def main(image):
                             "async ({path,data}) => (await fetch(path,{method:'POST',body:new URLSearchParams(data)})).status",
                             {"path": review_url, "data": payload},
                         )
-                        == 200
+                        == 404  # Confirmed movements are absent from the draft review endpoint.
                     )
                     assert stocks() == [30, 0, 9]
 
@@ -426,7 +437,7 @@ def main(image):
                     inventory_review = page.url
                     page.locator('[name="confirm"]').check()
                     # Browser stays online while PC/proxy stops responding (health probe failure).
-                    page.route("**/ligacao/", lambda route: route.abort())
+                    context.route("**/ligacao/", lambda route: route.abort())
                     page.evaluate("window.dispatchEvent(new Event('online'))")
                     page.wait_for_function("!document.querySelector('#offline-banner').hidden")
                     assert page.evaluate("navigator.onLine")
@@ -434,7 +445,7 @@ def main(image):
                         "button", name="Confirmar inventário", exact=True
                     ).is_disabled()
                     assert stocks() == [30, 0, 9]
-                    page.unroute("**/ligacao/")
+                    context.unroute("**/ligacao/")
                     page.evaluate("window.dispatchEvent(new Event('online'))")
                     page.locator("#offline-banner").wait_for(state="hidden")
                     # Lose only the response AFTER PostgreSQL has committed. Never replay.
@@ -452,10 +463,28 @@ def main(image):
 
                     # Abort after fetching the request upstream. This simulates a dropped response.
                     def lost_response(route):
-                        route.fetch()
+                        tls_context = ssl.create_default_context(cafile=str(tls / "ca.crt"))
+                        tls_context.load_cert_chain(tls / "device.crt", tls / "device.key")
+                        connection = http.client.HTTPSConnection(HOST, port, context=tls_context)
+                        connection.sock = tls_context.wrap_socket(
+                            socket.create_connection(("127.0.0.1", port), timeout=20),
+                            server_hostname=HOST,
+                        )
+                        try:
+                            connection.request(
+                                "POST",
+                                urlsplit(route.request.url).path,
+                                body=route.request.post_data_buffer,
+                                headers=route.request.all_headers(),
+                            )
+                            response = connection.getresponse()
+                            assert response.status == 302, response.status
+                            response.read()
+                        finally:
+                            connection.close()
                         route.abort()
 
-                    page.route("**/operacoes/*/conferir/", lost_response)
+                    context.route("**/operacoes/*/conferir/", lost_response)
                     # Fetch is explicit here to avoid Chrome's own error-page replacing the harness.
                     result = page.evaluate(
                         "async ({path,data}) => {try {await fetch(path,{method:'POST',body:new URLSearchParams(data)});return 'unexpected';}catch(_){return 'unknown';}}",
@@ -469,7 +498,7 @@ def main(image):
                         ).splitlines()[-1]
                         == "3"
                     )
-                    page.unroute("**/operacoes/*/conferir/")
+                    context.unroute("**/operacoes/*/conferir/")
                     page.goto(inventory_review)
                     assert stocks() == [29, 0, 9]
                     page.evaluate(
@@ -496,7 +525,7 @@ def main(image):
                     for path in ("/entradas/", "/saidas/", "/inventario/", "/referencias/"):
                         response = page.goto(url + path)
                         assert response.status == 403
-                    browser.close()
+                    context.close()
             finally:
                 if old_ca is None:
                     os.environ.pop("NODE_EXTRA_CA_CERTS", None)
@@ -511,6 +540,10 @@ def main(image):
                 "PASS Wi-Fi synthetic: trusted TLS/mTLS + revoked/absent device rejection + allowlist + HTTPS CSRF + Android PWA/entry/signed-exit/PDF/inventory/transfer + network failure/retry + viewer permissions",
                 flush=True,
             )
+        except Exception:
+            if command:
+                print(run(command + ["logs", "--tail", "30", "app", "proxy"]), flush=True)
+            raise
         finally:
             if command:
                 run(command + ["down", "--volumes", "--remove-orphans"])
