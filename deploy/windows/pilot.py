@@ -37,7 +37,7 @@ def check_marker(cursor, instance):
     return row[1]
 
 
-def initialize(instance, config):
+def initialize(instance, config, *, verified_recovery=False):
     if os.getenv("GG_BOOTSTRAP_OWNER") != "1" or config["USER"] != "gg_pilot_owner":
         raise RuntimeError("A inicializacao exige o processo separado de instalacao.")
     import psycopg
@@ -71,7 +71,7 @@ def initialize(instance, config):
                     "INSERT INTO gg_windows_pilot(id,instance_id) VALUES(1,%s)", [instance]
                 )
             with owner.cursor() as cursor:
-                check_marker(cursor, instance)
+                seeded = check_marker(cursor, instance)
             if not owner.execute("SELECT 1 FROM pg_roles WHERE rolname='gg_pilot_app'").fetchone():
                 password = Path("/run/secrets/db_app_password").read_text().strip()
                 owner.execute(
@@ -80,7 +80,15 @@ def initialize(instance, config):
                     ).format(sql.Literal(password))
                 )
             from django.core.management import call_command
+            from django.db import connection
+            from django.db.migrations.executor import MigrationExecutor
 
+            executor = MigrationExecutor(connection)
+            pending = executor.migration_plan(executor.loader.graph.leaf_nodes())
+            if seeded and pending and not verified_recovery:
+                raise RuntimeError(
+                    "Uma atualizacao com migracoes exige backup verificado e recuperacao num piloto novo. A base existente nao foi migrada."
+                )
             call_command("migrate", interactive=False, verbosity=0)
             # Reuse the reviewed application grants instead of creating another privilege model.
             grants = (
@@ -231,9 +239,16 @@ def recover(instance, config):
         old = cursor.fetchone()
         if not old or not old[1] or ImportBatch.objects.exists():
             raise RuntimeError("O restauro nao corresponde a um piloto sintetico completo.")
+        cursor.execute("SELECT to_regclass('public.inventory_reportfile') IS NOT NULL")
+        has_report_files = cursor.fetchone()[0]
         for document in manifest["documents"]:
             cursor.execute(
-                "SELECT payload,sha256 FROM inventory_document WHERE id=%s", [document["id"]]
+                (
+                    "SELECT COALESCE(d.payload,f.payload),d.sha256 FROM inventory_document d LEFT JOIN inventory_reportfile f ON f.document_id=d.id WHERE d.id=%s"
+                    if has_report_files
+                    else "SELECT payload,sha256 FROM inventory_document WHERE id=%s"
+                ),
+                [document["id"]],
             )
             row = cursor.fetchone()
             if (
@@ -247,7 +262,7 @@ def recover(instance, config):
             action="windows_pilot.synthetic_recovery",
             details={"source_instance": old[0], "instance": instance},
         )
-    initialize(instance, config)
+    initialize(instance, config, verified_recovery=True)
     print("Recuperacao sintetica concluida num destino novo. A origem nao foi alterada.")
 
 

@@ -143,3 +143,15 @@ e nome Gestão Vertente Aveludada. Sem alteração das regras de stock ou bases
 instaladas. Identidade Copo com Vida integrada com os originais fornecidos. Ver
 [etapa-a.md](etapa-a.md) e o procedimento de atualização do piloto em
 [windows11.md](windows11.md#atualização-da-etapa-a-num-piloto-existente).
+
+## Etapa A2 — melhorias finais de utilização
+
+Seleção direta de referências e confirmação/minimização de quantidades; pesquisa
+dinâmica de stock; gestão do catálogo a partir de Stock; histórico expansível;
+painel simplificado; perfis personalizados (exemplo Substituto); PDFs de entrada/
+saída com novo cabeçalho, numeração anual e gestão auditada de ficheiros com
+reprodução exata. Documentos anteriores não são renumerados ou reescritos.
+Datas antigas não podem ser confirmadas no dia seguinte.
+Migrações, âmbito de permissões, limitações e atualização segura por recuperação
+de backup em [etapa-a2.md](etapa-a2.md). Não inclui Android 6/7, publicação real ou
+atualização automática do computador instalado.

@@ -1,5 +1,9 @@
 # Etapa A — simplificação da aplicação principal
 
+Esta página documenta a Etapa A / PR #8. A continuação **A2** tem migrações,
+perfis e nova gestão de PDFs; ver [etapa-a2.md](etapa-a2.md), incluindo o
+procedimento Windows distinto. A ausência de migrações abaixo refere-se só à A.
+
 Branch `fix/entradas-saidas-diretas`, baseada em `stage5/windows-local-preflight`.
 Esta entrega não inclui a aplicação Android de consulta das etapas posteriores.
 Não há migrações, alterações ao esquema, regras de stock ou perfis de rede.

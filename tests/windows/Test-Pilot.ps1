@@ -119,6 +119,20 @@ try {
         Assert-True ($calls -match 'initialize')
         Assert-True ($calls -notmatch 'volume rm|system prune')
     }
+    Test 'A2 refuses an in-place legacy installation before building or migrating' {
+        $path=Join-Path $homePath 'installation.json'
+        $original=[IO.File]::ReadAllText($path)
+        try {
+            $legacy=$original | ConvertFrom-Json
+            $legacy.PSObject.Properties.Remove('CodeTrack')
+            [IO.File]::WriteAllText($path,($legacy | ConvertTo-Json))
+            & $module {$script:Calls.Clear()}
+            Assert-Throws {Install-GGPilot -HomePath $homePath -SourceRoot $root -NoShortcuts}
+            $calls=(& $module {$script:Calls|ConvertTo-Json -Depth 5})
+            Assert-True ($calls -notmatch '"build"|initialize|migrate')
+            Assert-True (Test-Path -LiteralPath (Join-Path $homePath 'secrets\db_owner_password'))
+        } finally {[IO.File]::WriteAllText($path,$original)}
+    }
     Test 'Daily start only starts existing services without migrations' {
         & $module {$script:Calls.Clear()}
         Start-GGPilot -HomePath $homePath -NoBrowser

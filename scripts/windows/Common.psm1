@@ -260,7 +260,7 @@ function New-GGInstallation {
     $HomePath = [IO.Path]::GetFullPath($HomePath)
     $source = [IO.Path]::GetFullPath($SourceRoot)
     $instance = [guid]::NewGuid()
-    $state = [pscustomobject]@{Schema=1;Mode='synthetic-v1';Instance=$instance.ToString();Project=('gg-win5-'+$instance.ToString('N').Substring(0,12));Port=$Port;Home=$HomePath;Source=$source;ComposeHash='';Installed=$false}
+    $state = [pscustomobject]@{Schema=1;Mode='synthetic-v1';Instance=$instance.ToString();Project=('gg-win5-'+$instance.ToString('N').Substring(0,12));Port=$Port;Home=$HomePath;Source=$source;ComposeHash='';Installed=$false;CodeTrack='A2'}
     $null = New-Item -ItemType Directory -Path (Join-Path $HomePath 'secrets')
     foreach ($secret in @('django_key','db_owner_password','db_app_password')) { Write-GGFile (Join-Path $HomePath "secrets\$secret") ((New-GGSecret)+"`n") }
     Copy-Item -LiteralPath (Join-Path $source 'deploy\windows\compose.yaml') -Destination (Join-Path $HomePath 'compose.yaml')
@@ -276,6 +276,9 @@ function Install-GGPilot {
     param([string]$HomePath=(Get-GGDefaultHome),[string]$SourceRoot=$script:BundleRoot,[int]$Port=8765,[switch]$NoShortcuts)
     $state = New-GGInstallation -HomePath $HomePath -SourceRoot $SourceRoot -Port $Port
     Assert-GGEnvironment $state
+    if (-not $state.PSObject.Properties['CodeTrack'] -or $state.CodeTrack -ne 'A2') {
+        throw 'A2: nao atualize o piloto anterior no local. Crie primeiro um backup e use Recuperar num destino novo com outra porta. Conserve a pasta e os volumes originais.'
+    }
     Invoke-GGCompose $state -Arguments @('build','app')
     Invoke-GGCompose $state -Arguments @('up','--detach','--wait','--wait-timeout','120','db')
     Invoke-GGCompose $state -Arguments @('--profile','setup','run','--rm','initialize')

@@ -215,6 +215,10 @@ Nada foi instalado no computador do utilizador e não é declarada operação of
 
 ## Atualização da Etapa A num piloto existente
 
+> Este procedimento aplica-se exclusivamente à Etapa A / PR #8. Para a **Etapa
+> A2**, que acrescenta migrações, seguir [a atualização por cópia recuperada](etapa-a2.md#atualização-segura-do-piloto-windows).
+> Não substituir a imagem da instalação antiga por A2 com os passos abaixo.
+
 **Procedimento a executar posteriormente pelo utilizador/informática, após revisão
 do PR. Não foi executado no computador instalado.** Aplica-se apenas a esta
 alteração de apresentação, que não acrescenta migrações nem dependências.
