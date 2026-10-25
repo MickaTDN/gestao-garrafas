@@ -44,6 +44,14 @@ certificado de dispositivo e a mesma PWA/base para PC e Android. Depende de DNS,
 certificados e firewall aprovados pela informática. Não abre o piloto loopback,
 não usa dados reais e não instala nada no PC/Android. Não há movimentos offline.
 
+## Vertente Aveludada — consulta e reposições offline (Etapa 7)
+
+PWA independente, em hostname próprio, que importa fotografias completas de stock
+assinadas pela Gestão de Garrafas. Inclui pesquisa, alertas mínimos individuais,
+acompanhamentos de encomendas e backup cifrado das preferências; não pode alterar
+stock oficial. Consulte [instalação e utilização](docs/vertente-aveludada.md).
+Instalação HTTPS/MDM empresarial e aceitação Android físico continuam pendentes.
+
 ## Executar em desenvolvimento
 
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.
