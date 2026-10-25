@@ -12,16 +12,16 @@
 </form>
 <div class="stack">
 {% for movement in page_obj %}
-  <article class="card stack">
-    <div class="row between wrapping"><div><h2>{{ movement.get_kind_display }}</h2><small>{{ movement.date|date:'d/m/Y' }}{% if movement.occurred_at %} · {{ movement.occurred_at|date:'H:i' }}{% endif %}{% if movement.person %} · {{ movement.person.name }}{% endif %}</small></div><span class="chip">Confirmado</span></div>
+  <details class="card stack movement-details">
+    <summary class="row between wrapping"><div><h2>{% if movement.report_number %}{{ movement.report_number }}{% else %}MOV-{{ movement.pk }}{% endif %} · {{ movement.get_kind_display }}</h2><small>{{ movement.date|date:'d/m/Y' }}{% if movement.occurred_at %} · {{ movement.occurred_at|date:'H:i' }}{% endif %} · {% firstof movement.person_name movement.person.name 'Cliente não identificado' %}</small></div><span class="chip">Confirmado</span></summary>
     {% if movement.original_label %}<p><strong>Etiqueta original:</strong> {{ movement.original_label }}</p>{% endif %}
     {% if movement.document_number %}<p><strong>Documento:</strong> {{ movement.document_number }}{% if not movement.person %} · Pessoa não identificada na fonte{% endif %}</p>{% endif %}
     {% for note in movement.source_metadata.annotations %}<p><strong>Observação {{ note.coordinate }}:</strong> {{ note.value }}<br><small>{{ note.decision }}</small></p>{% endfor %}
     {% if movement.reason %}<p>{{ movement.reason }}</p>{% endif %}
-    {% include 'web/operations/movement_body.html' %}
+    {% include 'web/operations/movement_body.html' %}{% for pdf in movement.documents.all %}{% include 'web/report_links.html' %}{% endfor %}
     <p><a href="{% url 'web:operation-detail' movement.pk %}">Abrir movimento e auditoria</a></p>
     {% if movement.import_batch_id %}<small>Origem Excel · coluna {{ movement.source_column|default_if_none:'—' }} · data preservada sem acrescentar hora.</small>{% endif %}
-  </article>
+  </details>
 {% empty %}<div class="card empty">Ainda não existem movimentos confirmados para estes filtros.</div>{% endfor %}
 </div>
 {% include 'web/pagination.html' %}

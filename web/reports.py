@@ -1,12 +1,22 @@
 import io
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.http import FileResponse, HttpResponse
-from django.shortcuts import get_object_or_404, render
-from django.views.decorators.http import require_GET
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from accounts.permissions import require_access, visible_movements
 from inventory.documents import DocumentIntegrityError, verified_bytes
-from inventory.models import AuditEvent, Document
+from inventory.models import AuditEvent, Document, Movement
+from inventory.reporting import (
+    authorized_document,
+    available_filter,
+    delete_pdf,
+    regenerate_pdf,
+    reproduce,
+)
 
 from .forms import HistoryFilterForm
 from .views import _page
@@ -17,10 +27,12 @@ from .views import _page
 def reports(request):
     from django.db.models import Q
 
+    require_access(request.user, "reports_view")
     form = HistoryFilterForm(request.GET)
+    movements = visible_movements(request.user, Movement.objects.filter(status="confirmed"))
     documents = (
-        Document.objects.filter(kind="pdf", payload__isnull=False, movement__status="confirmed")
-        .defer("payload", "metadata")
+        Document.objects.filter(available_filter(), kind="pdf", movement__in=movements)
+        .defer("payload")
         .select_related("movement")
         .order_by("-movement__date", "-pk")
     )
@@ -28,7 +40,8 @@ def reports(request):
         data = form.cleaned_data
         if data["q"]:
             documents = documents.filter(
-                Q(movement__person_name__icontains=data["q"])
+                Q(metadata__report_number__icontains=data["q"])
+                | Q(movement__person_name__icontains=data["q"])
                 | Q(movement__lines__reference_name__icontains=data["q"])
                 | Q(movement__lines__reference__code__icontains=data["q"])
             ).distinct()
@@ -49,11 +62,12 @@ def reports(request):
 @login_required
 @require_GET
 def content(request, pk):
+    require_access(request.user, "reports_view")
+    movements = visible_movements(request.user, Movement.objects.filter(status="confirmed"))
     document = get_object_or_404(
-        Document,
+        Document.objects.filter(available_filter()),
         pk=pk,
-        payload__isnull=False,
-        movement__status="confirmed",
+        movement__in=movements,
         kind__in=["pdf", "signature"],
     )
     try:
@@ -70,17 +84,68 @@ def content(request, pk):
             status=503,
             content_type="text/plain; charset=utf-8",
         )
-    suffix = "pdf" if document.kind == "pdf" else "png"
     AuditEvent.objects.create(
         actor=request.user,
         action="document.opened",
         movement_id=document.movement_id,
         details={"document_id": document.pk, "download": request.GET.get("download") == "1"},
     )
-    response = FileResponse(
+    suffix = "pdf" if document.kind == "pdf" else "png"
+    return FileResponse(
         io.BytesIO(payload),
         content_type=document.content_type,
-        filename=f"mov-{document.movement_id}-{document.kind}.{suffix}",
+        filename=f"{document.number.replace('/', '-')}-{document.kind}.{suffix}",
         as_attachment=request.GET.get("download") == "1",
     )
-    return response
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def delete(request, pk):
+    require_access(request.user, "reports_manage")
+    document = authorized_document(request.user, pk)
+    error = None
+    try:
+        reproduce(document)
+    except (ValidationError, DocumentIntegrityError) as exc:
+        error = " ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+    if request.method == "POST":
+        if request.POST.get("confirm") != "yes":
+            error = "Confirme explicitamente a eliminação apenas do ficheiro PDF."
+        elif not error:
+            try:
+                delete_pdf(actor=request.user, document_id=pk)
+            except (ValidationError, DocumentIntegrityError) as exc:
+                error = " ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+            else:
+                messages.success(
+                    request,
+                    "Ficheiro PDF eliminado. Movimento, stock, número e evidências preservados. Pode regenerá-lo através do Histórico.",
+                )
+                return redirect("web:reports")
+    return render(
+        request,
+        "web/report_delete.html",
+        {"section": "reports", "document": document, "error": error},
+        status=400 if request.method == "POST" and error else 200,
+    )
+
+
+@login_required
+@require_POST
+def regenerate(request, pk):
+    try:
+        document = regenerate_pdf(actor=request.user, document_id=pk)
+    except (ValidationError, DocumentIntegrityError) as error:
+        messages.error(
+            request, " ".join(error.messages) if isinstance(error, ValidationError) else str(error)
+        )
+        document = authorized_document(request.user, pk)
+    else:
+        messages.success(
+            request,
+            "Reprodução verificada byte a byte do relatório original. Número, dados e assinatura preservados; operação auditada."
+            if getattr(document, "file_was_regenerated", False)
+            else "O PDF original já está disponível; não foi necessário regenerar.",
+        )
+    return redirect("web:operation-detail", pk=document.movement_id)

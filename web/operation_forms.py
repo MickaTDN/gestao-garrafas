@@ -29,7 +29,7 @@ class StartForm(OperationForm):
 
 
 class OperationSearchForm(OperationForm):
-    q = forms.CharField(required=False, max_length=200, label="Nome da referência")
+    q = forms.CharField(required=False, max_length=200, label="Pesquisar referência")
 
 
 class HeaderForm(OperationForm):
@@ -37,7 +37,7 @@ class HeaderForm(OperationForm):
     date = forms.DateField(
         label="Data",
         initial=timezone.localdate,
-        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        widget=forms.DateInput(attrs={"type": "date", "readonly": True}, format="%Y-%m-%d"),
     )
     person_name = forms.CharField(
         label="Pessoa que entregou / levantou",
@@ -74,6 +74,12 @@ class LineForm(OperationForm):
 
     def __init__(self, *args, inventory=False, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.is_bound and self.data.get("action") == "remove:" + str(
+            self.data.get(self.add_prefix("id"), "")
+        ):
+            self.data = self.data.copy()
+            self.data[self.add_prefix("boxes")] = ""
+            self.data[self.add_prefix("units")] = ""
         if inventory:
             self.fields["target_location"].required = True
         else:

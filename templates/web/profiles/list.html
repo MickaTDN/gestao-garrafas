@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}
+<div class="intro"><div><h1>Perfis de Acesso</h1><p>Administrador e Consulta mantêm as permissões existentes. Perfis personalizados são atribuídos a contas individuais.</p></div></div>
+<div class="toolbar"><a class="btn" href="{% url 'web:profile-create' %}">Criar perfil</a><a class="btn secondary" href="{% url 'web:users' %}">Gerir utilizadores</a></div>
+<div class="stack">{% for profile in profiles %}<article class="card row between wrapping"><div><h2>{{ profile.name }}</h2><p>{% if profile.active %}Ativo{% else %}Inativo — sem acesso{% endif %}</p></div><a class="btn secondary" href="{% url 'web:profile-edit' profile.pk %}">Editar permissões e estado</a></article>{% empty %}<p>Sem perfis personalizados.</p>{% endfor %}</div>{% endblock %}

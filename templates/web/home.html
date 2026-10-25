@@ -2,31 +2,26 @@
 {% block title %}Início · Gestão Vertente Aveludada{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">GESTÃO DE STOCK</div><h1>Painel principal</h1><p class="muted intro-description">Uma visão rápida do stock e das localizações físicas.</p></div></div>
-<div class="grid four">
+{% if access.stock_view %}<div class="grid three">
   <div class="card kpi"><small>Garrafas em stock</small><div class="value">{{ total_stock|floatformat:'0g' }}</div><small>Saldo atual na base de dados</small></div>
   <div class="card kpi"><small>Referências ativas</small><div class="value">{{ reference_count|floatformat:'0g' }}</div><small>Referências disponíveis</small></div>
   <div class="card kpi"><small>Alertas de stock baixo</small><div class="value">{{ alert_count|floatformat:'0g' }}</div><small>Apenas alertas ativados</small></div>
-  <div class="card kpi"><small>Operações por concluir</small><div class="value">{{ draft_count|floatformat:'0g' }}</div><small>Sem efeito no stock</small></div>
-</div>
+</div>{% endif %}
 <div class="action-grid">
-  <a class="action" href="{% url 'web:stock' %}"><div class="sym" aria-hidden="true">▦</div><strong>Consultar stock</strong><span>Pesquisar garrafas</span></a>
-  {% if user.is_administrator %}
+  {% if access.stock_view %}<a class="action" href="{% url 'web:stock' %}"><div class="sym" aria-hidden="true">▦</div><strong>Consultar stock</strong><span>Pesquisar garrafas</span></a>{% endif %}
+  {% if access.entry %}
   <a class="action" href="{% url 'web:entry' %}"><div class="sym" aria-hidden="true">↘</div><strong>Entradas</strong><span>Preparar movimento e conferir</span></a>
-  <a class="action" href="{% url 'web:exit' %}"><div class="sym" aria-hidden="true">↗</div><strong>Saídas</strong><span>Preparar movimento e conferir</span></a>
-  <a class="action" href="{% url 'web:inventory' %}"><div class="sym" aria-hidden="true">☷</div><strong>Inventário físico</strong><span>Preparar movimento e conferir</span></a>
+  {% endif %}{% if access.exit %}<a class="action" href="{% url 'web:exit' %}"><div class="sym" aria-hidden="true">↗</div><strong>Saídas</strong><span>Preparar movimento e conferir</span></a>
+  {% endif %}{% if access.inventory %}<a class="action" href="{% url 'web:inventory' %}"><div class="sym" aria-hidden="true">☷</div><strong>Inventário físico</strong><span>Preparar movimento e conferir</span></a>
   {% endif %}
 </div>
-<div class="grid two">
-  <div class="card"><div class="cardtitle"><h2>Localizações existentes</h2></div>
-    {% for location in locations %}<div class="row between lined location-summary"><span>{{ location.name }}</span><span class="chip">{{ location.reference_count }} referências</span></div>{% empty %}<p class="muted">Ainda não existem localizações.</p>{% endfor %}
-  </div>
+{% if access.stock_view %}<div class="grid">
   <div class="card"><div class="cardtitle"><h2>Alertas de stock</h2></div>
     {% for reference in alerts %}<p class="lined"><a href="{% url 'web:reference-detail' reference.pk %}">{{ reference.name }}</a> · {{ reference.current_stock }} un.</p>{% empty %}<p class="muted">Sem alertas ativos em situação de stock baixo.</p>{% endfor %}
   </div>
-</div>
+</div>{% endif %}
 <div class="card more-areas"><div class="cardtitle"><h2>Outras áreas</h2></div><div class="row wrapping">
-  <a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a><a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a><a class="btn secondary small" href="{% url 'web:export' %}">Exportar Excel</a>
-  {% if user.is_administrator %}<a class="btn secondary small" href="{% url 'web:references' %}">Referências</a><a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
+  {% if access.history %}<a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a>{% endif %}{% if access.reports_view %}<a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a>{% endif %}{% if access.export %}<a class="btn secondary small" href="{% url 'web:export' %}">Exportar Excel</a>{% endif %}{% if access.admin %}<a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
 </div></div>
 {% if not reference_count %}<p class="footer-note">Ainda não existem referências nesta base de dados. A importação do Excel será realizada depois da reconciliação dos saldos e do histórico.</p>{% endif %}
 {% endblock %}
