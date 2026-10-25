@@ -74,6 +74,8 @@ O servidor valida novamente a associação, inclusive em pedidos HTTP forjados.
 Referências são agrupadas por localização e setor numérico (1, 2, 9, 10), depois
 por designação. Setores não numéricos surgem depois dos numéricos; referências
 sem setor surgem no fim da respetiva localização. Nunca são ocultadas por isso.
+O cálculo aceita os nomes configurados “Setor 1”, “Setor 10” e os números simples,
+sem reescrever designações ou dados existentes.
 
 Na seleção parcial, pesquisar novas referências não filtra nem apaga as linhas
 já selecionadas/quantidades em edição. A ordenação/paginação das linhas é estável

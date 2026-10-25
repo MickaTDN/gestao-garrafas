@@ -125,7 +125,9 @@ class InventoryUsabilityTests(TestCase):
         self.location = Location.objects.create(name="Local inventário A3 fictício")
         self.destination = Location.objects.create(name="Outro local inventário A3 fictício")
         self.sectors = {
-            name: Sector.objects.create(location=self.location, name=name)
+            name: Sector.objects.create(
+                location=self.location, name=("Setor " + name if name in ("1", "9", "10") else name)
+            )
             for name in ("1", "2", "9", "10", "Especial")
         }
         self.destination_sector = Sector.objects.create(location=self.destination, name="3")
@@ -179,7 +181,7 @@ class InventoryUsabilityTests(TestCase):
                 for sector in form.fields["sector"].queryset
                 if sector.location_id == self.location.pk
             ],
-            ["1", "2", "9", "10", "Especial"],
+            ["Setor 1", "2", "Setor 9", "Setor 10", "Especial"],
         )
         draft = self.draft(full=True, refs=list(self.refs.values()))
         response = self.client.get(reverse("web:operation-edit", args=[draft.pk]))

@@ -432,7 +432,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
         def prepare():
             sectors = {
-                name: Sector.objects.create(location=self.location, name=name)
+                name: Sector.objects.create(location=self.location, name="Setor " + name)
                 for name in ("1", "2", "9", "10")
             }
             target = Sector.objects.create(location=self.destination, name="3")
