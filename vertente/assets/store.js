@@ -111,7 +111,7 @@ export async function state() {
 export async function enroll(bundle, fingerprint) {
   await validateTrust(bundle);
   insist(
-    bundle.keys.some((k) => k.key_id === fingerprint.trim().toLowerCase()),
+    bundle.keys[0].key_id === fingerprint.trim().toLowerCase(),
     "Confirme o fingerprint completo por um canal independente.",
   );
   const db = await database(),

@@ -84,9 +84,8 @@ export async function validateTrust(bundle) {
       UUID.test(bundle.source_id),
   );
   insist(
-    Array.isArray(bundle.keys) &&
-      bundle.keys.length > 0 &&
-      bundle.keys.length <= 8,
+    Array.isArray(bundle.keys) && bundle.keys.length === 1,
+    "O ficheiro de origem deve conter exatamente uma chave, confirmada pelo seu fingerprint.",
   );
   insist(new Set(bundle.keys.map((k) => k.key_id)).size === bundle.keys.length);
   for (const record of bundle.keys) await keyRecord(record);

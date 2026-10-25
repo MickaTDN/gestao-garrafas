@@ -172,6 +172,9 @@ Em **Atualizações e cópias → Origem e chave autorizadas**, selecionar o fic
 introduzir o fingerprint SHA-256 completo confirmado pela informática por canal
 independente e confirmar o UUID/fingerprint apresentados. Não copiar apenas o
 fingerprint do mesmo ficheiro não verificado. A origem fica fixada: outro UUID é recusado.
+Cada ficheiro de confiança contém exatamente uma chave ativa, correspondente ao
+fingerprint confirmado. Não se aceitam chaves adicionais no mesmo ficheiro com
+base na confirmação de apenas uma; a rotação instala outra chave explicitamente.
 Não há download automático de chaves indicado por um remetente ou atualização.
 
 ## Exportar e importar stock

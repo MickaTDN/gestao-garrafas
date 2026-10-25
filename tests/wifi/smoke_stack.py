@@ -16,6 +16,7 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import traceback
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -541,6 +542,11 @@ def main(image):
                 flush=True,
             )
         except Exception:
+            # Synthetic data only. Expose the failure even when CI log archives
+            # cannot be fetched; fixture passwords are never argv/input logs.
+            diagnostic = traceback.format_exc()[-6000:]
+            diagnostic = diagnostic.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print("::error title=Wi-Fi synthetic integration::" + diagnostic, flush=True)
             if command:
                 print(run(command + ["logs", "--tail", "30", "app", "proxy"]), flush=True)
             raise

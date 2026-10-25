@@ -310,6 +310,13 @@ class VertenteBrowserTests(SimpleTestCase):
     def test_signature_origin_key_rotation_and_revocation(self):
         self.ready()
         other_key, other_trust = fixture()
+        mixed = {**self.trust, "keys": [*self.trust["keys"], public_key(other_key)]}
+        self.assertIn(
+            "exatamente uma chave", self.error("enroll", mixed, self.trust["keys"][0]["key_id"])
+        )
+        self.assertEqual(
+            len([key for key in self.data()["trust"]["keys"] if not key["revoked"]]), 1
+        )
         self.assertIn(
             "Chave não autorizada",
             self.error("importSnapshot", snapshot(other_key, other_trust, 2)),
