@@ -68,9 +68,10 @@ reativação ou rastreabilidade técnica; não prefixam os nomes nas listas norm
 - A apresentação de quantidades é partilhada entre conferência e PDF.
 - A identidade é apenas visual. Não se renomeiam bases, projetos/volumes Docker,
   pastas privadas, variáveis de ambiente, códigos ou registos existentes.
-- O original Copo com Vida não estava disponível. Os pontos de integração estão
-  em [static/branding/README.md](../static/branding/README.md). Não foi inventado
-  um símbolo; os ícones técnicos GG existentes são uma solução transitória.
+- Os originais Copo com Vida estão preservados e aplicados no login, novos PDFs
+  e ícones Windows/PWA. O copo foi derivado exclusivamente do recorte fornecido,
+  sem redesenho. Proveniência e compilação estão em
+  [static/branding/README.md](../static/branding/README.md).
 
 ## Validação
 
@@ -91,16 +92,27 @@ aceitação física Windows 11/WSL2 nem a validação do logótipo original.
 A atualização manual, sem apagar os dados fictícios instalados, está descrita em
 [windows11.md](windows11.md#atualização-da-etapa-a-num-piloto-existente).
 
-## Continuação — originais Copo com Vida
+## Identidade Copo com Vida concluída
 
-Foi recebida uma pré-visualização da marca na conversa, mas o ficheiro original
-não ficou acessível no ambiente. A integração gráfica final aguarda o PNG/SVG/PDF
-como ficheiro. Não foi desenhado nem gerado um copo substituto. Mantêm-se os nomes
-Gestão Vertente Aveludada e Stock Vertente Aveludada, sem alterar a aplicação
-Android separada.
+O utilizador forneceu no ZIP o logótipo completo (1273×827) e o recorte original
+do copo (143×246), sem dados da fatura. Ambos foram conservados byte a byte. O
+logótipo completo aparece no login responsivo e nos novos PDFs. O símbolo da
+barra lateral e os ícones PWA/Windows usam exclusivamente o copo original branco
+sobre verde-escuro. Não se alteraram os nomes das aplicações nem a aplicação
+Stock Vertente Aveludada separada.
 
-Foi completada a ligação do `.ico` aos atalhos Windows: copia apenas o elemento
-público para uma instalação validada, conserva configuração/segredos e não chama
-Docker nem a base. Os testes de marca verificam manifesto/cache, proporções e
-pixels da imagem embebida no PDF com ficheiros sintéticos temporários. Esta
-preparação não significa que o logótipo real já tenha sido aplicado.
+Os PNG PWA têm 192/512 px; o ICO contém sete tamanhos de 16 a 256 px. O script
+`scripts/build_brand_icons.py` documenta a compilação: margens vazias, máscara de
+tinta e escala proporcional, sem reconstrução de detalhes. A origem é raster;
+redimensionar não acrescenta detalhe e os tamanhos muito pequenos têm naturalmente
+menos definição.
+
+O ícone Windows é copiado para uma instalação validada, sem chamar Docker ou
+bases de dados. Os testes verificam os originais por SHA-256, a conservação da
+geometria, cores/margens, o ICO, manifesto/cache e a imagem original embebida no
+PDF ao lado de uma assinatura sintética. Chromium verifica o login e os ficheiros
+públicos em computador e telemóvel. Estes testes de marca não usam bases.
+
+A instalação/atualização num dispositivo físico não foi executada. Seguir o guia
+Windows existente e rever os ícones após atualizar a PWA/atalhos. PDFs históricos
+permanecem inalterados.

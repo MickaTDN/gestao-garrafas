@@ -140,6 +140,6 @@ não a criação de movimentos para preencher lacunas.
 Formulários diretos, continuação dentro de cada operação, pesquisa por nome nas
 entradas/saídas, setores dependentes da localização, conferência/PDF simplificados
 e nome Gestão Vertente Aveludada. Sem alteração das regras de stock ou bases
-instaladas. Identidade Copo com Vida depende de fornecer os originais. Ver
+instaladas. Identidade Copo com Vida integrada com os originais fornecidos. Ver
 [etapa-a.md](etapa-a.md) e o procedimento de atualização do piloto em
 [windows11.md](windows11.md#atualização-da-etapa-a-num-piloto-existente).

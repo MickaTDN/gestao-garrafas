@@ -42,7 +42,7 @@ bloqueios. Nada foi instalado num computador real por esta entrega.
 Entradas, Saídas e Inventário abrem diretamente o formulário. Mantêm-se a
 conferência, confirmação atómica, auditoria e dados das instalações existentes.
 Veja [o âmbito e as decisões](docs/etapa-a.md), os
-[ficheiros originais de marca em falta](static/branding/README.md) e a
+[originais e ícones Copo com Vida](static/branding/README.md) e a
 [atualização do piloto sem apagar dados](docs/windows11.md#atualização-da-etapa-a-num-piloto-existente).
 
 ## Executar em desenvolvimento
