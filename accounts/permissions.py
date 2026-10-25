@@ -35,7 +35,7 @@ def capabilities(actor):
         .filter(pk=actor.pk, is_active=True)
         .first()
     )
-    if not current:
+    if not current or current.must_change_password:
         return set()
     if current.role == "admin":
         return set(CAPABILITIES) | {"admin"}

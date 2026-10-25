@@ -19,6 +19,7 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.VIEWER)
     access_profile = models.ForeignKey(AccessProfile, on_delete=models.PROTECT, null=True, blank=True)
+    must_change_password = models.BooleanField(default=False, editable=False)
 
     class Meta:
         constraints = [models.CheckConstraint(
