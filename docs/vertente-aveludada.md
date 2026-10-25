@@ -158,6 +158,15 @@ instalação revista; não abrir o mesmo volume noutra base ou alterar projetos 
 Arranque diário não cria/regera chaves nem migra. Sem chave/origem configuradas,
 a exportação falha fechada com instrução para contactar a informática.
 
+Depois de ativar esse overlay, **todos os arranques/paragens/recriações da aplicação
+do escritório devem usar o mesmo projeto, env-file, Compose base e overlay**, com
+`VA_SIGNING_KEY_FILE` definido pelo processo aprovado. A informática deve preparar
+o respetivo atalho/rotina, conservando a verificação de contexto Docker local da
+Etapa 5. Os atalhos base das Etapas 5/6 não incluem este overlay: não os usar como
+rotina diária dessa configuração, pois podem recriar o serviço sem a chave e
+desativar a exportação. Isso não apaga stock nem preferências; recuperar a
+configuração revista, sem regenerar chaves ou inicializar/adotar outra base.
+
 **Instalar confiança no Android:** transferir apenas `origin.vatrust.json`.
 Em **Atualizações e cópias → Origem e chave autorizadas**, selecionar o ficheiro,
 introduzir o fingerprint SHA-256 completo confirmado pela informática por canal
