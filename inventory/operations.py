@@ -140,7 +140,7 @@ def save_draft(
         changed = (boxes, units, line.box_capacity) != (line.boxes, line.units, ref.box_capacity)
         if changed:
             line.quantity_checked = False
-        if line.pk in check_ids:
+        if line.pk in check_ids and movement.kind != "inventory":
             if (
                 movement.kind not in ("entry", "exit")
                 or total is None
@@ -162,12 +162,30 @@ def save_draft(
                 line.count_basis = basis if total is not None else {}
             line.counted_quantity = total
             line.quantity = None  # Never treat a physical count as an adjustment.
+            target = row.get("target_location") or line.target_location or ref.location
+            sector = row.get("target_sector")
+            if (target.pk, sector.pk if sector else None, row.get("reason", "").strip()) != (
+                line.target_location_id,
+                line.target_sector_id,
+                line.reason,
+            ) or recheck:
+                line.quantity_checked = False
             line.target_location = (
                 row.get("target_location") or line.target_location or ref.location
             )
             line.target_sector = row.get("target_sector")
             if line.target_sector and line.target_sector.location_id != line.target_location_id:
                 raise ValidationError("O setor não pertence à localização escolhida.")
+            if line.pk in check_ids:
+                if total is None or not ref.active or line.count_basis != reference_state(ref):
+                    raise ValidationError(
+                        "Confirme uma contagem física, incluindo zero, numa referência ativa e com stock conferido."
+                    )
+                if total != ref.current_stock and not (
+                    row.get("reason", "").strip() or movement.reason
+                ):
+                    raise ValidationError("Indique um motivo para a diferença de inventário.")
+                line.quantity_checked = True
         else:
             line.quantity = (
                 None if total is None else total * (1 if movement.kind == "entry" else -1)
@@ -222,7 +240,7 @@ def review_draft(movement_id, *, actor, revision):
     movement = Movement.objects.select_for_update().get(pk=movement_id)
     owned_draft(movement, actor)
     _revision(movement, revision)
-    if movement.kind == "exit":
+    if movement.kind in ("exit", "inventory"):
         movement.validation = Movement.Validation.SIMPLE
     lines, references = locked_lines(movement)
     plans = movement_plans(movement, lines, references)

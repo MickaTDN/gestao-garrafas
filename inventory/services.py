@@ -215,15 +215,15 @@ def confirm_movement(
 
     signature = None
     if validation is not None:
-        if movement.kind != "exit" or validation not in ("simple", "signed"):
+        if movement.kind not in ("exit", "inventory") or validation not in ("simple", "signed"):
             raise ValidationError("Método de validação inválido.")
         movement.validation = validation
     if movement.validation == "signed":
-        if movement.kind != "exit":
-            raise ValidationError("A assinatura só é utilizada nas saídas.")
+        if movement.kind not in ("exit", "inventory"):
+            raise ValidationError("A assinatura só é utilizada nas saídas e inventários.")
         signature = validate_signature(signature_data)
     elif signature_data:
-        raise ValidationError("Selecione validação por assinatura para a associar à saída.")
+        raise ValidationError("Selecione validação por assinatura para a associar à operação.")
     lines, references = locked_lines(movement)
     plans = movement_plans(movement, lines, references, signed=signature is not None)
     if movement.workflow_version:

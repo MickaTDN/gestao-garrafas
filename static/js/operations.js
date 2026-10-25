@@ -4,7 +4,12 @@
   if (!form) return;
   const scope = document.querySelector('#id_inventory_scope');
   const searchScope = document.querySelector('#reference-search input[name="inventory_scope"]');
-  if (scope && searchScope) scope.addEventListener('change', () => { searchScope.value = scope.value; });
+  if (scope && searchScope) {
+    const prepare = document.querySelector('#prepare-full');
+    const updateScope = () => { searchScope.value = scope.value; if (prepare) prepare.hidden = scope.value !== 'full'; };
+    scope.addEventListener('change', updateScope);
+    updateScope();
+  }
   document.querySelectorAll('.operation-line').forEach(line => {
     const boxes = line.querySelector('input[name$="-boxes"]');
     const units = line.querySelector('input[name$="-units"]');

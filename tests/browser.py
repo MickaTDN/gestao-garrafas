@@ -83,7 +83,7 @@ class BrowserSmokeTests(StaticLiveServerTestCase):
                     width,
                     "A página não deve transbordar horizontalmente em telemóvel.",
                 )
-                forbidden = page.goto(self.live_server_url + reverse("web:settings"))
+                forbidden = page.goto(self.live_server_url + reverse("web:users"))
                 self.assertEqual(forbidden.status, 403)
                 self.assertEqual(errors, [])
                 page.close()
@@ -168,7 +168,13 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         return page
 
     def assert_responsive(self, page, width):
-        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), width)
+        self.assertLessEqual(
+            page.evaluate("document.documentElement.scrollWidth"),
+            width,
+            page.evaluate(
+                "() => Array.from(document.querySelectorAll('body *')).filter(e => {const r=e.getBoundingClientRect(); return r.width && r.right > innerWidth;}).map(e => [e.tagName, e.className, Math.round(e.getBoundingClientRect().right)]).slice(0,15)"
+            ),
+        )
         self.assertEqual(self.errors, [])
         if directory := os.getenv("BROWSER_ARTIFACT_DIR"):
             os.makedirs(directory, exist_ok=True)
@@ -245,7 +251,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
     def inventory_flow(self, width):
         page = self.page("inventory", width)
         page.get_by_label("Âmbito", exact=True).select_option("full")
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        page.get_by_role("button", name="Preparar inventário completo", exact=True).click()
         first = page.locator(".operation-line").filter(has_text="Azul sintética operacional")
         second = page.locator(".operation-line").filter(has_text="Verde sintética operacional")
         self.assertEqual(first.get_by_label("Caixas", exact=True).input_value(), "")
@@ -317,7 +323,9 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         movement = self.database_call(
             lambda: confirmed_operation(self.admin, self.first, signed=True)
         )
-        document = self.database_call(lambda: movement.documents.get(kind="pdf"))
+        document = self.database_call(
+            lambda: movement.documents.select_related("annual_number").get(kind="pdf")
+        )
         original = self.database_call(lambda: verified_bytes(document))
         before = self.database_call(lambda: AuditEvent.objects.count())
         page.goto(self.live_server_url + reverse("web:history"))
@@ -397,8 +405,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         page.get_by_label("Setor", exact=True).select_option(str(destination_sector.pk))
         page.get_by_role("button", name="Guardar", exact=True).click()
         page.goto(self.live_server_url + reverse("web:inventory"))
-        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        self.add_reference(page, "Azul sintética operacional")
         sector = page.get_by_label("Setor após inventário", exact=True)
         self.assertEqual(sector.input_value(), str(destination_sector.pk))
         page.get_by_label("Localização após inventário", exact=True).select_option(
@@ -419,6 +426,169 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
     def test_sector_filter_and_new_reference_mobile(self):
         self.sector_and_new_reference_flow(390)
+
+    def a3_inventory_partial(self, width):
+        from inventory.models import Movement, Sector
+
+        def prepare():
+            sectors = {
+                name: Sector.objects.create(location=self.location, name=name)
+                for name in ("1", "2", "9", "10")
+            }
+            target = Sector.objects.create(location=self.destination, name="3")
+            Reference.objects.filter(pk=self.first.pk).update(sector=sectors["10"])
+            Reference.objects.filter(pk=self.second.pk).update(sector=sectors["2"])
+            return sectors, target
+
+        sectors, target = self.database_call(prepare)
+        page = self.page("inventory", width)
+        search = page.locator("#reference-search")
+        search.get_by_label("Localização", exact=True).select_option(str(self.location.pk))
+        sector = search.get_by_label("Setor", exact=True)
+        self.assertEqual(
+            sector.locator("option").evaluate_all("options => options.map(o => o.value)"),
+            ["", *(str(sectors[name].pk) for name in ("1", "2", "9", "10"))],
+        )
+        sector.select_option(str(sectors["10"].pk))
+        self.add_reference(page, self.first.name)
+        first = page.locator(".operation-line").filter(has_text=self.first.name)
+        self.assertEqual(first.get_by_label("Caixas", exact=True).input_value(), "")
+        self.assertEqual(first.get_by_label("Garrafas soltas", exact=True).input_value(), "")
+        first.get_by_label("Caixas", exact=True).fill("2")
+        first.get_by_label("Garrafas soltas", exact=True).fill("3")
+        first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertIsNone(first.get_attribute("open"))
+        self.assertIn("2 caixas + 3 garrafas", first.locator("summary").inner_text())
+        self.add_reference(page, self.second.name)
+        second = page.locator(".operation-line").filter(has_text=self.second.name)
+        second.get_by_label("Garrafas soltas", exact=True).fill("0")
+        second.get_by_label("Motivo da diferença / transferência", exact=True).fill(
+            "Zero físico fictício A3"
+        )
+        second.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertIsNone(second.get_attribute("open"))
+        self.assertIn("0 garrafas", second.locator("summary").inner_text())
+        first.locator("summary").click()
+        first.get_by_label("Garrafas soltas", exact=True).fill("2")
+        first.get_by_label("Motivo da diferença / transferência", exact=True).fill(
+            "Transferência e contagem fictícias A3"
+        )
+        target_sector = first.get_by_label("Setor após inventário", exact=True)
+        self.assertEqual(target_sector.input_value(), str(sectors["10"].pk))
+        first.get_by_label("Localização após inventário", exact=True).select_option(
+            str(self.destination.pk)
+        )
+        self.assertEqual(target_sector.input_value(), "")
+        self.assertEqual(
+            target_sector.locator("option").evaluate_all("options => options.map(o => o.value)"),
+            ["", str(target.pk)],
+        )
+        target_sector.select_option(str(target.pk))
+        first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        second.locator("summary").click()
+        second.get_by_role("button", name="Remover referência", exact=True).click()
+        self.assertEqual(page.locator(".operation-line").count(), 1)
+        self.assertEqual(self.stocks(), [15, 5])
+        self.assertEqual(
+            self.database_call(lambda: Reference.objects.get(pk=self.first.pk).location_id),
+            self.location.pk,
+        )
+        self.assert_responsive(page, width)
+        page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
+        page.get_by_label("Validação do inventário", exact=True).select_option("signed")
+        canvas = page.locator("#signature-canvas")
+        canvas.scroll_into_view_if_needed()
+        bounds = canvas.bounding_box()
+        points = [
+            (bounds["x"] + bounds["width"] * x, bounds["y"] + bounds["height"] * y)
+            for x, y in ((0.1, 0.7), (0.25, 0.2), (0.5, 0.8), (0.8, 0.3))
+        ]
+        if width < 760:
+            session = page.context.new_cdp_session(page)
+            session.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
+            session.send(
+                "Input.dispatchTouchEvent",
+                {"type": "touchStart", "touchPoints": [{"x": points[0][0], "y": points[0][1]}]},
+            )
+            for x, y in points[1:]:
+                session.send(
+                    "Input.dispatchTouchEvent",
+                    {"type": "touchMove", "touchPoints": [{"x": x, "y": y}]},
+                )
+            session.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+            session.detach()
+        else:
+            page.mouse.move(*points[0])
+            page.mouse.down()
+            for point in points[1:]:
+                page.mouse.move(*point, steps=5)
+            page.mouse.up()
+        page.locator('input[name="confirm"]').check()
+        page.get_by_role("button", name="Confirmar inventário", exact=True).click()
+        self.assertEqual(self.stocks(), [14, 5])
+        movement = self.database_call(lambda: Movement.objects.latest("pk"))
+        official = self.database_call(lambda: str(movement.report_number))
+        self.assertIn(official, page.locator("h1").inner_text())
+        self.assertEqual(self.database_call(lambda: movement.documents.count()), 2)
+        self.assertEqual(
+            self.database_call(lambda: Reference.objects.get(pk=self.first.pk).location_id),
+            self.destination.pk,
+        )
+        self.assert_responsive(page, width)
+
+    def test_a3_inventory_partial_desktop(self):
+        self.a3_inventory_partial(1366)
+
+    def test_a3_inventory_partial_mobile(self):
+        self.a3_inventory_partial(390)
+
+    def a3_password_flow(self, width):
+        page = self.page("entry", width)
+        page.goto(self.live_server_url + reverse("web:settings"))
+        page.get_by_role("link", name="A minha conta", exact=True).click()
+        self.assert_responsive(page, width)
+        replacement = secrets.token_urlsafe(32)
+        page.get_by_label("Palavra-passe atual", exact=True).fill(self.password)
+        page.get_by_label("Nova palavra-passe", exact=True).fill(replacement)
+        page.get_by_label("Confirmar nova palavra-passe", exact=True).fill(replacement)
+        page.get_by_role("button", name="Alterar palavra-passe", exact=True).click()
+        self.assertIn("Palavra-passe alterada", page.locator("body").inner_text())
+        self.assertNotIn(replacement, page.content())
+        viewer = self.database_call(
+            lambda: User.objects.create_user(username="a3-browser-reset-synthetic")
+        )
+        page.goto(self.live_server_url + reverse("web:user-password-reset", args=[viewer.pk]))
+        self.assert_responsive(page, width)
+        temporary = secrets.token_urlsafe(32)
+        page.get_by_label("A sua palavra-passe de Administrador", exact=True).fill(replacement)
+        page.get_by_label("Palavra-passe temporária", exact=True).fill(temporary)
+        page.get_by_label("Confirmar palavra-passe temporária", exact=True).fill(temporary)
+        page.locator('input[name="confirm"]').check()
+        page.get_by_role("button", name="Repor palavra-passe", exact=True).click()
+        self.assertNotIn(temporary, page.content())
+        page.get_by_role("button", name="Sair", exact=True).click()
+        page.goto(self.live_server_url + reverse("login"))
+        page.get_by_label("Utilizador", exact=True).fill(viewer.username)
+        page.get_by_label("Palavra-passe", exact=True).fill(temporary)
+        page.get_by_role("button", name="Entrar", exact=True).click()
+        self.assertIn("É obrigatório alterar", page.locator("body").inner_text())
+        self.assert_responsive(page, width)
+        page.goto(self.live_server_url + reverse("web:stock"))
+        self.assertIn(reverse("web:my-account"), page.url)
+        final = secrets.token_urlsafe(32)
+        page.get_by_label("Palavra-passe atual", exact=True).fill(temporary)
+        page.get_by_label("Nova palavra-passe", exact=True).fill(final)
+        page.get_by_label("Confirmar nova palavra-passe", exact=True).fill(final)
+        page.get_by_role("button", name="Alterar palavra-passe", exact=True).click()
+        page.goto(self.live_server_url + reverse("web:stock"))
+        self.assertIn("Consultar stock", page.locator("h1").inner_text())
+        self.assert_responsive(page, width)
+
+    def test_a3_password_flow_desktop(self):
+        self.a3_password_flow(1366)
+
+    def test_a3_password_flow_mobile(self):
+        self.a3_password_flow(390)
 
 
 class Stage4BrowserTests(StaticLiveServerTestCase):
