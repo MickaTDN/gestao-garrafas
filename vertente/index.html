@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#392e46" />
+    <meta
+      name="description"
+      content="Consulta privada de fotografias de stock e acompanhamento de reposições."
+    />
+    <title>Vertente Aveludada</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/assets/icon-192.png" />
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="identity">
+        <img src="/assets/icon-192.png" width="48" height="48" alt="" />
+        <div>
+          <h1>Vertente Aveludada</h1>
+          <p>Consulta e reposições</p>
+        </div>
+      </div>
+      <button id="install" hidden>Instalar</button>
+    </header>
+    <main>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <div id="connection" class="connection"></div>
+      <nav aria-label="Navegação">
+        <button id="nav-stock" aria-current="page">Stock</button
+        ><button id="nav-orders">Encomendas</button
+        ><button id="nav-settings">Atualizações e cópias</button>
+      </nav>
+      <div id="content"></div>
+    </main>
+    <dialog id="confirmation">
+      <form method="dialog">
+        <h2 id="confirm-title">Confirmar</h2>
+        <p id="confirm-text"></p>
+        <div class="actions">
+          <button value="cancel" class="secondary">Cancelar</button
+          ><button value="yes">Confirmar</button>
+        </div>
+      </form>
+    </dialog>
+    <footer>
+      Consulta de uma cópia. O stock oficial mantém-se na Gestão de Garrafas.
+    </footer>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>

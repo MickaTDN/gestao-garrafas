@@ -1,10 +1,13 @@
 from django.urls import path
 
+from consultation import views as consultation_views
+
 from . import catalog, exports, import_views, operations, reports, user_admin, views
 
 app_name = "web"
 
 urlpatterns = [
+    path("exportar/vertente-aveludada/", consultation_views.export, name="vertente-export"),
     path("", views.home, name="home"),
     path("stock/", views.stock, name="stock"),
     path("stock/<int:pk>/", views.reference_detail, name="reference-detail"),

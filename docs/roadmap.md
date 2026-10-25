@@ -95,6 +95,16 @@ Não sincroniza movimentos offline nem publica dados reais. Depende de configura
 DNS/PKI/MDM/firewall e aceitação física pela informática; não há instalação real.
 Ver [android-wifi.md](android-wifi.md) e [decisão 6](decisions/0006-android-local-wifi.md).
 
+## Etapa 7 — Vertente Aveludada offline
+
+Consulta pessoal por fotografias completas assinadas, com nome/ícone e origem
+separados. Inclui stock ativo/zero, pesquisa sem acentos, alertas individuais,
+acompanhamentos locais sem impacto quantitativo, preservação de ausentes, importação
+atómica verificada e backup cifrado de preferências. Não altera as operações das
+etapas anteriores. Configuração HTTPS/MDM/DNS e validação Android física permanecem
+pendentes. Atualização direta Wi-Fi é melhoria futura; ficheiros têm prioridade.
+Não há dados reais, produção ou merges automáticos. Ver [guia](vertente-aveludada.md).
+
 ## Matriz de requisitos aprovados
 
 | Requisito | Estado nesta entrega | Etapa de conclusão |

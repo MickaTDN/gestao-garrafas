@@ -286,3 +286,63 @@ Pendente: DNS/IP/PKI/MDM/firewall aprovados, seleção/renovação/revogação d
 em Chrome e PWA Android físicos, NAT/IPv6/VPN/segmentação reais, repouso/reinício,
 PDF/impressão e restauro em suporte autorizado. Os testes Linux/Chromium e Windows
 CI não substituem essa aceitação nem autorizam utilização operacional oficial.
+
+## Validação da sétima etapa — Vertente Aveludada
+
+**314 testes Django/PostgreSQL/Chromium aprovados**, nenhum ignorado: 286 anteriores,
+14 de exportação/identidade/permissões/concorrência PostgreSQL e 14 de consulta PWA.
+Os casos Chromium incluem UI completa de confiança por fingerprint, importação de
+ficheiro e exportação/restauro cifrado, pesquisa com acentos, zero/capacidade
+desconhecida, limites individuais/igualdade/remoção, marcação/anulação/encerramento,
+ausência/regresso de referências e subida de stock sem encerramento automático.
+
+Assinaturas adulteradas, chave desconhecida/revogada, origem diferente, versões
+inválidas, quantidades negativas/fracionárias, ficheiros incompletos/duplicados,
+datas futuras e atualizações repetidas/anteriores são recusados. Valida falha de
+escrita com rollback IndexedDB, recuperação de cópia anterior verificada, concorrência
+de importações, cache pública, consulta/edição/importação sem rede, texto malicioso
+sem execução e backups com frase-passe errada/conteúdo alterado/outra origem.
+
+PostgreSQL usa uma stack nova, sintética, com porta/segredos/volumes exclusivos. O
+teste concorrente suspende uma confirmação multirreferência depois da primeira
+escrita ainda não confirmada: a exportação observa todas as quantidades anteriores;
+depois do commit observa todas as novas, sem misturar instantes. Exportações
+concorrentes recebem sequências únicas. Falha de assinatura não avança contador.
+Nenhuma quantidade/movimento é criado pela exportação.
+
+**49 testes PowerShell 5.1**: 24 do piloto local, 17 Wi-Fi e oito do publicador
+Vertente. O ensaio novo usa pré-requisitos/Docker/TLS simulados e testa aprovação,
+hostname distinto, IPv4 específica, lista de origens, namespace novo, não adoção
+de pasta e ausência de arranque/alteração de políticas na preparação.
+
+Quatro ensaios de contentores, todos com projetos/dados novos:
+
+1. Payload Windows anterior: instalação restrita, persistência, PDF/assinatura,
+   backup/restauro noutro destino e recusa de sobrescrita.
+2. Payload Wi-Fi anterior: TLS/mTLS, operações/assinatura/PDF/inventário Android,
+   falha de resposta e proteção contra segundo efeito no stock.
+3. Exportação Vertente com o role real restrito `gg_pilot_app`: chave privada só no
+   contentor do escritório, sequência/assinatura, todas as ativas/zero/desconhecida,
+   saldo/versões inalterados e nenhum movimento ou lote de importação.
+4. Publicador estático HTTPS/mTLS em hostname próprio: sem DB/backend/socket/chave
+   de assinatura, recusa de certificado ausente/revogado, POST e host errado,
+   instalação elegível, consulta/pesquisa/alertas/encomendas/reabertura offline.
+   URLs não públicas são recusadas mesmo que existam ficheiros-sentinela fictícios
+   no diretório de ensaio. Nenhuma chave/dado real é utilizado nesses sentinelas.
+
+TLS real usa CA efémera confiada só em perfil NSS/HOME de Chromium temporário,
+sem desligar validação. O adaptador de certificado de dispositivo só de teste da
+Etapa 6 é reutilizado; não comprova seleção nativa de certificado Android/MDM.
+O ícone e o ecrã móvel foram inspecionados com referências fictícias.
+
+Ruff, `check`, `makemigrations --check --dry-run` e consistência do shell offline
+gerado são verificados. A rede de build Docker local teve falhas DNS; a validação
+local reutilizou a imagem anterior e cache de dependências com versões bloqueadas,
+sem desligar TLS. A CI constrói o Dockerfile normal e repete os ensaios. O resultado
+final da revisão fica ligado no PR #7, dirigido para a branch da Etapa 6.
+
+Pendente: instalação real no Chrome/PWA Android, MDM/certificados/ficheiros recebidos,
+modo avião após reinício, relógios, armazenamento/limpeza e restauro noutro aparelho;
+DNS/NAT/firewall/Windows reais. Atualização direta Wi-Fi fica adiada conforme
+[decisão 7](decisions/0007-signed-offline-consultation.md). A entrega não instala em
+dispositivos reais, publica stocks, liga à base reservada, contrata serviços ou faz merges.

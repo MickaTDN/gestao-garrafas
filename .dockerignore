@@ -43,3 +43,8 @@ attachments
 **/*.pem
 **/*.crt
 **/*.crl
+**/*.vastock.json
+**/*.vatrust.json
+**/*.vaprefs.json
+**/publisher.env
+**/publisher-installation.json

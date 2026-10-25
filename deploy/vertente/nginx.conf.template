@@ -1,0 +1,49 @@
+# Dedicated DNS name/origin. Never use the office application's hostname.
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 128; }
+http {
+    include /etc/nginx/mime.types;
+    types { application/manifest+json webmanifest; }
+    default_type application/octet-stream;
+    access_log off;
+    server_tokens off;
+    client_body_temp_path /tmp/client;
+    proxy_temp_path /tmp/proxy;
+    fastcgi_temp_path /tmp/fastcgi;
+    scgi_temp_path /tmp/scgi;
+    uwsgi_temp_path /tmp/uwsgi;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_certificate /run/tls/server-chain.crt;
+    ssl_certificate_key /run/tls/server.key;
+    ssl_client_certificate /run/tls/device-ca.crt;
+    ssl_crl /run/tls/device-ca.crl;
+    ssl_verify_client on;
+    ssl_verify_depth 2;
+    ssl_session_tickets off;
+    ssl_session_cache off;
+    server { listen 8444 ssl default_server; server_name _; return 421; }
+    server {
+        listen 8444 ssl;
+        server_name __HOST__;
+        include /etc/nginx/clients.conf;
+        deny all;
+        root /srv/vertente;
+        index index.html;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy no-referrer always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        add_header Strict-Transport-Security "max-age=3600" always;
+        add_header Cache-Control "no-cache" always;
+        location = / {
+            limit_except GET { deny all; }
+            try_files /index.html =404;
+        }
+        location ~ ^/(index\.html|manifest\.webmanifest|service-worker\.js|assets/(app\.css|app\.js|domain\.js|store\.js|icon-(192|512)\.png))$ {
+            limit_except GET { deny all; }
+            try_files $uri =404;
+        }
+        location / { return 404; }
+    }
+}

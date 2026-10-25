@@ -28,7 +28,8 @@ jobs:
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput
-          uv run python manage.py test accounts inventory imports web tests.browser tests.windows.test_profile tests.wifi.test_security tests.wifi.browser --noinput
+          uv run python scripts/build_vertente.py --check
+          uv run python manage.py test accounts inventory imports web consultation tests.browser tests.windows.test_profile tests.wifi.test_security tests.wifi.browser tests.vertente.browser --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
       - name: Validate prepared server image (no deployment)
@@ -38,10 +39,14 @@ jobs:
           test "$(docker run --rm --read-only gestao-garrafas-ci id -u)" = "10001"
       - name: Windows local payload on isolated Linux containers
         run: uv run python tests/windows/smoke_stack.py --image gestao-garrafas-ci
+      - name: Vertente signed exports with the restricted DB role (new synthetic pilot)
+        run: uv run python -m tests.vertente.smoke_export --image gestao-garrafas-ci
       - name: Android Wi-Fi HTTPS payload on a new synthetic stack (no TLS bypass)
         run: |
           sudo apt-get update && sudo apt-get install -y libnss3-tools
           uv run python -m tests.wifi.smoke_stack --image gestao-garrafas-ci
+      - name: Vertente isolated HTTPS publisher and offline Android PWA (synthetic only)
+        run: uv run python -m tests.vertente.smoke_https
       - name: Stop services
         if: always()
         run: docker compose down
@@ -56,3 +61,6 @@ jobs:
       - name: Wi-Fi assistant PowerShell 5.1 (Docker and PKI mocked)
         shell: powershell
         run: .\tests\wifi\Test-Wifi.ps1
+      - name: Vertente publisher preparation PowerShell 5.1 (mocked prerequisites)
+        shell: powershell
+        run: .\tests\vertente\Test-Publisher.ps1

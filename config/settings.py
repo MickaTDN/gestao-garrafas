@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "inventory",
     "imports",
     "web",
+    "consultation",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -133,3 +134,4 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SECURE_REFERRER_POLICY = "same-origin"
 
 LOGIN_TRUSTED_PROXY_ADDRESSES = {address.strip() for address in os.getenv("LOGIN_TRUSTED_PROXY_ADDRESSES", "").split(",") if address.strip()}
+VERTENTE_SIGNING_KEY_FILE = os.getenv("VERTENTE_SIGNING_KEY_FILE", "")

@@ -1,0 +1,11 @@
+# Explicit optional overlay for the EXISTING synthetic Windows/Wi-Fi stack.
+# Does not publish ports or mount the key in the consultation publisher/Android.
+services:
+  app:
+    environment:
+      VERTENTE_SIGNING_KEY_FILE: /run/secrets/vertente_signing_key
+    secrets:
+      - vertente_signing_key
+secrets:
+  vertente_signing_key:
+    file: ${VA_SIGNING_KEY_FILE:?Chave privada externa ao código}

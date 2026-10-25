@@ -266,3 +266,25 @@ apresenta orientação para resultado desconhecido quando a resposta se perde.
 Confirmação continua no serviço transacional existente, com efeito uma única vez.
 Instalação empresarial/Android físico e dados reais continuam pendentes. Ver
 [guia Android](android-wifi.md) e [decisão 6](decisions/0006-android-local-wifi.md).
+
+## Etapa 7 — Vertente Aveludada
+
+PWA estática em hostname/origem próprios; não partilha cookies, service worker,
+IndexedDB ou sessão com a aplicação do escritório. O publicador usa HTTPS/mTLS
+local da mesma arquitetura, com rede própria, sem backend/DB ou chave de assinatura.
+Cache exclusiva do shell; fotografias assinadas e preferências em IndexedDB.
+O código não contém API de escrita ou credenciais do stock oficial.
+
+O módulo `consultation` acrescenta exportação autenticada com CSRF, identidade UUID
+persistente e sequência serializada por bloqueio de linha. Um SELECT PostgreSQL
+obtém todas as referências ativas na mesma fotografia, com zero incluído. Não há
+movimentos ou alterações de stock. Assinatura ES256 usa chave privada externa ao
+código; o Android fixa origem/SPKI por fingerprint independente e confirmação.
+
+Importação valida bytes assinados/formato/origem/sequência antes de uma transação
+IndexedDB e revalida confiança/marcador sob essa transação. Preserva limites e
+acompanhamentos; ausência/desativação não elimina história local. Mantém cópia
+verificada anterior e maior sequência aceite para recuperar sem aceitar rollback.
+Preferências podem ser exportadas com AES-GCM/PBKDF2; nunca incluem stock/credenciais.
+Atualização direta Wi-Fi está adiada para evitar sessão/CORS entre origens.
+Ver [guia](vertente-aveludada.md) e [decisão 7](decisions/0007-signed-offline-consultation.md).
