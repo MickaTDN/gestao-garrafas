@@ -313,6 +313,7 @@ export function validatePreferences(data, source) {
   insist(
     data.format === "vertente-preferences" &&
       data.version === 1 &&
+      UUID.test(data.source_id) &&
       data.source_id === source,
     "As preferências pertencem a outra origem ou formato.",
   );
@@ -461,6 +462,7 @@ export async function decodePreferences(file, password) {
 }
 export async function restorePreferences(data) {
   const saved = await readAll();
+  insist(saved.trust, "Configure primeiro a origem autorizada.");
   validatePreferences(data, saved.trust?.source_id);
   await edit(["meta", "alerts", "orders", "tracked"], (tx) => {
     const request = tx.objectStore("meta").get("trust");

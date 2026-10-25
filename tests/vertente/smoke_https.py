@@ -33,6 +33,7 @@ def main():
             for name in [*PUBLIC, "service-worker.js"]:
                 target = site / "vertente" / name
                 target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+                target.parent.chmod(0o755)
                 shutil.copyfile(ROOT / "vertente" / name, target)
                 target.chmod(0o644)
             for name in ("signing.pem", "private.vastock.json"):
@@ -118,7 +119,8 @@ def main():
                     args + list(extra) + [url + path], check=True, capture_output=True, text=True
                 ).stdout
 
-            assert curl() == "200"
+            initial = curl()
+            assert initial == "200", initial
             assert curl(device=None) == "400" and curl("revoked") == "400"
             assert curl(extra=("-X", "POST", "--data", "stock=999")) == "403"
             assert curl(extra=("-H", "Host: office.invalid")) == "421"
