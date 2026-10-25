@@ -215,6 +215,7 @@ class VertenteBrowserTests(SimpleTestCase):
         self.page.reload()
         self.assertEqual(self.page.locator('.metric[data-filter="low"] strong').inner_text(), "1")
         self.call("setAlert", ref, None)
+        self.assertEqual(self.data()["tracked"], [])
         zero = self.data()["copy"]["data"]["references"][1]
         self.call("setAlert", zero, 0)
         self.page.reload()

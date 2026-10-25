@@ -59,6 +59,8 @@ principal. Exemplo fictício: `vertente.wifi.example.invalid:8444`, distinto de
 `garrafas.wifi.example.invalid:8443`. Cookies são associados a host, não a porta;
 por isso mudar apenas a porta não é a separação recomendada. Não há CORS nem
 autorização CSRF entre as duas aplicações.
+Manter o URL estável: mudar hostname ou porta cria outra origem de armazenamento.
+Antes dessa mudança, exportar as preferências e seguir o mesmo restauro de um novo aparelho.
 
 Reutiliza-se o padrão da [Etapa 6](android-wifi.md): Docker Desktop/WSL2 local,
 Nginx não privilegiado, certificado servidor confiável e certificado clientAuth por

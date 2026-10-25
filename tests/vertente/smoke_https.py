@@ -14,12 +14,13 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from scripts.build_vertente import PUBLIC
 from tests.vertente.fixtures import fixture, snapshot
 from tests.wifi.certificates import certificates
 from tests.wifi.tls_device import tls_device
 from tests.windows.smoke_stack import ROOT, free_port, run
 
-HOST = "local.playwright"
+HOST = "vertente.local.playwright"  # Distinct from the office smoke test's hostname.
 
 
 def main():
@@ -28,6 +29,16 @@ def main():
         home = Path(temporary)
         try:
             certificates(home / "tls", HOST)
+            site = home / "site"
+            for name in [*PUBLIC, "service-worker.js"]:
+                target = site / "vertente" / name
+                target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / "vertente" / name, target)
+                target.chmod(0o644)
+            for name in ("signing.pem", "private.vastock.json"):
+                sentinel = site / "vertente" / name
+                sentinel.write_text("Synthetic sentinel, not a private key or real data.")
+                sentinel.chmod(0o644)
             port = free_port()
             project = "gg-va7-test-" + uuid.uuid4().hex[:12]
             for kind in ("container", "volume", "network"):
@@ -43,7 +54,7 @@ def main():
                 )
             env = home / "publisher.env"
             env.write_text(
-                f"VA_PROJECT={project}\nVA_BIND_IP=127.0.0.1\nVA_HTTPS_PORT={port}\nVA_SOURCE_ROOT={ROOT}\nVA_PRIVATE_ROOT={home}\n"
+                f"VA_PROJECT={project}\nVA_BIND_IP=127.0.0.1\nVA_HTTPS_PORT={port}\nVA_SOURCE_ROOT={site}\nVA_PRIVATE_ROOT={home}\n"
             )
             (home / "nginx.conf").write_text(
                 (ROOT / "deploy/vertente/nginx.conf.template").read_text().replace("__HOST__", HOST)
@@ -78,7 +89,7 @@ def main():
             )
             url = f"https://{HOST}:{port}"
 
-            def curl(device="device", extra=()):
+            def curl(device="device", extra=(), path="/"):
                 args = [
                     "curl",
                     "--silent",
@@ -104,13 +115,15 @@ def main():
                         str(home / f"tls/{device}.key"),
                     ]
                 return subprocess.run(
-                    args + list(extra) + [url + "/"], check=True, capture_output=True, text=True
+                    args + list(extra) + [url + path], check=True, capture_output=True, text=True
                 ).stdout
 
             assert curl() == "200"
             assert curl(device=None) == "400" and curl("revoked") == "400"
             assert curl(extra=("-X", "POST", "--data", "stock=999")) == "403"
             assert curl(extra=("-H", "Host: office.invalid")) == "421"
+            for path in ("/signing.pem", "/private.vastock.json", "/entradas/", "/operacoes/"):
+                assert curl(path=path) == "404"
             browser_home = home / "browser-home"
             nss = browser_home / ".pki/nssdb"
             nss.mkdir(parents=True)
