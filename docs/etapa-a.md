@@ -90,3 +90,17 @@ aceitação física Windows 11/WSL2 nem a validação do logótipo original.
 
 A atualização manual, sem apagar os dados fictícios instalados, está descrita em
 [windows11.md](windows11.md#atualização-da-etapa-a-num-piloto-existente).
+
+## Continuação — originais Copo com Vida
+
+Foi recebida uma pré-visualização da marca na conversa, mas o ficheiro original
+não ficou acessível no ambiente. A integração gráfica final aguarda o PNG/SVG/PDF
+como ficheiro. Não foi desenhado nem gerado um copo substituto. Mantêm-se os nomes
+Gestão Vertente Aveludada e Stock Vertente Aveludada, sem alterar a aplicação
+Android separada.
+
+Foi completada a ligação do `.ico` aos atalhos Windows: copia apenas o elemento
+público para uma instalação validada, conserva configuração/segredos e não chama
+Docker nem a base. Os testes de marca verificam manifesto/cache, proporções e
+pixels da imagem embebida no PDF com ficheiros sintéticos temporários. Esta
+preparação não significa que o logótipo real já tenha sido aplicado.

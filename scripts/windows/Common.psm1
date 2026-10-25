@@ -221,6 +221,14 @@ function Wait-GGHttp {
 
 function New-GGShortcuts {
     param([string]$HomePath,[string]$ShortcutDirectory=[Environment]::GetFolderPath('Desktop'))
+    $state = Get-GGInstallation -HomePath $HomePath
+    Assert-GGEnvironment $state
+    $sourceIcon = Join-Path $state.Source 'static\branding\copo-com-vida.ico'
+    $installedIcon = Join-Path $state.Home 'copo-com-vida.ico'
+    if (Test-Path -LiteralPath $sourceIcon -PathType Leaf) {
+        # Copy only the public artwork, never installation state or secrets.
+        Copy-Item -LiteralPath $sourceIcon -Destination $installedIcon
+    }
     $shell = New-Object -ComObject WScript.Shell
     # ASCII source remains compatible with Windows PowerShell 5.1 without a BOM.
     $appName = 'Gest' + [char]0x00E3 + 'o Vertente Aveludada'
@@ -229,6 +237,9 @@ function New-GGShortcuts {
         $shortcut.TargetPath = Join-Path $HomePath $item[1]
         $shortcut.WorkingDirectory = $HomePath
         $shortcut.Description = 'Piloto local apenas com dados ficticios. Nao altera politicas do Windows.'
+        if ($item[1] -eq 'Iniciar.cmd' -and (Test-Path -LiteralPath $installedIcon -PathType Leaf)) {
+            $shortcut.IconLocation = $installedIcon + ',0'
+        }
         $shortcut.Save()
     }
 }
