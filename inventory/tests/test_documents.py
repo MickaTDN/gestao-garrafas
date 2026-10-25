@@ -72,7 +72,8 @@ class DocumentTests(TestCase):
         signature = movement.documents.get(kind="signature")
         self.assertTrue(verified_bytes(signature).startswith(b"\x89PNG"))
         self.assertIn("não constitui assinatura digital qualificada", text)
-        self.assertTrue(any(list(page.images) for page in PdfReader(io.BytesIO(payload)).pages))
+        images = [image.image for page in PdfReader(io.BytesIO(payload)).pages for image in page.images]
+        self.assertTrue(any(image.size == (600, 200) for image in images))
         self.assertEqual(document.metadata["validation"], "signed")
 
     def test_inventory_includes_counts_difference_reason_before_after_and_transfer(self):

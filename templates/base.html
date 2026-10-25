@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#126650">
   <link rel="manifest" href="{% url 'manifest' %}">
   <link rel="apple-touch-icon" href="{% static brand_icon %}">
+  <link rel="icon" type="image/png" href="{% static brand_icon %}">
   <title>{% block title %}Gestão Vertente Aveludada{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
@@ -14,7 +15,7 @@
 <a href="#main-content" class="skip-link">Saltar para o conteúdo</a>
 <div class="app-root">
   <aside class="sidebar">
-    <div class="brand">{% if brand_logo %}<img class="brand-logo" src="{% static brand_logo %}" alt="Copo com Vida">{% endif %}<div><strong>Gestão Vertente Aveludada</strong><span>Gestão de stock</span></div></div>
+    <div class="brand">{% if brand_logo %}<img class="brand-symbol" src="{% static brand_icon %}" alt="">{% endif %}<div><strong>Gestão Vertente Aveludada</strong><span>Gestão de stock</span></div></div>
     <nav class="menu" aria-label="Navegação principal">
       <a class="nav-btn {% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><span class="ico" aria-hidden="true">⌂</span>Início</a>
       <a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>

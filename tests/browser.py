@@ -5,8 +5,11 @@ import secrets
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
+from django.contrib.staticfiles.handlers import StaticFilesHandler
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.db import connections
+from django.test import SimpleTestCase, override_settings
+from django.test.testcases import LiveServerThread
 from django.urls import reverse
 from playwright.sync_api import sync_playwright
 
@@ -503,3 +506,69 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         workbook = load_workbook(io.BytesIO(Path(download.value.path()).read_bytes()))
         self.assertEqual(workbook["Dados"].max_row, 3)
         self.assert_responsive(page, 390)
+
+
+@override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1", "testserver"])
+class PublicBrandBrowserTests(SimpleTestCase):
+    """Real Chromium/public HTTP only. No accounts, stock or database setup."""
+
+    def setUp(self):
+        server = LiveServerThread("localhost", StaticFilesHandler)
+        server.daemon = True
+        server.start()
+        self.addCleanup(server.terminate)
+        self.assertTrue(server.is_ready.wait(10), "Public test server did not start")
+        if server.error:
+            raise server.error
+        self.url = f"http://localhost:{server.port}"
+        playwright = sync_playwright().start()
+        self.addCleanup(playwright.stop)
+        self.browser = playwright.chromium.launch(
+            executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
+            headless=True,
+            args=["--no-sandbox"],
+        )
+        self.addCleanup(self.browser.close)
+
+    def check_login(self, width):
+        import hashlib
+        from pathlib import Path
+
+        page = self.browser.new_page(viewport={"width": width, "height": 900})
+        self.addCleanup(page.close)
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        response = page.goto(self.url + reverse("login"))
+        self.assertEqual(response.status, 200)
+        self.assertEqual(page.title(), "Entrar · Gestão Vertente Aveludada")
+        logo = page.get_by_role("img", name="Copo com Vida", exact=True)
+        logo.wait_for(state="visible")
+        page.wait_for_function("document.querySelector('.brand-logo').naturalWidth > 0")
+        dimensions = logo.evaluate(
+            "image => ({natural:[image.naturalWidth,image.naturalHeight],width:image.clientWidth,height:image.clientHeight})"
+        )
+        self.assertEqual(dimensions["natural"], [1273, 827])
+        self.assertAlmostEqual(dimensions["width"] / dimensions["height"], 1273 / 827, delta=0.02)
+        image = page.request.get(self.url + logo.get_attribute("src"))
+        self.assertEqual(image.status, 200)
+        self.assertEqual(
+            hashlib.sha256(image.body()).hexdigest(),
+            "58e89b8b1c0d930e8418bae77565367f7785e55740ac435c2d3ba88555c24948",
+        )
+        manifest = page.request.get(self.url + reverse("manifest")).json()
+        for icon in manifest["icons"]:
+            self.assertIn("branding/copo-com-vida-", icon["src"])
+            self.assertEqual(page.request.get(self.url + icon["src"]).status, 200)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), width)
+        self.assertEqual(errors, [])
+        if directory := os.getenv("BROWSER_ARTIFACT_DIR"):
+            Path(directory).mkdir(parents=True, exist_ok=True)
+            page.screenshot(
+                path=str(Path(directory) / f"branding-login-{width}.png"), full_page=True
+            )
+
+    def test_original_logo_login_desktop(self):
+        self.check_login(1366)
+
+    def test_original_logo_login_mobile(self):
+        self.check_login(390)
