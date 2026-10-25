@@ -71,8 +71,11 @@ class DocumentTests(TestCase):
         self.assertEqual(movement.validation, "signed")
         signature = movement.documents.get(kind="signature")
         self.assertTrue(verified_bytes(signature).startswith(b"\x89PNG"))
-        self.assertIn("não constitui assinatura digital qualificada", text)
-        images = [image.image for page in PdfReader(io.BytesIO(payload)).pages for image in page.images]
+        self.assertIn("Validação com assinatura.", text)
+        self.assertNotIn("assinatura digital qualificada", text)
+        images = [
+            image.image for page in PdfReader(io.BytesIO(payload)).pages for image in page.images
+        ]
         self.assertTrue(any(image.size == (600, 200) for image in images))
         self.assertEqual(document.metadata["validation"], "signed")
 

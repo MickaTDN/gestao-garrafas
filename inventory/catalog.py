@@ -7,8 +7,9 @@ from django.db import connection, transaction
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 
+from accounts.permissions import require_access
+
 from .models import AuditEvent, Location, LocationChange, Reference, Sector
-from .services import require_administrator
 
 
 def catalogue_lock():
@@ -40,9 +41,11 @@ def matching_references(name):
 class DuplicateReferenceError(ValidationError):
     def __init__(self, matches):
         self.matches = matches
-        super().__init__({
-            "name": "Já existem referências com esta designação. Reveja os registos existentes antes de criar uma nova referência.",
-        })
+        super().__init__(
+            {
+                "name": "Já existem referências com esta designação. Reveja os registos existentes antes de criar uma nova referência.",
+            }
+        )
 
 
 def _reference_state(reference):
@@ -61,8 +64,11 @@ def _next_reference_code():
     # The advisory lock serializes writers and the database uniqueness remains
     # the final guard. Existing imported identifiers are retained unchanged.
     greatest = max(
-        (int(match.group(1)) for code in Reference.objects.values_list("code", flat=True)
-         if (match := re.fullmatch(r"GAR-(\d+)", code))),
+        (
+            int(match.group(1))
+            for code in Reference.objects.values_list("code", flat=True)
+            if (match := re.fullmatch(r"GAR-(\d+)", code))
+        ),
         default=0,
     )
     return f"GAR-{greatest + 1:04d}"
@@ -70,7 +76,7 @@ def _next_reference_code():
 
 @transaction.atomic
 def save_reference(*, actor, data, reference_id=None):
-    require_administrator(actor)
+    require_access(actor, "catalog_manage")
     catalogue_lock()
     if reference_id is None:
         matches = matching_references(_name(data["name"]))
@@ -83,8 +89,7 @@ def save_reference(*, actor, data, reference_id=None):
         before = _reference_state(reference)
     location = Location.objects.select_for_update().get(pk=data["location"].pk)
     sector = (
-        Sector.objects.select_for_update().get(pk=data["sector"].pk)
-        if data.get("sector") else None
+        Sector.objects.select_for_update().get(pk=data["sector"].pk) if data.get("sector") else None
     )
     if not location.active or (sector and not sector.active):
         raise ValidationError("Escolha uma localização e setor ativos.")
@@ -102,23 +107,31 @@ def save_reference(*, actor, data, reference_id=None):
         reference.save()
     else:
         reference.save(update_fields=["name", "box_capacity", "location", "sector", "minimum"])
-        if (before["location_id"], before["sector_id"]) != (reference.location_id, reference.sector_id):
+        if (before["location_id"], before["sector_id"]) != (
+            reference.location_id,
+            reference.sector_id,
+        ):
             LocationChange.objects.create(
                 reference=reference,
-                location_before_id=before["location_id"], location_after=location,
-                sector_before_id=before["sector_id"], sector_after=sector,
-                changed_by=actor, reason="Alteração na ficha da referência.",
+                location_before_id=before["location_id"],
+                location_after=location,
+                sector_before_id=before["sector_id"],
+                sector_after=sector,
+                changed_by=actor,
+                reason="Alteração na ficha da referência.",
             )
     AuditEvent.objects.create(
-        actor=actor, action="reference.created" if before is None else "reference.updated",
-        reference=reference, details={"before": before, "after": _reference_state(reference)},
+        actor=actor,
+        action="reference.created" if before is None else "reference.updated",
+        reference=reference,
+        details={"before": before, "after": _reference_state(reference)},
     )
     return reference
 
 
 @transaction.atomic
 def set_reference_active(*, actor, reference_id, active):
-    require_administrator(actor)
+    require_access(actor, "catalog_manage")
     catalogue_lock()
     reference = Reference.objects.select_for_update().get(pk=reference_id)
     if not active and reference.current_stock != 0:
@@ -130,7 +143,9 @@ def set_reference_active(*, actor, reference_id, active):
         reference.active = active
         reference.save(update_fields=["active"])
         AuditEvent.objects.create(
-            actor=actor, action="reference.state_changed", reference=reference,
+            actor=actor,
+            action="reference.state_changed",
+            reference=reference,
             details={"before": before, "after": active},
         )
     return reference
@@ -138,9 +153,11 @@ def set_reference_active(*, actor, reference_id, active):
 
 @transaction.atomic
 def save_location(*, actor, data, location_id=None):
-    require_administrator(actor)
+    require_access(actor, "locations_manage")
     catalogue_lock()
-    location = Location.objects.select_for_update().get(pk=location_id) if location_id else Location()
+    location = (
+        Location.objects.select_for_update().get(pk=location_id) if location_id else Location()
+    )
     before = {"name": location.name} if location.pk else None
     name = _name(data["name"])
     if Location.objects.filter(name__iexact=name).exclude(pk=location.pk).exists():
@@ -149,7 +166,8 @@ def save_location(*, actor, data, location_id=None):
     location.full_clean()
     location.save()
     AuditEvent.objects.create(
-        actor=actor, action="location.updated" if before else "location.created",
+        actor=actor,
+        action="location.updated" if before else "location.created",
         details={"location_id": location.pk, "before": before, "after": {"name": name}},
     )
     return location
@@ -157,14 +175,16 @@ def save_location(*, actor, data, location_id=None):
 
 @transaction.atomic
 def save_sector(*, actor, data, sector_id=None):
-    require_administrator(actor)
+    require_access(actor, "locations_manage")
     catalogue_lock()
     sector = Sector.objects.select_for_update().get(pk=sector_id) if sector_id else Sector()
     before = {"name": sector.name, "location_id": sector.location_id} if sector.pk else None
     location = Location.objects.select_for_update().get(pk=data["location"].pk)
     if before and before["location_id"] != location.pk:
         if sector.references.exists() or sector.changes_from.exists() or sector.changes_to.exists():
-            raise ValidationError({"location": "Não pode mover um setor com referências ou histórico associados."})
+            raise ValidationError(
+                {"location": "Não pode mover um setor com referências ou histórico associados."}
+            )
     name = _name(data["name"])
     if Sector.objects.filter(location=location, name__iexact=name).exclude(pk=sector.pk).exists():
         raise ValidationError({"name": "Já existe um setor com esta designação na localização."})
@@ -173,35 +193,46 @@ def save_sector(*, actor, data, sector_id=None):
     sector.full_clean()
     sector.save()
     AuditEvent.objects.create(
-        actor=actor, action="sector.updated" if before else "sector.created",
-        details={"sector_id": sector.pk, "before": before, "after": {"name": name, "location_id": location.pk}},
+        actor=actor,
+        action="sector.updated" if before else "sector.created",
+        details={
+            "sector_id": sector.pk,
+            "before": before,
+            "after": {"name": name, "location_id": location.pk},
+        },
     )
     return sector
 
 
 @transaction.atomic
 def delete_location(*, actor, location_id):
-    require_administrator(actor)
+    require_access(actor, "locations_manage")
     catalogue_lock()
     location = Location.objects.select_for_update().get(pk=location_id)
     if Reference.objects.filter(Q(location=location) | Q(sector__location=location)).exists():
-        raise ValidationError("Não pode remover uma localização com referências associadas, mesmo inativas.")
+        raise ValidationError(
+            "Não pode remover uma localização com referências associadas, mesmo inativas."
+        )
     before = {"location_id": location.pk, "name": location.name}
     try:
         location.sectors.all().delete()
         location.delete()
     except ProtectedError as exc:
-        raise ValidationError("Não pode remover esta localização: existe histórico associado.") from exc
+        raise ValidationError(
+            "Não pode remover esta localização: existe histórico associado."
+        ) from exc
     AuditEvent.objects.create(actor=actor, action="location.deleted", details=before)
 
 
 @transaction.atomic
 def delete_sector(*, actor, sector_id):
-    require_administrator(actor)
+    require_access(actor, "locations_manage")
     catalogue_lock()
     sector = Sector.objects.select_for_update().get(pk=sector_id)
     if sector.references.exists():
-        raise ValidationError("Não pode remover um setor com referências associadas, mesmo inativas.")
+        raise ValidationError(
+            "Não pode remover um setor com referências associadas, mesmo inativas."
+        )
     before = {"sector_id": sector.pk, "name": sector.name, "location_id": sector.location_id}
     try:
         sector.delete()

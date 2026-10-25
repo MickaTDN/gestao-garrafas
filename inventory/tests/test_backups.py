@@ -69,7 +69,7 @@ class BackupTests(TransactionTestCase):
                 )
                 self.assertEqual(
                     conn.execute(
-                        "SELECT count(*) FROM inventory_document WHERE payload IS NOT NULL"
+                        "SELECT count(*) FROM inventory_document d LEFT JOIN inventory_reportfile f ON f.document_id=d.id WHERE d.payload IS NOT NULL OR f.payload IS NOT NULL"
                     ).fetchone()[0],
                     2,
                 )
@@ -213,3 +213,57 @@ class BackupTests(TransactionTestCase):
             )
             self.assertEqual(result.returncode, 0, "Synthetic GPG decryption failed")
             self.assertEqual(verify_archive(decrypted), manifest)
+
+    def test_deleted_pdf_recipe_number_and_signature_restore_and_regenerate_in_another_process(
+        self,
+    ):
+        import json
+        import sys
+
+        from inventory.models import ReportFile
+        from inventory.reporting import delete_pdf
+
+        document = self.movement.documents.get(kind="pdf")
+        expected = document.sha256
+        number = document.metadata["report_number"]
+        delete_pdf(actor=self.admin, document_id=document.pk)
+        archive, manifest = create_backup(synthetic=True)
+        self.assertEqual(len(manifest["documents"]), 1)  # Signature retained, PDF file absent.
+        database = "garrafas_restore_" + uuid.uuid4().hex[:20]
+        restore_synthetic(archive, database=database)
+        try:
+            cfg = settings.DATABASES["default"]
+            env = {
+                **os.environ,
+                "DJANGO_SETTINGS_MODULE": "config.settings",
+                "APP_ENV": "development",
+                "DB_ENGINE": "postgresql",
+                "DB_NAME": database,
+                "DB_USER": cfg["USER"],
+                "DB_PASSWORD": cfg["PASSWORD"],
+                "DB_HOST": cfg["HOST"],
+                "DB_PORT": str(cfg["PORT"]),
+                "DB_SSLMODE": cfg["OPTIONS"].get("sslmode", "prefer"),
+                "DJANGO_SECRET_KEY": settings.SECRET_KEY,
+            }
+            code = f"from django.contrib.auth import get_user_model; from inventory.reporting import regenerate_pdf; from inventory.documents import verified_bytes; from inventory.models import ReportNumber,Reference; import hashlib,json; d=regenerate_pdf(actor=get_user_model().objects.get(pk={self.admin.pk}),document_id={document.pk}); print(json.dumps(dict(digest=hashlib.sha256(verified_bytes(d)).hexdigest(),number=d.metadata['report_number'],numbers=ReportNumber.objects.count(),stock=Reference.objects.get(pk={self.ref.pk}).current_stock)))"
+            result = subprocess.run(
+                [sys.executable, "manage.py", "shell", "--verbosity", "0", "-c", code],
+                cwd=settings.BASE_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+            actual = json.loads(result.stdout.strip())
+            self.assertEqual(
+                actual, {"digest": expected, "number": number, "numbers": 1, "stock": 13}
+            )
+            # The source remains deleted; regeneration happened only in the restored destination.
+            self.assertIsNone(ReportFile.objects.get(document=document).payload)
+        finally:
+            with self.admin_connection() as conn:
+                conn.execute(
+                    sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(database))
+                )

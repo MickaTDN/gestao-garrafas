@@ -15,3 +15,9 @@ GRANT INSERT, UPDATE, DELETE ON accounts_loginlimit, django_session,
 -- Existing triggers protect confirmed lines even though draft lines are removable.
 -- No ownership, superuser, CREATE, CREATEDB, CREATEROLE or ledger/document DELETE.
 -- Repeat grants after migrations add tables/sequences; never migrate as this role.
+
+-- A2 additive tables. Evidence identities stay append-only; file transitions
+-- are hash-checked by PostgreSQL and authorized/audited by the domain service.
+GRANT INSERT, UPDATE ON accounts_accessprofile, inventory_reportsequence TO :"app_role";
+GRANT INSERT ON inventory_reporttemplate, inventory_reportnumber, inventory_reportfile TO :"app_role";
+GRANT UPDATE (payload,reproductions) ON inventory_reportfile TO :"app_role";
