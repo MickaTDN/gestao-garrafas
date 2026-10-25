@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -Force
 try {
     $report = Get-GGPreflight -Port $Port
-    Write-Host 'Gestao de Garrafas - diagnostico de leitura; nao instala nem altera o Windows.'
+    Write-Host ('Gest' + [char]0x00E3 + 'o Vertente Aveludada - diagnostico de leitura; nao instala nem altera o Windows.')
     foreach ($check in $report.Checks) {
         $label = if ($check.OK) {'OK'} else {'BLOQUEADO'}
         Write-Host ("{0} - {1}: {2}" -f $label,$check.Code,$check.Message)

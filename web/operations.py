@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.debug import sensitive_post_parameters
@@ -12,12 +13,13 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from inventory import catalog, operations
 from inventory.models import Movement, Person, Reference
+from inventory.presentation import entered_quantity, stock_quantity
 from inventory.services import confirm_movement, owned_draft, reference_state
 
 from .catalog import _errors
 from .catalog_forms import ReferenceForm
 from .forms import StockFilterForm
-from .operation_forms import HeaderForm, LineFormSet, ReviewForm, StartForm
+from .operation_forms import HeaderForm, LineFormSet, OperationSearchForm, ReviewForm, StartForm
 from .views import _page, administrator_required
 
 
@@ -31,58 +33,150 @@ def _own(request, pk):
     return movement
 
 
-def _catalogue(request, *, active_only=True):
-    form = StockFilterForm(request.GET)
+def _catalogue(request, *, active_only=True, name_only=False):
+    form = OperationSearchForm(request.GET) if name_only else StockFilterForm(request.GET)
     refs = Reference.objects.select_related("location", "sector").order_by("name", "pk")
     if active_only:
         refs = refs.filter(active=True)
     if form.is_valid():
         data = form.cleaned_data
         if data["q"]:
-            refs = refs.filter(Q(name__icontains=data["q"]) | Q(code__icontains=data["q"]))
-        if data["location"]:
+            refs = (
+                refs.filter(name__icontains=data["q"])
+                if name_only
+                else refs.filter(Q(name__icontains=data["q"]) | Q(code__icontains=data["q"]))
+            )
+        if data.get("location"):
             refs = refs.filter(location=data["location"])
-        if data["sector"]:
+        if data.get("sector"):
             refs = refs.filter(sector=data["sector"])
     else:
         refs = refs.none()
     return form, refs
 
 
-@administrator_required
-@require_http_methods(["GET", "POST"])
-def start(request, kind):
-    form = StartForm(request.POST if request.method == "POST" else None)
-    filter_form, refs = _catalogue(request)
-    if kind != "inventory":
-        form.fields.pop("inventory_scope")
-    if request.method == "POST" and form.is_valid():
+def _pending(request, kind):
+    return Paginator(
+        Movement.objects.filter(
+            created_by=request.user, status="draft", workflow_version=1, kind=kind
+        ).order_by("-pk"),
+        10,
+    ).get_page(request.GET.get("pending_page"))
+
+
+def _new_movement(request, kind):
+    """Render a complete, unsaved form on GET; persist only an explicit valid POST."""
+    movement = Movement(kind=kind, created_by=request.user, workflow_version=1)
+    header = HeaderForm(
+        request.POST if request.method == "POST" else None,
+        initial={"revision": 0, "date": movement.date, "person_name": "", "reason": ""},
+    )
+    header.fields["reason"].label = "Observações (opcional)"
+    header.fields["person_name"].label = (
+        "Pessoa que entregou" if kind == "entry" else "Pessoa que levantou"
+    )
+    scope_form = None
+    if kind == "inventory":
+        header.fields.pop("person_name")
+        scope_form = StartForm(
+            request.POST if request.method == "POST" else None,
+            initial={
+                "inventory_scope": "full"
+                if request.GET.get("inventory_scope") == "full"
+                else "partial"
+            },
+        )
+        scope_form.fields.pop("reason")
+        scope_form.fields["inventory_scope"].widget.attrs["form"] = "operation-form"
+    formset = LineFormSet(request.POST if request.method == "POST" else None, initial=[])
+    filter_form, refs = _catalogue(
+        request, active_only=kind != "entry", name_only=kind != "inventory"
+    )
+    refs_page = Paginator(refs, 20).get_page(request.GET.get("ref_page"))
+    if (
+        request.method == "POST"
+        and header.is_valid()
+        and formset.is_valid()
+        and (scope_form is None or scope_form.is_valid())
+    ):
         try:
-            scope = form.cleaned_data.get("inventory_scope") or "partial"
-            if kind == "inventory" and scope == "full" and not filter_form.is_valid():
-                raise ValidationError("Corrija os filtros do âmbito antes de criar o inventário.")
-            movement = operations.create_draft(
-                actor=request.user,
-                kind=kind,
-                inventory_scope=scope,
-                references=refs if kind == "inventory" and scope == "full" else None,
+            if header.cleaned_data["revision"] != 0 or len(formset) != 0:
+                raise ValidationError("Selecione as referências antes de introduzir quantidades.")
+            add_ids = [int(value) for value in request.POST.getlist("add_reference")]
+            if not set(add_ids).issubset({ref.pk for ref in refs_page}):
+                raise ValidationError("Seleção fora dos resultados apresentados.")
+            action = request.POST.get("action", "save")
+            reactivate_id = None
+            if action.startswith("reactivate:"):
+                reactivate_id = int(action.split(":", 1)[1])
+                if kind != "entry" or not any(
+                    ref.pk == reactivate_id and not ref.active for ref in refs_page
+                ):
+                    raise ValidationError("Reativação inválida.")
+                action = "reactivate"
+            if action not in ("save", "new-reference", "reactivate") or (
+                action == "new-reference" and kind != "entry"
+            ):
+                raise ValidationError("Ação inválida.")
+            scope = (
+                (scope_form.cleaned_data.get("inventory_scope") or "partial")
+                if scope_form
+                else "partial"
             )
-        except ValidationError as error:
-            _errors(form, error)
-        else:
-            return redirect("web:operation-edit", pk=movement.pk)
+            if kind == "inventory" and scope == "full" and not filter_form.is_valid():
+                raise ValidationError("Corrija os filtros do âmbito do inventário.")
+            with transaction.atomic():
+                saved = operations.create_draft(
+                    actor=request.user,
+                    kind=kind,
+                    inventory_scope=scope,
+                    references=refs if kind == "inventory" and scope == "full" else None,
+                )
+                operations.save_draft(
+                    saved.pk,
+                    actor=request.user,
+                    revision=0,
+                    header=header.cleaned_data,
+                    add_ids=add_ids if scope != "full" else (),
+                )
+            if action == "new-reference":
+                return redirect("web:operation-reference", pk=saved.pk)
+            if action == "reactivate":
+                return redirect("web:operation-reactivate", pk=saved.pk, reference_pk=reactivate_id)
+            return redirect("web:operation-edit", pk=saved.pk)
+        except (ValidationError, ValueError) as error:
+            _errors(
+                header,
+                error
+                if isinstance(error, ValidationError)
+                else ValidationError("Seleção inválida."),
+            )
+    params = request.GET.copy()
+    params.pop("ref_page", None)
     return render(
         request,
-        "web/operations/start.html",
+        "web/operations/edit.html",
         {
             "section": kind,
-            "kind": kind,
-            "title": dict(Movement.Kind.choices)[kind],
-            "form": form,
+            "movement": movement,
+            "header": header,
+            "formset": formset,
+            "pairs": [],
+            "refs_page": refs_page,
+            "ref_params": params.urlencode(),
             "filter_form": filter_form,
+            "people": Person.objects.filter(active=True).order_by("name"),
+            "pending_page": _pending(request, kind),
+            "scope_form": scope_form,
         },
         status=400 if request.method == "POST" else 200,
     )
+
+
+@administrator_required
+@require_http_methods(["GET", "POST"])
+def start(request, kind):
+    return _new_movement(request, kind)
 
 
 @administrator_required
@@ -136,7 +230,7 @@ def edit(request, pk):
         return redirect("web:drafts")
     line_query = movement.lines.select_related(
         "reference__location", "reference__sector", "target_location", "target_sector"
-    ).order_by("reference__code")
+    ).order_by("reference__name", "pk")
     if movement.kind == "inventory":
         _, filtered_refs = _catalogue(request, active_only=False)
         line_query = line_query.filter(reference__in=filtered_refs)
@@ -153,12 +247,21 @@ def edit(request, pk):
     )
     if movement.kind == "inventory":
         header.fields.pop("person_name")
+    else:
+        header.fields["person_name"].label = (
+            "Pessoa que entregou" if movement.kind == "entry" else "Pessoa que levantou"
+        )
+    header.fields["reason"].label = (
+        "Motivo da correção" if movement.correction_of_id else "Observações (opcional)"
+    )
     formset = LineFormSet(
         request.POST if request.method == "POST" else None,
         initial=_initial(movement, lines),
         form_kwargs={"inventory": movement.kind == "inventory"},
     )
-    filter_form, refs = _catalogue(request, active_only=movement.kind != "entry")
+    filter_form, refs = _catalogue(
+        request, active_only=movement.kind != "entry", name_only=movement.kind != "inventory"
+    )
     refs = refs.exclude(pk__in=movement.lines.values_list("reference_id", flat=True))
     if movement.correction_of_id:
         refs = refs.filter(movement_lines__movement_id=movement.correction_of_id).distinct()
@@ -218,7 +321,7 @@ def edit(request, pk):
                 # Review is a separate POST, so refreshing its GET never accepts new stock silently.
                 operations.review_draft(pk, actor=request.user, revision=movement.revision)
                 return redirect("web:operation-review", pk=pk)
-            messages.success(request, "Rascunho guardado. O stock permanece inalterado.")
+            messages.success(request, "Operação guardada. O stock permanece inalterado.")
             return redirect(request.get_full_path())
         except (ValidationError, ValueError) as error:
             _errors(
@@ -298,19 +401,39 @@ def review(request, pk):
             return redirect("web:operation-detail", pk=pk)
     # Show exactly what was reviewed, not silently refreshed quantities.
     plans = []
+    stale_review = False
     for line in movement.lines.select_related(
         "reference", "target_location", "target_sector"
-    ).order_by("reference__code"):
+    ).order_by("reference__name", "pk"):
         snapshot = movement.review_snapshot.get(str(line.reference_id), {})
+        changed = snapshot != reference_state(line.reference)
+        stale_review = stale_review or changed
         before = snapshot.get("stock", 0)
         quantity = line.counted_quantity - before if movement.kind == "inventory" else line.quantity
         plans.append(
-            {"line": line, "before": before, "quantity": quantity, "after": before + quantity}
+            {
+                "line": line,
+                "before": before,
+                "quantity": quantity,
+                "after": before + quantity,
+                "entered_display": entered_quantity(
+                    line.boxes, line.units, quantity, line.box_capacity
+                ),
+                "after_display": "Requer nova conferência"
+                if changed
+                else stock_quantity(before + quantity, line.box_capacity),
+            }
         )
     return render(
         request,
         "web/operations/review.html",
-        {"section": movement.kind, "movement": movement, "form": form, "plans": plans},
+        {
+            "section": movement.kind,
+            "movement": movement,
+            "form": form,
+            "plans": plans,
+            "stale_review": stale_review,
+        },
         status=400 if request.method == "POST" else 200,
     )
 
@@ -336,13 +459,13 @@ def cancel(request, pk):
             )
         else:
             messages.success(
-                request, "Rascunho cancelado sem alterar stock. Dados e auditoria preservados."
+                request, "Operação cancelada sem alterar stock. Dados e auditoria preservados."
             )
-            return redirect("web:drafts")
+            return redirect(f"web:{movement.kind}")
     return render(
         request,
         "web/operations/cancel.html",
-        {"section": "drafts", "movement": movement, "error": error},
+        {"section": movement.kind, "movement": movement, "error": error},
         status=400 if error else 200,
     )
 

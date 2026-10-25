@@ -1,0 +1,8 @@
+{% if pending_page.paginator.count %}
+<section class="card more-areas" aria-label="Operações por concluir">
+<h2>Operações por concluir</h2><p class="muted">Ainda não alteraram o stock. Pode continuar ou cancelar uma operação sua.</p>
+{% for pending in pending_page %}<div class="lined row between wrapping"><div><strong>{{ pending }}</strong><p>{{ pending.date|date:'d/m/Y' }} · {{ pending.draft_person_name|default:'Pessoa por indicar' }}</p></div><div class="row wrapping"><a class="btn secondary" href="{% url 'web:operation-edit' pending.pk %}">Continuar {{ pending.get_kind_display|lower }} {{ pending.pk }}</a><a class="btn danger" href="{% url 'web:operation-cancel' pending.pk %}">Cancelar {{ pending.pk }}</a></div></div>{% endfor %}
+{% if pending_page.has_previous %}<a class="btn secondary" href="?pending_page={{ pending_page.previous_page_number }}">Operações anteriores</a>{% endif %}
+{% if pending_page.has_next %}<a class="btn secondary" href="?pending_page={{ pending_page.next_page_number }}">Mais operações</a>{% endif %}
+</section>
+{% endif %}

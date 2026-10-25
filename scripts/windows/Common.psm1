@@ -222,7 +222,9 @@ function Wait-GGHttp {
 function New-GGShortcuts {
     param([string]$HomePath,[string]$ShortcutDirectory=[Environment]::GetFolderPath('Desktop'))
     $shell = New-Object -ComObject WScript.Shell
-    foreach ($item in @(@('Gestao de Garrafas - Piloto','Iniciar.cmd'),@('Parar Gestao de Garrafas','Parar.cmd'),@('Diagnostico Gestao de Garrafas','Diagnostico.cmd'))) {
+    # ASCII source remains compatible with Windows PowerShell 5.1 without a BOM.
+    $appName = 'Gest' + [char]0x00E3 + 'o Vertente Aveludada'
+    foreach ($item in @(@(($appName + ' - Piloto'),'Iniciar.cmd'),@(('Parar ' + $appName),'Parar.cmd'),@(('Diagnostico ' + $appName),'Diagnostico.cmd'))) {
         $shortcut = $shell.CreateShortcut((Join-Path $ShortcutDirectory ($item[0]+'.lnk')))
         $shortcut.TargetPath = Join-Path $HomePath $item[1]
         $shortcut.WorkingDirectory = $HomePath

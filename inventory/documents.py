@@ -24,7 +24,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as PDFImage
 from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle
 
+from web.branding import APP_NAME, LOGO, original_asset
+
 from .models import AuditEvent, Document
+from .presentation import entered_quantity, stock_quantity
 
 MAX_SIGNATURE_BYTES = 256 * 1024
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
@@ -144,6 +147,7 @@ def report_snapshot(movement, *, actor):
     changes = [
         {
             "code": change.reference.code,
+            "name": change.reference.name,
             "before": change.before_snapshot,
             "after": change.after_snapshot,
             "reason": change.reason,
@@ -152,6 +156,7 @@ def report_snapshot(movement, *, actor):
     ]
     return {
         "schema": 1,
+        "presentation": 2,
         "id": movement.pk,
         "kind": movement.kind,
         "label": movement.get_kind_display(),
@@ -199,11 +204,11 @@ def render_pdf(snapshot, signature=None):
         leftMargin=17 * mm,
         topMargin=20 * mm,
         bottomMargin=20 * mm,
-        title=f"Gestão de Garrafas · MOV-{snapshot['id']}",
-        author="Gestão de Garrafas",
+        title=f"{APP_NAME} · MOV-{snapshot['id']}",
+        author=APP_NAME,
     )
     story = [
-        p("GESTÃO DE GARRAFAS", title),
+        p(APP_NAME, title),
         Spacer(1, 5 * mm),
         p(f"{snapshot['label']} · MOV-{snapshot['id']}", title),
         p(
@@ -212,6 +217,12 @@ def render_pdf(snapshot, signature=None):
         p(f"Responsável pela confirmação: {snapshot['responsible']}"),
         p(f"Pessoa: {snapshot['person'] or 'Não aplicável'}"),
     ]
+    logo = original_asset(LOGO)
+    if logo:
+        image = PDFImage(str(logo))
+        scale = min(65 * mm / image.imageWidth, 25 * mm / image.imageHeight)
+        image.drawWidth, image.drawHeight = image.imageWidth * scale, image.imageHeight * scale
+        story[0:0] = [image, Spacer(1, 4 * mm)]
     if snapshot["correction_of"]:
         story.append(
             p(f"Correção relacionada com MOV-{snapshot['correction_of']} · {snapshot['reason']}")
@@ -219,31 +230,38 @@ def render_pdf(snapshot, signature=None):
     elif snapshot["reason"]:
         story.append(p(snapshot["reason"]))
     inventory = snapshot["kind"] == "inventory"
-    headings = [
-        "Referência / capacidade",
-        "Caixas",
-        "Soltas",
-        "Contagem" if inventory else "Total",
-        "Stock antes",
-        "Diferença" if inventory else "Variação",
-        "Stock final",
-    ]
+    if inventory:
+        headings = [
+            "Referência",
+            "Caixas",
+            "Soltas",
+            "Contagem",
+            "Stock antes",
+            "Diferença",
+            "Stock final",
+        ]
+        widths = [61, 14, 14, 20, 21, 22, 24]
+    else:
+        headings = [
+            "Referência",
+            "Quantidade a entrar" if snapshot["kind"] == "entry" else "Quantidade a sair",
+            "Stock final",
+        ]
+        widths = [80, 48, 48]
     rows = [[p(label, header) for label in headings]]
     for line in snapshot["lines"]:
-        rows.append(
-            [
-                p(
-                    f"{line['code']} · {line['name']}\nCaixa: {line['capacity'] if line['capacity'] is not None else 'por definir'}"
-                ),
-                p(line["boxes"]),
-                p(line["units"]),
-                p(line["counted"] if inventory else abs(line["quantity"])),
-                p(line["before"]),
-                p(line["quantity"]),
-                p(line["after"]),
-            ]
-        )
         if inventory:
+            rows.append(
+                [
+                    p(line["name"]),
+                    p(line["boxes"]),
+                    p(line["units"]),
+                    p(line["counted"]),
+                    p(line["before"]),
+                    p(line["quantity"]),
+                    p(line["after"]),
+                ]
+            )
             rows.append(
                 [
                     p(
@@ -257,12 +275,19 @@ def render_pdf(snapshot, signature=None):
                     "",
                 ]
             )
-    table = LongTable(
-        rows,
-        colWidths=[61 * mm, 14 * mm, 14 * mm, 20 * mm, 21 * mm, 22 * mm, 24 * mm],
-        repeatRows=1,
-        hAlign="LEFT",
-    )
+        else:
+            rows.append(
+                [
+                    p(line["name"]),
+                    p(
+                        entered_quantity(
+                            line["boxes"], line["units"], line["quantity"], line["capacity"]
+                        )
+                    ),
+                    p(stock_quantity(line["after"], line["capacity"])),
+                ]
+            )
+    table = LongTable(rows, colWidths=[width * mm for width in widths], repeatRows=1, hAlign="LEFT")
     commands = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#126650")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -281,7 +306,7 @@ def render_pdf(snapshot, signature=None):
     for change in snapshot["changes"]:
         story.append(
             p(
-                f"Transferência {change['code']}: {change['before'].get('location')} / {change['before'].get('sector') or 'sem setor'} → {change['after'].get('location')} / {change['after'].get('sector') or 'sem setor'} · {change['reason']}"
+                f"Transferência {change.get('name') or change['code']}: {change['before'].get('location')} / {change['before'].get('sector') or 'sem setor'} → {change['after'].get('location')} / {change['after'].get('sector') or 'sem setor'} · {change['reason']}"
             )
         )
     if signature:
@@ -306,7 +331,7 @@ def render_pdf(snapshot, signature=None):
         canvas.setFont("GG", 8)
         canvas.setFillColor(colors.HexColor("#71817c"))
         canvas.drawString(
-            17 * mm, 12 * mm, f"Gestão de Garrafas · MOV-{snapshot['id']} · Documento histórico"
+            17 * mm, 12 * mm, f"{APP_NAME} · MOV-{snapshot['id']} · Documento histórico"
         )
         canvas.drawRightString(193 * mm, 12 * mm, f"Página {doc.page}")
         canvas.restoreState()

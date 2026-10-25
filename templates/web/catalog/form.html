@@ -1,5 +1,5 @@
-{% extends 'base.html' %}
-{% block title %}{{ title }} · Gestão de Garrafas{% endblock %}
+{% extends 'base.html' %}{% load static %}
+{% block title %}{{ title }} · Gestão Vertente Aveludada{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">GESTÃO DO CATÁLOGO</div><h1>{{ title }}</h1>{% if description %}<p class="muted intro-description">{{ description }}</p>{% endif %}</div></div>
 {% if match_form %}
@@ -35,3 +35,5 @@
   <div class="row wrapping"><button class="btn" type="submit">Guardar</button><a class="btn secondary" href="{% url back_url %}">Cancelar</a></div>
 </form>
 {% endblock %}
+
+{% block scripts %}<script src="{% static 'js/sectors.js' %}" defer></script>{% endblock %}

@@ -1,7 +1,10 @@
 from django import template
 from django.utils.formats import number_format
 
+from inventory.presentation import stock_quantity
+
 register = template.Library()
+register.filter("stock_quantity", stock_quantity)
 
 
 @register.filter

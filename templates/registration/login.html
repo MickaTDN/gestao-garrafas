@@ -1,10 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="pt-PT">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Entrar · Gestão de Garrafas</title><link rel="stylesheet" href="{% static 'css/app.css' %}"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Entrar · Gestão Vertente Aveludada</title><link rel="stylesheet" href="{% static 'css/app.css' %}"></head>
 <body class="login-body">
 <main class="card login-card">
-  <div class="brand login-brand"><div class="brand-mark">GG</div><div><strong>Gestão de Garrafas</strong><span>Gestão de stock</span></div></div>
+  <div class="brand login-brand">{% if brand_logo %}<img class="brand-logo" src="{% static brand_logo %}" alt="Copo com Vida">{% endif %}<div><strong>Gestão Vertente Aveludada</strong><span>Gestão de stock</span></div></div>
   <h1>Bem-vindo</h1><p class="muted login-intro">Entre com a sua conta para consultar o stock.</p>
   {% if form.errors %}<div class="banner" role="alert">Não foi possível iniciar sessão. Verifique o utilizador e a palavra-passe.</div>{% endif %}
   {% if next and not form.errors %}<p class="banner">Inicie sessão para aceder a esta área.</p>{% endif %}

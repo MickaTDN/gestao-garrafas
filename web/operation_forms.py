@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from inventory.models import Location, Sector
 
-from .catalog_forms import StyledFieldsMixin
+from .catalog_forms import SectorSelect, StyledFieldsMixin
 
 
 class OperationForm(StyledFieldsMixin, forms.Form):
@@ -28,6 +28,10 @@ class StartForm(OperationForm):
     )
 
 
+class OperationSearchForm(OperationForm):
+    q = forms.CharField(required=False, max_length=200, label="Nome da referência")
+
+
 class HeaderForm(OperationForm):
     revision = forms.IntegerField(widget=forms.HiddenInput)
     date = forms.DateField(
@@ -44,14 +48,6 @@ class HeaderForm(OperationForm):
     reason = forms.CharField(
         label="Motivo geral / observações", required=False, widget=forms.Textarea(attrs={"rows": 2})
     )
-
-
-class SectorSelect(forms.Select):
-    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
-        option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        if value and hasattr(value, "instance"):
-            option["attrs"]["data-location"] = value.instance.location_id
-        return option
 
 
 class LineForm(OperationForm):

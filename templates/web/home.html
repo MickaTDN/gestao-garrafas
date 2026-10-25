@@ -1,19 +1,19 @@
 {% extends 'base.html' %}
-{% block title %}Início · Gestão de Garrafas{% endblock %}
+{% block title %}Início · Gestão Vertente Aveludada{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">GESTÃO DE STOCK</div><h1>Painel principal</h1><p class="muted intro-description">Uma visão rápida do stock e das localizações físicas.</p></div></div>
 <div class="grid four">
   <div class="card kpi"><small>Garrafas em stock</small><div class="value">{{ total_stock|floatformat:'0g' }}</div><small>Saldo atual na base de dados</small></div>
   <div class="card kpi"><small>Referências ativas</small><div class="value">{{ reference_count|floatformat:'0g' }}</div><small>Referências disponíveis</small></div>
   <div class="card kpi"><small>Alertas de stock baixo</small><div class="value">{{ alert_count|floatformat:'0g' }}</div><small>Apenas alertas ativados</small></div>
-  <div class="card kpi"><small>Rascunhos</small><div class="value">{{ draft_count|floatformat:'0g' }}</div><small>Sem efeito no stock</small></div>
+  <div class="card kpi"><small>Operações por concluir</small><div class="value">{{ draft_count|floatformat:'0g' }}</div><small>Sem efeito no stock</small></div>
 </div>
 <div class="action-grid">
   <a class="action" href="{% url 'web:stock' %}"><div class="sym" aria-hidden="true">▦</div><strong>Consultar stock</strong><span>Pesquisar garrafas</span></a>
   {% if user.is_administrator %}
-  <a class="action" href="{% url 'web:entry' %}"><div class="sym" aria-hidden="true">↘</div><strong>Entradas</strong><span>Guardar rascunho e conferir</span></a>
-  <a class="action" href="{% url 'web:exit' %}"><div class="sym" aria-hidden="true">↗</div><strong>Saídas</strong><span>Guardar rascunho e conferir</span></a>
-  <a class="action" href="{% url 'web:inventory' %}"><div class="sym" aria-hidden="true">☷</div><strong>Inventário físico</strong><span>Guardar rascunho e conferir</span></a>
+  <a class="action" href="{% url 'web:entry' %}"><div class="sym" aria-hidden="true">↘</div><strong>Entradas</strong><span>Preparar movimento e conferir</span></a>
+  <a class="action" href="{% url 'web:exit' %}"><div class="sym" aria-hidden="true">↗</div><strong>Saídas</strong><span>Preparar movimento e conferir</span></a>
+  <a class="action" href="{% url 'web:inventory' %}"><div class="sym" aria-hidden="true">☷</div><strong>Inventário físico</strong><span>Preparar movimento e conferir</span></a>
   {% endif %}
 </div>
 <div class="grid two">
@@ -26,7 +26,7 @@
 </div>
 <div class="card more-areas"><div class="cardtitle"><h2>Outras áreas</h2></div><div class="row wrapping">
   <a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a><a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a><a class="btn secondary small" href="{% url 'web:export' %}">Exportar Excel</a>
-  {% if user.is_administrator %}<a class="btn secondary small" href="{% url 'web:drafts' %}">Os meus rascunhos</a><a class="btn secondary small" href="{% url 'web:references' %}">Referências</a><a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
+  {% if user.is_administrator %}<a class="btn secondary small" href="{% url 'web:references' %}">Referências</a><a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
 </div></div>
 {% if not reference_count %}<p class="footer-note">Ainda não existem referências nesta base de dados. A importação do Excel será realizada depois da reconciliação dos saldos e do histórico.</p>{% endif %}
 {% endblock %}

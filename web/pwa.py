@@ -8,7 +8,16 @@ from django.shortcuts import render
 from django.templatetags.static import static
 from django.views.decorators.http import require_GET
 
-PUBLIC_FILES = ["css/app.css", "js/pwa.js", "icons/icon-192.png", "icons/icon-512.png"]
+from .branding import APP_NAME, LOGO, icon_asset, original_asset
+
+
+def public_files():
+    return [
+        "css/app.css",
+        "js/pwa.js",
+        *(icon_asset(size) for size in (192, 512)),
+        *([LOGO] if original_asset(LOGO) else []),
+    ]
 
 
 @require_GET
@@ -16,8 +25,8 @@ def manifest(request):
     return JsonResponse(
         {
             "id": "/",
-            "name": "Gestão de Garrafas",
-            "short_name": "Garrafas",
+            "name": APP_NAME,
+            "short_name": "Gestão Vertente",
             "lang": "pt-PT",
             "start_url": "/",
             "scope": "/",
@@ -27,7 +36,7 @@ def manifest(request):
             "description": "Gestão de stock de garrafas; operações requerem ligação.",
             "icons": [
                 {
-                    "src": static(f"icons/icon-{size}.png"),
+                    "src": static(icon_asset(size)),
                     "sizes": f"{size}x{size}",
                     "type": "image/png",
                     "purpose": "any maskable",
@@ -43,11 +52,12 @@ def manifest(request):
 def service_worker(request):
     root = Path(settings.BASE_DIR) / "static"
     source = (root / "js/service-worker.js").read_text()
+    files = public_files()
     digest = hashlib.sha256(
-        source.encode() + b"".join((root / name).read_bytes() for name in PUBLIC_FILES)
+        source.encode() + b"".join((root / name).read_bytes() for name in files)
     ).hexdigest()[:16]
     # Resolve manifest-hashed production assets too; offline HTML uses those URLs.
-    assets = ["/offline/", *(static(name) for name in PUBLIC_FILES)]
+    assets = ["/offline/", *(static(name) for name in files)]
     source = "\n".join(
         f"const CACHE = 'gg-public-{digest}';"
         if line.startswith("const CACHE =")
