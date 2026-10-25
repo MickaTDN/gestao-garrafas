@@ -179,6 +179,10 @@ try {
         $shortcuts=Join-Path $temporary 'shortcuts';$null=New-Item -ItemType Directory -Path $shortcuts
         New-GGShortcuts -HomePath $homePath -ShortcutDirectory $shortcuts
         $links=@(Get-ChildItem -LiteralPath $shortcuts -Filter *.lnk)
+        $displayName = 'Gest' + [char]0x00E3 + 'o Vertente Aveludada'
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ($displayName + ' - Piloto.lnk')))
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ('Parar ' + $displayName + '.lnk')))
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ('Diagnostico ' + $displayName + '.lnk')))
         Assert-True ($links.Count -eq 3)
         $shell=New-Object -ComObject WScript.Shell
         foreach($link in $links){

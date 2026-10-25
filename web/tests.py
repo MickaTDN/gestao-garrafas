@@ -56,7 +56,7 @@ class WebTests(TestCase):
         for name in ("settings", "entry", "exit", "inventory", "references"):
             with self.subTest(name=name):
                 self.assertEqual(self.client.get(reverse(f"web:{name}")).status_code, 200)
-                self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 302 if name in ("entry", "exit", "inventory") else 405)
+                self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 400 if name in ("entry", "exit", "inventory") else 405)
 
     def test_search_by_code_and_location(self):
         response = self.client.get(reverse("web:stock"), {"q": "test-001", "location": self.location.pk})
@@ -136,4 +136,4 @@ class WebTests(TestCase):
     def test_read_views_reject_post(self):
         for name in ("home", "stock", "history"):
             with self.subTest(name=name):
-                self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 302 if name in ("entry", "exit", "inventory") else 405)
+                self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 405)

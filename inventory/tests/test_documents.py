@@ -50,7 +50,8 @@ class DocumentTests(TestCase):
         self.assertIn("Garrafa histórica sintética", text)
         self.assertIn("Pessoa documental sintética", text)
         self.assertIn("docs-synthetic", text)
-        self.assertIn("PDF-SYN", text)
+        self.assertNotIn("PDF-SYN", text)
+        self.assertEqual(document.metadata["lines"][0]["code"], "PDF-SYN")
         self.assertEqual(document.metadata["lines"][0]["capacity"], 6)
         self.assertEqual(document.content_type, "application/pdf")
         self.assertTrue(
@@ -80,7 +81,7 @@ class DocumentTests(TestCase):
         )
         document, _, text = self.pdf(movement)
         self.assertIn("Contagem", text)
-        self.assertIn("Transferência PDF-SYN", text)
+        self.assertIn("Transferência Garrafa histórica sintética", text)
         self.assertIn("Destino documental sintético", text)
         line = document.metadata["lines"][0]
         self.assertEqual(
@@ -124,7 +125,8 @@ class DocumentTests(TestCase):
         document, _, text = self.pdf(movement)
         self.assertIsNone(document.metadata["lines"][0]["capacity"])
         self.assertIsNone(document.metadata["lines"][0]["boxes"])
-        self.assertIn("por definir", text)
+        self.assertIn("2 garrafas", text)
+        self.assertNotIn("capacidade", text.lower())
 
     def test_invalid_or_blank_oversized_or_wrong_type_signature_rejected(self):
         for value in (
@@ -267,7 +269,7 @@ class DocumentTests(TestCase):
         document, payload, text = self.pdf(movement)
         self.assertGreater(len(PdfReader(io.BytesIO(payload)).pages), 1)
         self.assertEqual(len(document.metadata["lines"]), 70)
-        self.assertIn("PDF-069", text)
+        self.assertIn("Referência sintética longa " * 3 + "69", text.replace("\n", " "))
         self.assertTrue(
             all(
                 "Stock final" in page.extract_text()
