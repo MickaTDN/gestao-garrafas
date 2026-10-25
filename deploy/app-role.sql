@@ -8,6 +8,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"app_role";
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"app_role";
 GRANT INSERT, UPDATE ON accounts_user, inventory_person, inventory_reference, inventory_movement,
  inventory_importbatch, inventory_importpreview, inventory_legacyrow TO :"app_role";
+GRANT INSERT, UPDATE ON consultation_exportsource TO :"app_role";
 GRANT INSERT ON inventory_document, inventory_auditevent, inventory_locationchange,
  inventory_openingbalance, inventory_movementlinesource TO :"app_role";
 GRANT INSERT, UPDATE, DELETE ON accounts_loginlimit, django_session,
