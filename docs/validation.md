@@ -229,3 +229,40 @@ Pendente: aceitação física Windows 11/Docker Desktop/WSL2 por informática, p
 corporativas, consola interativa/partilha de ficheiros, proxy/CA, arranque após
 suspensão/reinício, suporte externo de backup, impressoras e eventual Wi-Fi Android
 com HTTPS autorizado. Não se afirma que o runner Windows CI prove esses pontos.
+
+## Etapa A — formulários diretos e Gestão Vertente Aveludada
+
+Validação em 2026-10-25, branch `fix/entradas-saidas-diretas`, baseada na Etapa 5
+(`16ac7c4`). Nenhuma operação foi executada no PC Windows instalado ou na base
+reservada à pré-visualização. Foi criado outro PostgreSQL 17 com credenciais
+aleatórias e dados exclusivamente fictícios.
+
+- `ruff check .`: passou.
+- `manage.py check`: passou; `makemigrations --check --dry-run`: sem alterações.
+- `manage.py test accounts inventory imports web tests.browser tests.windows.test_profile --noinput`:
+  **291 testes passaram**, incluindo 14 Chromium em computador/viewport móvel e
+  8 verificações do perfil Windows. Inclui concorrência real PostgreSQL,
+  importação sintética, PDFs, assinatura com rato/toque e backup/restauro.
+- O teste de rollback do primeiro POST foi reforçado para provocar falha dentro
+  de `save_draft`, depois da criação interna; repetição individual: passou,
+  sem movimento, pessoa ou auditoria órfãos.
+- `collectstatic --noinput` e `check --deploy --fail-level WARNING` com configuração
+  de produção: passaram. A verificação não efetuou deploy.
+- Payload Docker da Etapa 5 num projeto novo: passou. Inclui arranque local,
+  PostgreSQL sem portas, conta restrita, PDFs/assinatura, persistência após paragem,
+  backup, restauro noutro projeto vazio e recusa de sobrescrever um destino usado.
+  A imagem local reutilizou a base de dependências da Etapa 5 com o código novo;
+  a CI reconstrói a imagem normal a partir do Dockerfile do repositório.
+- PowerShell 5.1/NTFS/atalhos: execução no job Windows da CI, não neste ambiente
+  Linux. O resultado final deve ser consultado nos checks do PR.
+
+Na primeira execução completa foram identificadas duas incompatibilidades dos
+seletores dos novos testes de criação de referência e um gesto tátil iniciado sob
+navegação fixa. Os rótulos foram uniformizados e o teste verifica agora que o alvo
+tátil é o canvas visível. Os quatro cenários afetados passaram isoladamente e a
+suíte completa seguinte passou. Capturas sintéticas foram inspecionadas localmente;
+não se publicam relatórios/capturas privados.
+
+Pendente de aceitação: atualização física Windows 11/WSL2, políticas/permissões do
+utilizador e incorporação/contraste dos originais Copo com Vida ainda não fornecidos.
+Não há merge, publicação de dados reais ou alterações à aplicação Android separada.

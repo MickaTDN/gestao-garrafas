@@ -249,3 +249,12 @@ não é ligada nem montada. Ver [guia Windows](windows11.md) e
 Android por Wi-Fi continua fechado até autorização da informática e preparação
 de HTTPS, hosts/CSRF, firewall limitada à rede e dispositivos autorizados. Não
 existe segundo stock offline nem nova aplicação Stock Vendas nesta etapa.
+
+## Etapa A — formulários e apresentação
+
+Entradas, Saídas e Inventário passam a abrir diretamente o formulário. O primeiro
+POST válido cria/guarda a operação interna atomicamente; GET não escreve. Os
+serviços transacionais e o esquema mantêm-se. Conferência/PDF de entrada/saída
+usam três colunas e uma função comum de apresentação, conservando os snapshots
+técnicos e os documentos históricos. A identidade visível passa a Gestão Vertente
+Aveludada, sem renomear identificadores de instalação. Ver [Etapa A](etapa-a.md).

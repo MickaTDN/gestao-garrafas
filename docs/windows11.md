@@ -69,8 +69,8 @@ executar à força ou usar ferramentas portáteis para contornar a política.
    existente. Não existe conta/password predefinida e a password não vai em
    argumentos, ficheiros de instalação ou logs. Pode fazê-lo depois com
    **CriarUtilizador.cmd** na pasta privada do piloto.
-7. São criados atalhos no ambiente de trabalho do utilizador: **Gestao de Garrafas
-   - Piloto**, **Parar Gestao de Garrafas** e **Diagnostico Gestao de Garrafas**.
+7. São criados atalhos no ambiente de trabalho do utilizador: **Gestão Vertente Aveludada
+   - Piloto**, **Parar Gestão Vertente Aveludada** e **Diagnostico Gestão Vertente Aveludada**.
    São ficheiros `.lnk` por utilizador, não serviços ou tarefas privilegiadas.
 
 Não existe atualizador automático. Conservar a versão revista do pacote; uma
@@ -212,3 +212,72 @@ Ainda falta uma aceitação presencial, autorizada pela informática, num Window
 real: Docker Desktop/WSL2 e políticas, proxy/CA, caminhos do utilizador, reinício/
 suspensão, proteção do disco, abertura/ impressão, cópia externa e restauro.
 Nada foi instalado no computador do utilizador e não é declarada operação oficial.
+
+## Atualização da Etapa A num piloto existente
+
+**Procedimento a executar posteriormente pelo utilizador/informática, após revisão
+do PR. Não foi executado no computador instalado.** Aplica-se apenas a esta
+alteração de apresentação, que não acrescenta migrações nem dependências.
+As etapas Android mantêm branches próprias; este PR é destinado à branch da Etapa 5.
+
+1. Com o piloto ainda ligado, usar `Backup.cmd` da pasta privada e guardar o
+   backup numa pasta **nova**, fora do código e num suporte autorizado. Conservar
+   também uma cópia protegida da pasta privada (manifesto, configuração e segredos),
+   fora de Git/email. Conferir o backup e anotar a versão anterior do código.
+2. Usar `Parar.cmd`. Não remover contentores ou volumes, não repor o Docker
+   Desktop e não mudar `installation.json`, `pilot.env`, `compose.yaml` ou segredos.
+3. Obter a versão revista de `fix/entradas-saidas-diretas` **na mesma pasta de código
+   guardada em `installation.json.Source`**. Num checkout Git limpo, a informática
+   pode usar `git fetch origin` e `git switch fix/entradas-saidas-diretas`. Se houver
+   alterações locais, analisá-las primeiro; não usar reset/clean à força.
+4. Abrir PowerShell na raiz desse código revisto. O exemplo abaixo valida a
+   instalação existente e reconstrói **apenas a imagem da aplicação**. Não executa
+   instalação, semente, importação, migração ou recuperação de base de dados.
+   Em caso de qualquer erro, parar e pedir diagnóstico; não alterar hashes.
+
+   ```powershell
+   $ErrorActionPreference = 'Stop'
+   Import-Module .\scripts\windows\Common.psm1 -Force
+   $piloto = Get-GGInstallation
+   if ([IO.Path]::GetFullPath((Get-Location).Path) -ne [IO.Path]::GetFullPath($piloto.Source)) {
+       throw 'Use a pasta de codigo original guardada no manifesto.'
+   }
+   # Valida ambiente/pastas existentes; nunca prepara um destino novo neste guia.
+   $validado = New-GGInstallation -HomePath $piloto.Home -SourceRoot $piloto.Source -Port $piloto.Port
+   if ($validado.Project -ne $piloto.Project) { throw 'Projeto inesperado; parar.' }
+   $compose = @('compose', '--project-name', $piloto.Project,
+       '--file', (Join-Path $piloto.Home 'compose.yaml'),
+       '--env-file', (Join-Path $piloto.Home 'pilot.env'))
+   & docker @compose build app
+   if ($LASTEXITCODE -ne 0) { throw 'Build falhou; preservar dados e diagnosticar.' }
+   # A paragem anterior conservou a base: arrancar os mesmos contentores/volumes.
+   & docker @compose up --no-build --pull never --detach --wait --wait-timeout 180 db app
+   if ($LASTEXITCODE -ne 0) { throw 'Arranque falhou; preservar dados e diagnosticar.' }
+   $origemScripts = Join-Path $piloto.Source 'scripts\windows'
+   foreach ($nome in @('Common.psm1', 'Diagnostico.ps1', 'Instalar.ps1')) {
+       Copy-Item -LiteralPath (Join-Path $origemScripts $nome) -Destination $piloto.Home
+   }
+   New-GGShortcuts -HomePath $piloto.Home
+   Start-GGPilot -HomePath $piloto.Home
+   ```
+
+   Para uma pasta privada personalizada, substituir `Get-GGInstallation` por
+   `Get-GGInstallation -HomePath 'caminho original'`. Não inventar outro caminho.
+   O exemplo não adapta uma instalação antiga com estrutura diferente ou ficheiros
+   de configuração alterados: nesse caso é necessária revisão pela informática.
+
+5. Confirmar login, mesmas referências/quantidades, histórico, PDFs anteriores e
+   os três formulários. Confirmar uma operação fictícia apenas após conferir os
+   saldos. O novo atalho chama-se **Gestão Vertente Aveludada - Piloto**. Os atalhos
+   antigos continuam a apontar para a mesma pasta; podem ser removidos manualmente
+   após verificar os novos (remover só os ficheiros `.lnk`, nunca a pasta do piloto).
+6. Se a imagem nova falhar, conservar tudo e voltar ao código anterior revisto,
+   reconstruindo apenas a aplicação com o mesmo projeto/configuração. Como não
+   há alteração de esquema, este trabalho não exige restauro sobre a base existente.
+   Um restauro, se necessário por outro motivo, segue o procedimento de recuperação
+   para **outro destino vazio**, nunca uma substituição automática da origem.
+
+Não executar instalação num projeto novo para «atualizar»: isso mostraria outra
+base vazia. Não alterar nomes de bases, projeto `gg-win5-*`, volumes, pastas privadas
+ou variáveis técnicas por causa da mudança do nome visível. A aplicação mantém-se
+exclusivamente local em `127.0.0.1`; nenhuma porta de PostgreSQL ou Wi-Fi é publicada.
