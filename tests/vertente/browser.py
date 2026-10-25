@@ -411,6 +411,14 @@ class VertenteBrowserTests(SimpleTestCase):
         self.page.reload()
         self.page.wait_for_function("navigator.serviceWorker.controller !== null")
         ref = self.data()["copy"]["data"]["references"][0]
+        requests = []
+        self.context.route(
+            self.url + "/", lambda route: (requests.append(route.request.url), route.abort())
+        )
+        self.page.reload()
+        self.assertTrue(self.page.evaluate("navigator.onLine"))
+        self.assertEqual(requests, [])  # Never waits for the office even on another online network.
+        self.context.unroute(self.url + "/")
         self.context.set_offline(True)
         self.page.reload()
         self.page.get_by_role("heading", name="A sua fotografia de stock", exact=True).wait_for()

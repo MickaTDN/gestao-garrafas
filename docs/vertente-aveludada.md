@@ -31,6 +31,8 @@ O shell offline contém apenas HTML/CSS/JS, manifesto e ícones. IndexedDB cont�
 fotografias assinadas, chaves **públicas**, limites e acompanhamentos. Não contém
 passwords de contas, pessoas, assinaturas, PDFs, movimentos ou chaves privadas.
 Não há notificações push, sincronização de movimentos ou pedidos à base oficial.
+O arranque usa o shell em cache, sem esperar pelo computador do escritório mesmo
+que o Android continue online através de dados móveis ou de outra rede Wi-Fi.
 
 ## Alertas e encomendas
 

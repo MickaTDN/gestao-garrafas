@@ -5,10 +5,11 @@ self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).the
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('vertente-shell-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.search) return;
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
-  } else if (ASSETS.has(url.pathname)) {
+    // Consultation must open immediately even on mobile data while the office is unreachable.
+    event.respondWith(caches.match('/index.html').then(shell => shell || fetch(request)));
+  } else if (!url.search && ASSETS.has(url.pathname)) {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(request).then(found => found || fetch(request))));
   }
 });
