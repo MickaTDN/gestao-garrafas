@@ -155,3 +155,12 @@ Datas antigas não podem ser confirmadas no dia seguinte.
 Migrações, âmbito de permissões, limitações e atualização segura por recuperação
 de backup em [etapa-a2.md](etapa-a2.md). Não inclui Android 6/7, publicação real ou
 atualização automática do computador instalado.
+
+## Etapa A3 — correções de utilização após A2
+
+Numeração visível pelo documento efetivamente emitido; A minha conta para todos
+os perfis e reposição administrativa com alteração obrigatória; inventário com
+seleção direta, confirmação/minimização, setores dependentes e ordenação numérica.
+Conserva contagem completa, zero/vazio, transferências, assinaturas, PDFs,
+concorrência e histórico. Migração apenas na cópia recuperada do piloto A2.
+Ver [etapa-a3.md](etapa-a3.md). Sem integração Android ou atualização automática.

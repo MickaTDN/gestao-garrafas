@@ -278,3 +278,19 @@ As migrações são aditivas mas o código antigo não compreende a evidência/p
 novos. A atualização Windows usa backup verificado e recuperação num piloto novo,
 com origem preservada. Migração inversa com evidência é bloqueada; a recuperação
 depois de usar A2 exige código compatível. Ver [guia e decisões A2](etapa-a2.md).
+
+## Etapa A3 — identidade visível e alteração obrigatória de palavra-passe
+
+A apresentação de movimentos consulta `ReportNumber`, conservando IDs técnicos
+separados e sem alocar números na leitura. O renderizador e as receitas A2 não
+mudam. O inventário reutiliza seleção direta/linhas expansíveis e ordenação SQL
+por setor numérico, mantendo âmbito completo, bases assinadas de contagem e
+confirmação atómica. Zero e vazio continuam distintos.
+
+A migração accounts 0005 acrescenta uma marca obrigatória após reposição de
+password. Formulários nativos Django, middleware, capacidades persistentes e
+serviços bloqueiam a conta até escolher uma nova. Hashes de sessão invalidam as
+sessões anteriores; a alteração própria preserva apenas a sessão atual. Limites
+HMAC independentes do login protegem tentativas concorrentes. A atualização
+Windows A2 → A3 recupera backup para outro destino, nunca migra o piloto instalado
+in-place. Ver [decisões, migração e procedimento A3](etapa-a3.md).

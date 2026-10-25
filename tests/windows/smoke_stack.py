@@ -141,7 +141,7 @@ def validate_scope(command, project):
     return volumes
 
 
-def main(image, previous_image=None):
+def main(image, previous_image=None, preserve_volumes=False):
     source = None
     recovered = None
     with tempfile.TemporaryDirectory(prefix="gg-windows-stack-") as temporary:
@@ -198,6 +198,9 @@ def main(image, previous_image=None):
                 # Only this NEW synthetic namespace: demonstrate that new code
                 # refuses an in-place schema upgrade, BEFORE any migration.
                 before_migrations = sql(source, "SELECT count(*) FROM django_migrations")
+                before_number_table = sql(
+                    source, "SELECT to_regclass('public.inventory_reportnumber') IS NULL"
+                )
                 override = root / "new-code-only.json"
                 override.write_text(json.dumps({"services": {"initialize": {"image": image}}}))
                 attempt = subprocess.run(
@@ -213,7 +216,7 @@ def main(image, previous_image=None):
                 assert sql(source, "SELECT count(*) FROM django_migrations") == before_migrations
                 assert (
                     sql(source, "SELECT to_regclass('public.inventory_reportnumber') IS NULL")
-                    == "t"
+                    == before_number_table
                 )
             # Explicit repair/migrations are idempotent: no duplicate synthetic balances.
             compose(source, "--profile", "setup", "run", "--rm", "initialize")
@@ -281,6 +284,23 @@ def main(image, previous_image=None):
                 sql(recovered, "SELECT string_agg(sha256,',' ORDER BY id) FROM inventory_document")
                 == expected_documents
             )
+            # Reproduce the pre-upgrade A2 signature/PDF using the new code,
+            # before creating any A3 documents. Legacy unique PDFs stay protected.
+            if sql(recovered, "SELECT count(*) FROM inventory_reportnumber") != "0":
+                old_proof = "from accounts.models import User; from inventory.models import Document; from inventory.documents import verified_bytes; from inventory.reporting import delete_pdf,regenerate_pdf; u=User.objects.get(username='windows-smoke-synthetic'); d=Document.objects.filter(kind='pdf').first(); original=verified_bytes(d); identity=d.number; delete_pdf(actor=u,document_id=d.pk); regenerate_pdf(actor=u,document_id=d.pk); assert verified_bytes(d)==original and d.number==identity; print('Pre-upgrade PDF identity and signature reproduced exactly: PASS')"
+                compose(
+                    recovered,
+                    "exec",
+                    "-T",
+                    "app",
+                    "python",
+                    "manage.py",
+                    "shell",
+                    "--verbosity",
+                    "0",
+                    "-c",
+                    old_proof,
+                )
             # Application role (not owner): create a new A2 report, remove only
             # its bytes, reproduce it exactly, and keep the original evidence.
             code = "from accounts.models import User,AccessProfile; from inventory.models import Reference,ReportFile,ReportNumber; from inventory.documents import verified_bytes; from inventory.reporting import delete_pdf,regenerate_pdf; from tests.document_fixtures import confirmed_operation; u=User.objects.get(username='windows-smoke-synthetic'); r=Reference.objects.get(code='SYN-WIN-001'); m=confirmed_operation(u,r,kind='entry',units=1,report=True); d=m.documents.get(kind='pdf'); original=verified_bytes(d); identity=str(m.report_number); delete_pdf(actor=u,document_id=d.pk); assert ReportFile.objects.get(document=d).payload is None; regenerate_pdf(actor=u,document_id=d.pk); assert verified_bytes(d)==original and str(ReportNumber.objects.get(movement=m))==identity; assert AccessProfile.objects.get(name='Substituto').active; print('A2 report lifecycle with restricted role: PASS')"
@@ -303,6 +323,22 @@ def main(image, previous_image=None):
                     "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'",
                 )
                 == "23"
+            )
+            # A3 password transitions also work with the application role, never
+            # owner rights, plaintext logs, or accounts from an existing pilot.
+            password_proof = "import secrets; from accounts.models import User; from accounts.passwords import reset_password,change_own_password; from accounts.permissions import capabilities; p,t,n=[secrets.token_urlsafe(32) for _ in range(3)]; a=User.objects.create_user(username='a3-password-smoke-admin',password=p,role='admin'); v=User.objects.create_user(username='a3-password-smoke-viewer'); f=reset_password(actor=a,account_id=v.pk,data={'current_password':p,'new_password1':t,'new_password2':t,'confirm':'on'}); assert f.is_valid(); v.refresh_from_db(); assert v.must_change_password and not capabilities(v); f=change_own_password(actor=v,data={'old_password':t,'new_password1':n,'new_password2':n}); assert f.is_valid(); v.refresh_from_db(); assert not v.must_change_password and v.check_password(n); print('A3 native passwords with restricted application role: PASS')"
+            compose(
+                recovered,
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "manage.py",
+                "shell",
+                "--verbosity",
+                "0",
+                "-c",
+                password_proof,
             )
             # Restore a second time MUST refuse to touch an existing target.
             result = subprocess.run(
@@ -348,7 +384,10 @@ def main(image, previous_image=None):
             # User-facing Windows scripts intentionally contain no removal/reset command.
             for command in (recovered, source):
                 if command:
-                    compose(command, "--profile", "setup", "down", "--volumes", "--remove-orphans")
+                    options = ["--profile", "setup", "down", "--remove-orphans"]
+                    if not preserve_volumes:
+                        options.append("--volumes")
+                    compose(command, *options)
 
 
 if __name__ == "__main__":
@@ -358,5 +397,10 @@ if __name__ == "__main__":
         "--previous-image",
         help="Optional old pilot image for a synthetic migration/recovery rehearsal",
     )
+    parser.add_argument(
+        "--preserve-volumes",
+        action="store_true",
+        help="Keep newly created synthetic volumes after local validation",
+    )
     args = parser.parse_args()
-    main(args.image, args.previous_image)
+    main(args.image, args.previous_image, args.preserve_volumes)
