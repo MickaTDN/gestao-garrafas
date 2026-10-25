@@ -353,6 +353,10 @@ class VertenteBrowserTests(SimpleTestCase):
         self.page.reload()
         self.assertFalse(self.page.evaluate("Boolean(window.injected)"))
         self.assertEqual(self.page.locator(".reference-card img").count(), 0)
+        # PostgreSQL varchar and Python count Unicode code points, not UTF-16 units.
+        refs[0]["name"] = "🧪" * 250
+        self.call("importSnapshot", snapshot(self.key, self.trust, 3, references=refs))
+        self.assertEqual(self.data()["copy"]["data"]["references"][0]["name"], refs[0]["name"])
 
     def test_atomic_storage_failure_and_verified_previous_copy_recovery(self):
         self.ready()

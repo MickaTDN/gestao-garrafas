@@ -27,8 +27,9 @@ export function text(value, max) {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.length <= max &&
-    !/[\u0000-\u001f]/.test(value)
+    value.length <= max * 2 &&
+    [...value].length <= max &&
+    !/[\u0000\p{Surrogate}]/u.test(value)
   );
 }
 export function bytes(value, max = MAX_FILE) {
