@@ -21,7 +21,7 @@
   </div>
 </div>{% endif %}
 <div class="card more-areas"><div class="cardtitle"><h2>Outras áreas</h2></div><div class="row wrapping">
-  {% if access.history %}<a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a>{% endif %}{% if access.reports_view %}<a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a>{% endif %}{% if access.export %}<a class="btn secondary small" href="{% url 'web:export' %}">Exportar Excel</a>{% endif %}{% if access.admin %}<a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
+  {% if access.history %}<a class="btn secondary small" href="{% url 'web:history' %}">Histórico</a>{% endif %}{% if access.reports_view %}<a class="btn secondary small" href="{% url 'web:reports' %}">Relatórios</a>{% endif %}{% if access.export %}<a class="btn secondary small" href="{% url 'web:vertente-export' %}">Exportar Stock</a>{% endif %}{% if access.admin %}<a class="btn secondary small" href="{% url 'web:settings' %}">Definições</a>{% endif %}
 </div></div>
 {% if not reference_count %}<p class="footer-note">Ainda não existem referências nesta base de dados. A importação do Excel será realizada depois da reconciliação dos saldos e do histórico.</p>{% endif %}
 {% endblock %}

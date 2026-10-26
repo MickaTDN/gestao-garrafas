@@ -1,5 +1,7 @@
 from django.urls import path
 
+from consultation import views as consultation
+
 from . import (
     catalog,
     exports,
@@ -46,6 +48,7 @@ urlpatterns = [
     path("utilizadores/<int:pk>/editar/", user_admin.edit, name="user-edit"),
     path("utilizadores/<int:pk>/palavra-passe/", passwords.reset, name="user-password-reset"),
     path("exportar/", exports.export, name="export"),
+    path("exportar-stock/", consultation.export, name="vertente-export"),
     path("relatorios/", reports.reports, name="reports"),
     path("documentos/<int:pk>/", reports.content, name="document-content"),
     path("documentos/<int:pk>/eliminar/", reports.delete, name="document-delete"),

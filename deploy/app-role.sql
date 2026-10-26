@@ -21,3 +21,7 @@ GRANT INSERT, UPDATE, DELETE ON accounts_loginlimit, django_session,
 GRANT INSERT, UPDATE ON accounts_accessprofile, inventory_reportsequence TO :"app_role";
 GRANT INSERT ON inventory_reporttemplate, inventory_reportnumber, inventory_reportfile TO :"app_role";
 GRANT UPDATE (payload,reproductions) ON inventory_reportfile TO :"app_role";
+
+-- Consultation metadata only; never grants stock modification.
+GRANT INSERT, UPDATE ON consultation_exportsource TO :"app_role";
+-- Device enrollment is an owner/IT command, never writable by the web role.

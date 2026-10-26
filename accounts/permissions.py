@@ -14,7 +14,7 @@ CAPABILITIES = {
     "reports_manage": "Eliminar e regenerar relatórios autorizados",
     "catalog_manage": "Gerir referências e alertas",
     "locations_manage": "Gerir localizações e setores",
-    "export": "Exportar Excel",
+    "export": "Exportar Stock",
 }
 SUBSTITUTE = ["stock_view", "entry", "exit", "reports_view"]
 

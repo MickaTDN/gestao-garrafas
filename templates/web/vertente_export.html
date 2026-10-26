@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<div class="intro"><div><h1>Exportar Stock</h1><p>Atualização assinada para Stock Vertente Aveludada.</p></div></div>
+<div class="card stack"><p>Inclui todas as referências ativas, mesmo com stock zero, capacidades reais, localização, setor, mínimos configurados e Entradas confirmadas do período. Não inclui pessoas, contas, PDFs, assinaturas ou credenciais.</p>
+<p>O stock e as Entradas pertencem à mesma fotografia confirmada. A exportação não altera quantidades. O Android deteta ficheiros repetidos e assinala eventuais lacunas de receções; a informática pode recuperar períodos antigos através de ficheiros assinados.</p>
+{% if error %}<p class="banner" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="stack">{% csrf_token %}{{ form.as_p }}<button class="btn" type="submit">Exportar Stock</button></form></div>
+{% endblock %}
