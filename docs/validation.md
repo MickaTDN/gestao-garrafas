@@ -178,3 +178,54 @@ Não foram testados Android/iOS físicos, impressoras do armazém, domínio/TLS 
 backup remoto de produção, recuperação num segundo servidor real ou capacidade
 sob carga de produção. Estes pontos exigem infraestrutura e validação operacional,
 não podem ser declarados concluídos a partir dos testes sintéticos.
+
+## Validação da quinta etapa
+
+Execução em 2026-10-24 (Europe/Lisbon), com a aplicação das etapas anteriores
+mantida. **275 testes Django aprovados, nenhum ignorado**: os 267 anteriores,
+incluindo 12 casos Chromium, e 8 casos novos do perfil Windows. A instância
+PostgreSQL 17 de regressão foi criada num projeto/volume novos, com credenciais
+aleatórias e porta exclusiva em loopback. Nem sequer foi usada a ligação da base
+reservada. Não foram aplicadas migrações nessa base nem lido/importado o Excel.
+
+Os casos novos verificam o modo sintético explícito, recusa de servidores/bases
+externos ou reservados/SQLite, hosts apenas locais, ausência de proxies/CSRF Wi-Fi,
+segredos de ficheiro, seleção de owner apenas na preparação, cookies HTTP limitados
+a este perfil e ausência de comandos destrutivos/de bypass nos assistentes.
+
+**24 testes PowerShell 5.1** exercitam parsing, diagnóstico com Docker simulado,
+recusa de contexto remoto, requisitos, segredos distintos, ACL NTFS, caminhos com
+espaços/acentos/apóstrofo/dólar, repetição sem regenerar segredos, pasta desconhecida,
+instalação incompleta, separação entre código/segredos/backups, arranque sem migrações/build, paragem que conserva volumes,
+configuração alterada, segredo em falta, criação interativa sem credenciais
+predefinidas, recusa de restauro sobre origem e atalhos por utilizador. Executam-se
+num runner Windows descartável; não se instala Docker/WSL nem se testa um PC real.
+
+O **ensaio real do payload Compose** usa duas stacks sintéticas novas. Verifica:
+
+- PostgreSQL sem portas publicadas e apenas HTTP 127.0.0.1, volumes/projetos próprios.
+- Migrações, grants, 4 localizações/27 setores e três referências fictícias; nenhuma
+  conta/password predefinida ou lote de importação.
+- Confirmação com conta PostgreSQL restrita, PDF e assinatura pelos serviços atuais.
+- Repetição da instalação sem duplicar saldos ou apagar a operação sintética.
+- Paragem/rearranque com os mesmos volumes, saldos e documentos.
+- Backup, restauro numa segunda stack vazia e checksums dos documentos restaurados.
+- Recusa de segundo restauro no destino não vazio e preservação do stock/instância
+  da origem. A limpeza automática existe só neste teste, para namespaces aleatórios
+  que o próprio processo criou, nunca nos scripts do utilizador.
+
+A imagem foi construída e o ensaio passou também no ambiente de desenvolvimento.
+A CA confiada pelo executor foi montada temporariamente no build local; a verificação
+TLS não foi desativada nem a CA incorporada na imagem. A CI constrói o Dockerfile
+normal e repete os testes de aplicação, Windows e contentores. Resultado remoto
+no PR da Etapa 5. Ruff e coerência do esquema continuam verificados.
+
+Os IDs/montagens dos contentores preexistentes são comparados antes/depois, sem
+consultar ou modificar o conteúdo de bases privadas. O piloto não monta o volume
+reservado. Não houve instalação no PC do utilizador, elevação, alteração de política,
+ativação de WSL, firewall, alojamento externo, publicação real ou merge.
+
+Pendente: aceitação física Windows 11/Docker Desktop/WSL2 por informática, políticas
+corporativas, consola interativa/partilha de ficheiros, proxy/CA, arranque após
+suspensão/reinício, suporte externo de backup, impressoras e eventual Wi-Fi Android
+com HTTPS autorizado. Não se afirma que o runner Windows CI prove esses pontos.

@@ -228,3 +228,24 @@ obrigatória em produção e retenção após sucesso. Existe restauro automáti
 para destinos sintéticos novos; produção segue procedimento manual com revisão.
 A [instalação](installation.md) e a [recuperação](recovery.md) distinguem preparação
 de código, infraestrutura real e operação efetivamente autorizada.
+
+## Etapa 5 — piloto Windows local
+
+A imagem Linux e PostgreSQL 17 são reutilizados em Docker Desktop/WSL2 aprovado,
+sem alterar serviços de stock ou documentos. A instalação gera um projeto, volumes,
+rede e segredos novos. Apenas a aplicação publica uma porta em 127.0.0.1;
+PostgreSQL fica numa rede interna sem portas no host. HTTP e cookies locais são
+uma exceção explícita de `config.windows_local`, exclusivamente sintética, com
+debug desligado, hosts locais e sem confiança em proxies. Produção mantém HTTPS.
+
+O processo pontual de instalação tem o segredo de owner, aplica migrações/grants
+e semeia apenas referências fictícias uma vez. O webserver continua sem root e
+com a conta restrita. Arranque/paragem são por atalhos do utilizador, sem alterar
+serviços/políticas/firewall e sem downloads ou migrações no arranque diário.
+Recuperação usa outro projeto vazio e preserva a origem. A base da pré-visualização
+não é ligada nem montada. Ver [guia Windows](windows11.md) e
+[decisão 5](decisions/0005-windows-local.md).
+
+Android por Wi-Fi continua fechado até autorização da informática e preparação
+de HTTPS, hosts/CSRF, firewall limitada à rede e dispositivos autorizados. Não
+existe segundo stock offline nem nova aplicação Stock Vendas nesta etapa.

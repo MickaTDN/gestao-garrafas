@@ -28,7 +28,7 @@ jobs:
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput
-          uv run python manage.py test accounts inventory imports web tests.browser --noinput
+          uv run python manage.py test accounts inventory imports web tests.browser tests.windows.test_profile --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
       - name: Validate prepared server image (no deployment)
@@ -36,6 +36,16 @@ jobs:
           docker build -f deploy/Dockerfile -t gestao-garrafas-ci .
           docker run --rm --read-only gestao-garrafas-ci pg_dump --version
           test "$(docker run --rm --read-only gestao-garrafas-ci id -u)" = "10001"
+      - name: Windows local payload on isolated Linux containers
+        run: uv run python tests/windows/smoke_stack.py --image gestao-garrafas-ci
       - name: Stop services
         if: always()
         run: docker compose down
+
+  windows-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows PowerShell 5.1 parsing, safeguards, NTFS and shortcuts (Docker mocked)
+        shell: powershell
+        run: .\tests\windows\Test-Pilot.ps1

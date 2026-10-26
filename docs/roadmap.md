@@ -72,6 +72,19 @@ Não há merge, publicação real, contratação de serviços ou deploy automát
 Ver [instalação](installation.md), [recuperação](recovery.md) e
 [decisão 4](decisions/0004-private-documents-and-recovery.md).
 
+## Etapa 5 — instalação local no Windows 11
+
+Piloto preparado para Windows 11 de 64 bits com pelo menos 16 GB de RAM, usando
+a imagem existente em Docker Desktop/WSL2. Inclui diagnóstico, preparação privada,
+atalhos de arranque/paragem, conta escolhida pelo utilizador, backup e restauro
+num novo projeto. A base é nova e fictícia; a reservada à importação não é usada.
+
+As autorizações e a instalação de pré-requisitos ficam com a informática, sem
+bypass de políticas. Android por Wi-Fi está apenas desenhado, não aberto. Não
+se implementa Stock Vendas offline. Testes de shell Windows CI e de payload Linux
+não substituem a aceitação num PC Windows 11 real autorizado. Ver
+[windows11.md](windows11.md) e [decisão 5](decisions/0005-windows-local.md).
+
 ## Matriz de requisitos aprovados
 
 | Requisito | Estado nesta entrega | Etapa de conclusão |

@@ -14,8 +14,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY . .
-RUN DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))') APP_ENV=production DJANGO_DEBUG=0 python manage.py collectstatic --noinput \
- && groupadd --gid 10001 garrafas && useradd --uid 10001 --gid 10001 --create-home garrafas
+RUN find /app -path /app/.venv -prune -o -type d -exec chmod 0755 {} + -o -type f -exec chmod 0644 {} + \
+ && DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))') APP_ENV=production DJANGO_DEBUG=0 python manage.py collectstatic --noinput \
+ && groupadd --gid 10001 garrafas && useradd --uid 10001 --gid 10001 --create-home garrafas \
+ && mkdir -p /backups && chown 10001:10001 /backups && chmod 0700 /backups
 USER 10001:10001
 EXPOSE 8000
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "90", "--access-logfile", "-", "--access-logformat", "%(m)s %(U)s %(s)s %(L)s"]

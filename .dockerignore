@@ -17,3 +17,21 @@ staticfiles
 .ruff_cache
 test-results
 playwright-report
+
+# Nested user data must not enter an installation image either.
+attachments
+**/*.xlsx
+**/*.xls
+**/*.csv
+**/*.sqlite3*
+**/*.dump
+**/*.backup
+**/*.tar.gz*
+**/.env
+**/.env.*
+
+# Windows per-user pilot state is never part of an application image.
+**/secrets
+**/installation.json
+**/pilot.env
+**/*.previous
