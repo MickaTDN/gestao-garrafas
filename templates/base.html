@@ -18,19 +18,14 @@
     <div class="brand">{% if brand_logo %}<img class="brand-symbol" src="{% static brand_icon %}" alt="">{% endif %}<div><strong>Gestão Vertente Aveludada</strong><span>Gestão de stock</span></div></div>
     <nav class="menu" aria-label="Navegação principal">
       <a class="nav-btn {% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><span class="ico" aria-hidden="true">⌂</span>Início</a>
-      <a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>
-      {% if user.is_administrator %}
-      <a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>
-      <a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>
-      <a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>
-      {% endif %}
-      <a class="nav-btn {% if section == 'export' %}active{% endif %}" href="{% url 'web:export' %}"><span class="ico" aria-hidden="true">⇩</span>Exportar Excel</a>
-      <a class="nav-btn {% if section == 'reports' %}active{% endif %}" href="{% url 'web:reports' %}"><span class="ico" aria-hidden="true">▤</span>Relatórios</a>
-      <a class="nav-btn {% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><span class="ico" aria-hidden="true">◷</span>Histórico</a>
-      {% if user.is_administrator %}
-      <a class="nav-btn {% if section == 'references' %}active{% endif %}" href="{% url 'web:references' %}"><span class="ico" aria-hidden="true">≡</span>Referências</a>
-      <a class="nav-btn {% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><span class="ico" aria-hidden="true">⚙</span>Definições</a>
-      {% endif %}
+      {% if access.stock_view %}<a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>{% endif %}
+      {% if access.entry %}<a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>{% endif %}
+      {% if access.exit %}<a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>{% endif %}
+      {% if access.inventory %}<a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>{% endif %}
+      {% if access.export %}<a class="nav-btn {% if section == 'export' %}active{% endif %}" href="{% url 'web:export' %}"><span class="ico" aria-hidden="true">⇩</span>Exportar Excel</a>{% endif %}
+      {% if access.reports_view %}<a class="nav-btn {% if section == 'reports' %}active{% endif %}" href="{% url 'web:reports' %}"><span class="ico" aria-hidden="true">▤</span>Relatórios</a>{% endif %}
+      {% if access.history %}<a class="nav-btn {% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><span class="ico" aria-hidden="true">◷</span>Histórico</a>{% endif %}
+      {% if access.admin %}<a class="nav-btn {% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><span class="ico" aria-hidden="true">⚙</span>Definições</a>{% endif %}
     </nav>
     <div class="sidefoot"><strong>Base permanente</strong><p>A consulta utiliza os dados guardados no servidor.</p></div>
   </aside>
@@ -40,7 +35,7 @@
       <div class="topbar-right">
         <button class="btn secondary small" id="install-app" hidden type="button">Instalar</button>
         <span class="hide-sm">{{ user.username }}</span>
-        <span class="chip">{% if user.is_administrator %}Administrador{% else %}Consulta{% endif %}</span>
+        <span class="chip">{% if access.admin %}Administrador{% elif user.role == 'custom' %}{{ user.access_profile.name }}{% else %}Consulta{% endif %}</span>
         <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn ghost small" type="submit">Sair</button></form>
       </div>
     </header>
@@ -53,13 +48,11 @@
   </main>
 </div>
 <nav class="mobile-nav" aria-label="Navegação móvel">
-  <a class="{% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><b aria-hidden="true">⌂</b>Início</a>
-  <a class="{% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><b aria-hidden="true">▦</b>Stock</a>
-  <a class="{% if section == 'history' %}active{% endif %}" href="{% url 'web:history' %}"><b aria-hidden="true">◷</b>Histórico</a>
-  {% if user.is_administrator %}
-  <a class="{% if section == 'references' %}active{% endif %}" href="{% url 'web:references' %}"><b aria-hidden="true">≡</b>Referências</a>
-  <a class="{% if section == 'settings' %}active{% endif %}" href="{% url 'web:settings' %}"><b aria-hidden="true">⚙</b>Definições</a>
-  {% endif %}
+  <a href="{% url 'web:home' %}"><b aria-hidden="true">⌂</b>Início</a>
+  {% if access.stock_view %}<a href="{% url 'web:stock' %}"><b aria-hidden="true">▦</b>Stock</a>{% endif %}
+  {% if access.history %}<a href="{% url 'web:history' %}"><b aria-hidden="true">◷</b>Histórico</a>{% endif %}
+  {% if access.reports_view %}<a href="{% url 'web:reports' %}"><b aria-hidden="true">▤</b>Relatórios</a>{% endif %}
+  {% if access.admin %}<a href="{% url 'web:settings' %}"><b aria-hidden="true">⚙</b>Definições</a>{% endif %}
 </nav>
 <script src="{% static 'js/pwa.js' %}" defer></script>
 {% block scripts %}{% endblock %}

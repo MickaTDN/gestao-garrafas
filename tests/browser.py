@@ -53,6 +53,14 @@ class BrowserSmokeTests(StaticLiveServerTestCase):
         self.addCleanup(self.browser.close)
 
     def test_desktop_and_mobile_authenticated_stock(self):
+        self.database_call(
+            lambda: Reference.objects.create(
+                code="SYN-STOCK-OTHER",
+                name="Outra garrafa fictícia",
+                location_id=self.location_id,
+                current_stock=1,
+            )
+        )
         for width, height in [(1366, 900), (390, 844)]:
             with self.subTest(width=width):
                 page = self.browser.new_page(viewport={"width": width, "height": height})
@@ -66,8 +74,8 @@ class BrowserSmokeTests(StaticLiveServerTestCase):
                 page.get_by_role("button", name="Entrar", exact=True).click()
                 self.assertIn("Referência fictícia azul", page.locator("body").inner_text())
                 # Submit through the real form, including query-string round trip.
-                page.locator('input[name="q"]').fill("SYN-001")
-                page.locator('input[name="q"]').press("Enter")
+                page.locator('input[name="q"]').fill("Referência fictícia azul")
+                page.wait_for_function("() => document.querySelectorAll('tbody tr').length === 1")
                 self.assertEqual(page.locator("tbody tr").count(), 1)
                 self.assertIn("15", page.locator("tbody").inner_text())
                 self.assertLessEqual(
@@ -175,12 +183,16 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
             lambda: list(Reference.objects.order_by("code").values_list("current_stock", flat=True))
         )
 
+    def add_reference(self, page, name):
+        page.get_by_label("Pesquisar referência", exact=True).fill(name)
+        page.get_by_role("button", name=name, exact=True).click()
+
     def entry_exit(self, kind, width):
         page = self.page(kind, width)
-        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
-        page.get_by_label("Adicionar Verde sintética operacional", exact=True).check()
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
-        edit_url = page.url
+        self.assertEqual(page.locator("#reference-results button").count(), 0)
+        self.add_reference(page, "Azul sintética operacional")
+        self.add_reference(page, "Verde sintética operacional")
+        edit_url = page.url.split("?", 1)[0]
         self.assertEqual(
             page.locator(".operation-line").count(), 2, page.locator("body").inner_text()
         )
@@ -189,9 +201,9 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         for row in (first, second):
             self.assertEqual(row.get_by_label("Caixas", exact=True).input_value(), "")
             self.assertEqual(row.get_by_label("Garrafas soltas", exact=True).input_value(), "")
-        page.get_by_label("Pessoa que entregou" if kind == "entry" else "Pessoa que levantou", exact=True).fill(
-            "Pessoa browser sintética"
-        )
+        page.get_by_label(
+            "Pessoa que entregou" if kind == "entry" else "Pessoa que levantou", exact=True
+        ).fill("Pessoa browser sintética")
         first.get_by_label("Caixas", exact=True).fill("1")
         first.get_by_label("Garrafas soltas", exact=True).fill("8" if kind == "entry" else "2")
         second.get_by_label("Garrafas soltas", exact=True).fill("3")
@@ -200,6 +212,11 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         )
         self.assertIn("29" if kind == "entry" else "7", first.locator(".line-after").inner_text())
         self.assert_responsive(page, width)
+        first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertEqual(first.get_attribute("open"), None)
+        second.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertEqual(second.get_attribute("open"), None)
+        self.assertEqual(self.stocks(), [15, 5])
         page.get_by_role("button", name="Guardar operação", exact=True).click()
         self.assertEqual(self.stocks(), [15, 5])
         page.goto(self.live_server_url + reverse(f"web:{kind}"))
@@ -276,24 +293,81 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
     def test_exit_mobile(self):
         self.entry_exit("exit", 390)
 
+    def a2_edit_history_and_pdf(self, width):
+        from inventory.documents import verified_bytes
+        from inventory.models import AuditEvent
+        from tests.document_fixtures import confirmed_operation
+
+        page = self.page("entry", width)
+        self.add_reference(page, self.first.name)
+        row = page.locator(".operation-line")
+        row.get_by_label("Garrafas soltas", exact=True).fill("2")
+        row.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertIsNone(row.get_attribute("open"))
+        self.assertIn("2 garrafas", row.locator("summary").inner_text())
+        row.locator("summary").click()
+        row.get_by_label("Garrafas soltas", exact=True).fill("3")
+        row.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertIn("3 garrafas", row.locator("summary").inner_text())
+        row.locator("summary").click()
+        row.get_by_role("button", name="Remover referência", exact=True).click()
+        self.assertEqual(page.locator(".operation-line").count(), 0)
+        self.assertEqual(self.stocks(), [15, 5])
+
+        movement = self.database_call(
+            lambda: confirmed_operation(self.admin, self.first, signed=True)
+        )
+        document = self.database_call(lambda: movement.documents.get(kind="pdf"))
+        original = self.database_call(lambda: verified_bytes(document))
+        before = self.database_call(lambda: AuditEvent.objects.count())
+        page.goto(self.live_server_url + reverse("web:history"))
+        details = page.locator(".movement-details")
+        self.assertIsNone(details.get_attribute("open"))
+        self.assertFalse(details.locator("table").is_visible())
+        details.locator("summary").click()
+        self.assertTrue(details.locator("table").is_visible())
+        details.locator("summary").click()
+        self.assertFalse(details.locator("table").is_visible())
+        self.assertEqual(self.database_call(lambda: AuditEvent.objects.count()), before)
+        self.assert_responsive(page, width)
+
+        page.goto(self.live_server_url + reverse("web:document-delete", args=[document.pk]))
+        page.get_by_label("Confirmo a eliminação apenas deste ficheiro PDF.", exact=True).check()
+        page.get_by_role("button", name="Eliminar PDF", exact=True).click()
+        page.goto(self.live_server_url + reverse("web:history"))
+        details = page.locator(".movement-details")
+        details.locator("summary").click()
+        self.assertIn("Ficheiro PDF eliminado", details.inner_text())
+        details.get_by_role("button", name=f"Regenerar PDF {document.number}", exact=True).click()
+        self.assertIn("Reprodução verificada byte a byte", page.locator("body").inner_text())
+        self.assertEqual(self.database_call(lambda: verified_bytes(document)), original)
+        self.assertEqual(self.stocks(), [13, 5])
+        self.assert_responsive(page, width)
+
+    def test_a2_edit_history_and_pdf_desktop(self):
+        self.a2_edit_history_and_pdf(1366)
+
+    def test_a2_edit_history_and_pdf_mobile(self):
+        self.a2_edit_history_and_pdf(390)
+
     def test_inventory_desktop(self):
         self.inventory_flow(1366)
 
     def test_inventory_mobile(self):
         self.inventory_flow(390)
 
-
     def sector_and_new_reference_flow(self, width):
         from inventory.models import Sector
 
-        origin_sector, destination_sector = self.database_call(lambda: (
-            Sector.objects.create(location=self.location, name="Origem setor fictício"),
-            Sector.objects.create(location=self.destination, name="Destino setor fictício"),
-        ))
+        origin_sector, destination_sector = self.database_call(
+            lambda: (
+                Sector.objects.create(location=self.location, name="Origem setor fictício"),
+                Sector.objects.create(location=self.destination, name="Destino setor fictício"),
+            )
+        )
         page = self.page("entry", width)
         self.assertEqual(page.locator('select[name="location"]').count(), 0)
-        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        self.add_reference(page, "Azul sintética operacional")
         edit_url = page.url
         page.get_by_label("Garrafas soltas", exact=True).fill("3")
         page.get_by_role("button", name="Criar nova referência", exact=True).click()
@@ -305,7 +379,12 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         sector.select_option(str(origin_sector.pk))
         location.select_option(str(self.destination.pk))
         self.assertEqual(sector.input_value(), "")
-        self.assertEqual(sector.locator('option:not([disabled])').evaluate_all("options => options.map(o => o.value)"), ["", str(destination_sector.pk)])
+        self.assertEqual(
+            sector.locator("option:not([disabled])").evaluate_all(
+                "options => options.map(o => o.value)"
+            ),
+            ["", str(destination_sector.pk)],
+        )
         sector.select_option(str(destination_sector.pk))
         self.assert_responsive(page, width)
         page.get_by_role("button", name="Criar referência", exact=True).click()
@@ -322,9 +401,16 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
         sector = page.get_by_label("Setor após inventário", exact=True)
         self.assertEqual(sector.input_value(), str(destination_sector.pk))
-        page.get_by_label("Localização após inventário", exact=True).select_option(str(self.location.pk))
+        page.get_by_label("Localização após inventário", exact=True).select_option(
+            str(self.location.pk)
+        )
         self.assertEqual(sector.input_value(), "")
-        self.assertEqual(sector.locator('option:not([disabled])').evaluate_all("options => options.map(o => o.value)"), ["", str(origin_sector.pk)])
+        self.assertEqual(
+            sector.locator("option:not([disabled])").evaluate_all(
+                "options => options.map(o => o.value)"
+            ),
+            ["", str(origin_sector.pk)],
+        )
         self.assertEqual(self.stocks(), [0, 15, 5])
         self.assert_responsive(page, width)
 
@@ -340,6 +426,7 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
     setUp = OperationalBrowserTests.setUp
     page = OperationalBrowserTests.page
     stocks = OperationalBrowserTests.stocks
+    add_reference = OperationalBrowserTests.add_reference
     assert_responsive = OperationalBrowserTests.assert_responsive
 
     def signed_exit(self, width, *, touch=False):
@@ -350,11 +437,8 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         from inventory.models import Movement
 
         page = self.page("exit", width)
-        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
-        page.get_by_label("Pessoa que levantou", exact=True).fill(
-            "Pessoa assinatura sintética"
-        )
+        self.add_reference(page, "Azul sintética operacional")
+        page.get_by_label("Pessoa que levantou", exact=True).fill("Pessoa assinatura sintética")
         page.get_by_label("Garrafas soltas", exact=True).fill("2")
         page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
         page.get_by_label("Validação da saída", exact=True).select_option("signed")
@@ -362,14 +446,21 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
 
         def draw():
             canvas.evaluate("element => element.scrollIntoView({block: 'center'})")
-            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+            page.evaluate(
+                "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+            )
             bounds = canvas.bounding_box()
             self.assertIsNotNone(bounds)
             points = [
                 (bounds["x"] + bounds["width"] * x, bounds["y"] + bounds["height"] * y)
                 for x, y in [(0.1, 0.7), (0.25, 0.2), (0.4, 0.8), (0.55, 0.3), (0.8, 0.65)]
             ]
-            self.assertTrue(canvas.evaluate("(element, point) => document.elementFromPoint(point[0], point[1]) === element", points[0]))
+            self.assertTrue(
+                canvas.evaluate(
+                    "(element, point) => document.elementFromPoint(point[0], point[1]) === element",
+                    points[0],
+                )
+            )
             if touch:
                 session = page.context.new_cdp_session(page)
                 session.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
@@ -450,11 +541,8 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         self.assertEqual(manifest["errors"], [])
         self.assertEqual(session.send("Page.getInstallabilityErrors")["installabilityErrors"], [])
         session.detach()
-        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
-        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
-        page.get_by_label("Pessoa que entregou", exact=True).fill(
-            "Pessoa offline sintética"
-        )
+        self.add_reference(page, "Azul sintética operacional")
+        page.get_by_label("Pessoa que entregou", exact=True).fill("Pessoa offline sintética")
         page.get_by_label("Garrafas soltas", exact=True).fill("3")
         page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
         review_url = page.url

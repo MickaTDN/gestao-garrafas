@@ -20,6 +20,7 @@ from psycopg import sql
 
 from .documents import verified_bytes
 from .models import Document
+from .reporting import available_filter
 
 MAX_UNPACKED = 10 * 1024**3
 
@@ -174,7 +175,7 @@ def create_backup(*, synthetic=False):
                     stdout=output,
                 )
             for document in Document.objects.filter(
-                payload__isnull=False, movement__status="confirmed"
+                available_filter(), movement__status="confirmed"
             ).iterator():
                 payload = verified_bytes(document)
                 name = f"documents/{document.pk}.{'pdf' if document.kind == 'pdf' else 'png'}"
@@ -319,9 +320,17 @@ def restore_synthetic(path, *, database):
             port=config["PORT"],
             sslmode=config.get("OPTIONS", {}).get("sslmode", "prefer"),
         ) as restored:
+            has_report_files = restored.execute(
+                "SELECT to_regclass('public.inventory_reportfile') IS NOT NULL"
+            ).fetchone()[0]
             for record in manifest["documents"]:
                 row = restored.execute(
-                    "SELECT payload,sha256 FROM inventory_document WHERE id=%s", [record["id"]]
+                    (
+                        "SELECT COALESCE(d.payload,f.payload),d.sha256 FROM inventory_document d LEFT JOIN inventory_reportfile f ON f.document_id=d.id WHERE d.id=%s"
+                        if has_report_files
+                        else "SELECT payload,sha256 FROM inventory_document WHERE id=%s"
+                    ),
+                    [record["id"]],
                 ).fetchone()
                 if (
                     not row

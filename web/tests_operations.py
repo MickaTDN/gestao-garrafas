@@ -3,6 +3,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from inventory import operations
+from inventory.documents import verified_bytes
 from inventory.models import AuditEvent, Location, Movement, Person, Reference, Sector
 from inventory.services import confirm_movement
 
@@ -46,6 +47,7 @@ class OperationWebTests(TestCase):
             "person_name": "Pessoa web sintética",
             "reason": initial["reason"],
             "action": "save",
+            "search_q": "sintética",
         }
         fs = context["formset"]
         data.update(
@@ -595,10 +597,10 @@ class OperationWebTests(TestCase):
                 document = confirmed.documents.get(kind="pdf")
                 text = "\n".join(
                     page.extract_text()
-                    for page in PdfReader(io.BytesIO(bytes(document.payload))).pages
+                    for page in PdfReader(io.BytesIO(verified_bytes(document))).pages
                 )
                 for shown in (
-                    "Quantidade a entrar" if kind == "entry" else "Quantidade a sair",
+                    "Quantidade movimentada",
                     "1 caixa + " + str(units) + " garrafas",
                     final,
                     "Observação sintética",

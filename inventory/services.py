@@ -17,8 +17,9 @@ from .models import (
 
 
 def require_administrator(actor):
-    if not actor or not actor.is_authenticated or not actor.is_active or actor.role != "admin":
-        raise PermissionDenied("Este perfil é apenas de consulta.")
+    from accounts.permissions import require_access
+
+    require_access(actor, "admin")
 
 
 def resolve_person(name):
@@ -60,13 +61,16 @@ def bottle_total(boxes, units, capacity):
 
 
 def owned_draft(movement, actor):
-    require_administrator(actor)
+    from accounts.permissions import require_operation
+
+    require_operation(actor)
+    if movement.kind not in ("entry", "exit", "inventory"):
+        raise ValidationError("O histórico deve ser carregado pela importação reconciliada.")
+    require_operation(actor, movement.kind)
     if movement.created_by_id and movement.created_by_id != actor.pk:
         raise PermissionDenied("Só pode alterar os seus próprios rascunhos.")
     if movement.status != Movement.Status.DRAFT:
         raise ValidationError("A operação já foi confirmada ou cancelada.")
-    if movement.kind not in ("entry", "exit", "inventory"):
-        raise ValidationError("O histórico deve ser carregado pela importação reconciliada.")
 
 
 def locked_lines(movement):
@@ -192,12 +196,21 @@ def confirm_movement(
 ):
     """Lock parent and stock in stable order; confirm exactly once, all lines or none."""
     # Same order as catalogue/import: advisory lock -> movement -> lines -> refs.
+    from accounts.permissions import require_operation
+
     from .catalog import catalogue_lock
 
-    require_administrator(actor)
+    require_operation(actor)
     catalogue_lock()
     movement = Movement.objects.select_for_update().get(pk=movement_id)
     owned_draft(movement, actor)
+    if movement.workflow_version and (
+        movement.date != timezone.localdate()
+        or timezone.localtime(movement.created_at).date() != timezone.localdate()
+    ):
+        raise ValidationError(
+            "Uma operação de outro dia não pode ser confirmada. Cancele-a ou inicie uma nova operação."
+        )
     from .documents import create_confirmation_documents, validate_signature
 
     signature = None

@@ -6,28 +6,12 @@ import hashlib
 import io
 import uuid
 import warnings
-from datetime import date, datetime
-from pathlib import Path
-from xml.sax.saxutils import escape
 
-import reportlab
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from PIL import Image, ImageStat, UnidentifiedImageError
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image as PDFImage
-from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle
 
-from web.branding import APP_NAME, LOGO, original_asset
-
-from .models import AuditEvent, Document
-from .presentation import entered_quantity, stock_quantity
+from .models import AuditEvent, Document, ReportFile, ReportNumber
 
 MAX_SIGNATURE_BYTES = 256 * 1024
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
@@ -92,16 +76,20 @@ def store_document(movement, *, kind, payload, metadata=None):
     if not payload or len(payload) > MAX_DOCUMENT_BYTES:
         raise ValidationError("Não foi possível guardar o documento dentro dos limites permitidos.")
     extension = "pdf" if kind == "pdf" else "png"
+    reproducible = kind == "pdf" and (metadata or {}).get("presentation") == 3
     document = Document.objects.create(
         movement=movement,
         kind=kind,
         storage_key=f"{uuid.uuid4()}.{extension}",
-        payload=payload,
+        payload=None if reproducible else payload,
         byte_size=len(payload),
         sha256=hashlib.sha256(payload).hexdigest(),
         content_type="application/pdf" if kind == "pdf" else "image/png",
         metadata=metadata or {},
     )
+
+    if reproducible:
+        ReportFile.objects.create(document=document, payload=payload)
 
     AuditEvent.objects.create(
         actor=movement.confirmed_by or movement.created_by,
@@ -113,7 +101,9 @@ def store_document(movement, *, kind, payload, metadata=None):
 
 
 def verified_bytes(document):
-    payload = bytes(document.payload or b"")
+    from .reporting import document_payload
+
+    payload = document_payload(document)
     if (
         not payload
         or len(payload) != document.byte_size
@@ -156,7 +146,7 @@ def report_snapshot(movement, *, actor):
     ]
     return {
         "schema": 1,
-        "presentation": 2,
+        "presentation": 3,
         "id": movement.pk,
         "kind": movement.kind,
         "label": movement.get_kind_display(),
@@ -173,178 +163,32 @@ def report_snapshot(movement, *, actor):
 
 
 def render_pdf(snapshot, signature=None):
-    """A4 report generated once from immutable confirmation snapshots."""
-    fonts = Path(reportlab.__file__).parent / "fonts"
-    if "GG" not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont("GG", str(fonts / "Vera.ttf")))
-        pdfmetrics.registerFont(TTFont("GG-Bold", str(fonts / "VeraBd.ttf")))
-    body = ParagraphStyle(
-        "GGBody", fontName="GG", fontSize=8, leading=12, alignment=TA_LEFT, spaceAfter=5
-    )
-    title = ParagraphStyle(
-        "GGTitle",
-        parent=body,
-        fontName="GG-Bold",
-        fontSize=19,
-        leading=24,
-        textColor=colors.HexColor("#126650"),
-    )
-    header = ParagraphStyle(
-        "GGHeader", parent=body, fontName="GG-Bold", fontSize=7, leading=10, textColor=colors.white
-    )
+    from .pdf_v3 import render_pdf as render
 
-    def p(value, style=body):
-        return Paragraph(escape("—" if value is None else str(value)).replace("\n", "<br/>"), style)
-
-    output = io.BytesIO()
-    document = SimpleDocTemplate(
-        output,
-        pagesize=A4,
-        rightMargin=17 * mm,
-        leftMargin=17 * mm,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm,
-        title=f"{APP_NAME} · MOV-{snapshot['id']}",
-        author=APP_NAME,
-    )
-    story = [
-        p(APP_NAME, title),
-        Spacer(1, 5 * mm),
-        p(f"{snapshot['label']} · MOV-{snapshot['id']}", title),
-        p(
-            f"Data: {date.fromisoformat(snapshot['date']).strftime('%d/%m/%Y')} · Confirmado: {datetime.fromisoformat(snapshot['confirmed_at']).strftime('%d/%m/%Y %H:%M:%S %z')}"
-        ),
-        p(f"Responsável pela confirmação: {snapshot['responsible']}"),
-        p(f"Pessoa: {snapshot['person'] or 'Não aplicável'}"),
-    ]
-    logo = original_asset(LOGO)
-    if logo:
-        image = PDFImage(str(logo))
-        scale = min(65 * mm / image.imageWidth, 25 * mm / image.imageHeight)
-        image.drawWidth, image.drawHeight = image.imageWidth * scale, image.imageHeight * scale
-        story[0:0] = [image, Spacer(1, 4 * mm)]
-    if snapshot["correction_of"]:
-        story.append(
-            p(f"Correção relacionada com MOV-{snapshot['correction_of']} · {snapshot['reason']}")
-        )
-    elif snapshot["reason"]:
-        story.append(p(snapshot["reason"]))
-    inventory = snapshot["kind"] == "inventory"
-    if inventory:
-        headings = [
-            "Referência",
-            "Caixas",
-            "Soltas",
-            "Contagem",
-            "Stock antes",
-            "Diferença",
-            "Stock final",
-        ]
-        widths = [61, 14, 14, 20, 21, 22, 24]
-    else:
-        headings = [
-            "Referência",
-            "Quantidade a entrar" if snapshot["kind"] == "entry" else "Quantidade a sair",
-            "Stock final",
-        ]
-        widths = [80, 48, 48]
-    rows = [[p(label, header) for label in headings]]
-    for line in snapshot["lines"]:
-        if inventory:
-            rows.append(
-                [
-                    p(line["name"]),
-                    p(line["boxes"]),
-                    p(line["units"]),
-                    p(line["counted"]),
-                    p(line["before"]),
-                    p(line["quantity"]),
-                    p(line["after"]),
-                ]
-            )
-            rows.append(
-                [
-                    p(
-                        f"Motivo: {line['reason'] or 'Sem diferença quantitativa'}\nLocalização final: {line['location'] or 'por definir'} · Setor: {line['sector'] or 'por definir'}"
-                    ),
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                ]
-            )
-        else:
-            rows.append(
-                [
-                    p(line["name"]),
-                    p(
-                        entered_quantity(
-                            line["boxes"], line["units"], line["quantity"], line["capacity"]
-                        )
-                    ),
-                    p(stock_quantity(line["after"], line["capacity"])),
-                ]
-            )
-    table = LongTable(rows, colWidths=[width * mm for width in widths], repeatRows=1, hAlign="LEFT")
-    commands = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#126650")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor("#e0e8e4")),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]
-    if inventory:
-        commands.extend(("SPAN", (0, index), (-1, index)) for index in range(2, len(rows), 2))
-    table.setStyle(TableStyle(commands))
-    story.extend([Spacer(1, 4 * mm), table, Spacer(1, 4 * mm)])
-    if not inventory:
-        story.append(
-            p(f"Total de garrafas: {sum(abs(line['quantity']) for line in snapshot['lines'])}")
-        )
-    for change in snapshot["changes"]:
-        story.append(
-            p(
-                f"Transferência {change.get('name') or change['code']}: {change['before'].get('location')} / {change['before'].get('sector') or 'sem setor'} → {change['after'].get('location')} / {change['after'].get('sector') or 'sem setor'} · {change['reason']}"
-            )
-        )
-    if signature:
-        story.extend(
-            [
-                p(
-                    "Validação com assinatura desenhada — não constitui assinatura digital qualificada."
-                ),
-                PDFImage(io.BytesIO(signature), width=90 * mm, height=30 * mm, kind="proportional"),
-            ]
-        )
-    elif snapshot["kind"] == "exit":
-        story.append(p("Validação: confirmação simples, sem assinatura."))
-    story.append(
-        p(
-            "Caixas e garrafas soltas preservam os valores introduzidos; — identifica informação não fornecida."
-        )
-    )
-
-    def footer(canvas, doc):
-        canvas.saveState()
-        canvas.setFont("GG", 8)
-        canvas.setFillColor(colors.HexColor("#71817c"))
-        canvas.drawString(
-            17 * mm, 12 * mm, f"{APP_NAME} · MOV-{snapshot['id']} · Documento histórico"
-        )
-        canvas.drawRightString(193 * mm, 12 * mm, f"Página {doc.page}")
-        canvas.restoreState()
-
-    document.build(story, onFirstPage=footer, onLaterPages=footer)
-    return output.getvalue()
+    return render(snapshot, signature)
 
 
 def create_confirmation_documents(movement, *, actor, signature=None):
-    if signature:
-        store_document(movement, kind="signature", payload=signature)
+    from .reporting import allocate_number, template_key
+
+    signature_document = (
+        store_document(movement, kind="signature", payload=signature) if signature else None
+    )
     if movement.kind in ("exit", "inventory") or movement.report_requested:
+        number = allocate_number(movement.date.year)
         snapshot = report_snapshot(movement, actor=actor)
-        store_document(
+        snapshot.update(
+            {
+                "report_number": f"Mov-{number}/{movement.date.year % 100:02}",
+                "report_year": movement.date.year,
+                "report_sequence": number,
+                "template_key": template_key(),
+                "signature_sha256": signature_document.sha256 if signature_document else None,
+            }
+        )
+        document = store_document(
             movement, kind="pdf", payload=render_pdf(snapshot, signature), metadata=snapshot
+        )
+        ReportNumber.objects.create(
+            movement=movement, document=document, year=movement.date.year, number=number
         )

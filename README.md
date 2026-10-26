@@ -47,6 +47,12 @@ Veja [o âmbito e as decisões](docs/etapa-a.md), os
 
 ## Executar em desenvolvimento
 
+**Etapa A2:** seleção direta e pesquisa dinâmica, linhas minimizáveis, histórico
+expansível, perfis personalizados e PDFs com numeração anual e reprodução fiel.
+Consulte [o guia A2, migrações e atualização segura do Windows](docs/etapa-a2.md).
+A A2 exige recuperação de backup para uma cópia nova; o procedimento da Etapa A
+sem migrações não se aplica. O piloto instalado não foi atualizado por esta entrega.
+
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.
 Use o checkout existente; não é necessário criar um worktree. Na raiz do projeto:
 

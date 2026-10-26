@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import catalog, exports, import_views, operations, reports, user_admin, views
+from . import catalog, exports, import_views, operations, profiles, reports, user_admin, views
 
 app_name = "web"
 
@@ -17,16 +17,27 @@ urlpatterns = [
     path("operacoes/<int:pk>/editar/", operations.edit, name="operation-edit"),
     path("operacoes/<int:pk>/conferir/", operations.review, name="operation-review"),
     path("operacoes/<int:pk>/cancelar/", operations.cancel, name="operation-cancel"),
-    path("operacoes/<int:pk>/nova-referencia/", operations.new_reference, name="operation-reference"),
-    path("operacoes/<int:pk>/reativar/<int:reference_pk>/", operations.reactivate, name="operation-reactivate"),
+    path(
+        "operacoes/<int:pk>/nova-referencia/", operations.new_reference, name="operation-reference"
+    ),
+    path(
+        "operacoes/<int:pk>/reativar/<int:reference_pk>/",
+        operations.reactivate,
+        name="operation-reactivate",
+    ),
     path("operacoes/<int:pk>/corrigir/", operations.correction, name="operation-correction"),
     path("operacoes/<int:pk>/", operations.detail, name="operation-detail"),
+    path("definicoes/perfis/", profiles.profiles, name="profiles"),
+    path("definicoes/perfis/novo/", profiles.edit, name="profile-create"),
+    path("definicoes/perfis/<int:pk>/editar/", profiles.edit, name="profile-edit"),
     path("utilizadores/", user_admin.accounts, name="users"),
     path("utilizadores/novo/", user_admin.create, name="user-create"),
     path("utilizadores/<int:pk>/editar/", user_admin.edit, name="user-edit"),
     path("exportar/", exports.export, name="export"),
     path("relatorios/", reports.reports, name="reports"),
     path("documentos/<int:pk>/", reports.content, name="document-content"),
+    path("documentos/<int:pk>/eliminar/", reports.delete, name="document-delete"),
+    path("documentos/<int:pk>/regenerar/", reports.regenerate, name="document-regenerate"),
     path("referencias/", catalog.reference_list, name="references"),
     path("referencias/nova/", catalog.reference_create, name="reference-create"),
     path("referencias/<int:pk>/editar/", catalog.reference_edit, name="reference-edit"),

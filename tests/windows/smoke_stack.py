@@ -141,13 +141,15 @@ def validate_scope(command, project):
     return volumes
 
 
-def main(image):
+def main(image, previous_image=None):
     source = None
     recovered = None
     with tempfile.TemporaryDirectory(prefix="gg-windows-stack-") as temporary:
         root = Path(temporary)
         try:
-            instance, project, source = make_state(root / "source O'Neill $", image, free_port())
+            instance, project, source = make_state(
+                root / "source O'Neill $", previous_image or image, free_port()
+            )
             config = json.loads(compose(source, "config", "--format", "json"))
             assert not config["services"]["db"].get("ports")
             assert config["networks"]["pilot"]["internal"] is True
@@ -192,6 +194,27 @@ def main(image):
                 source, "SELECT string_agg(sha256,',' ORDER BY id) FROM inventory_document"
             )
             assert expected_stock == "22" and len(expected_documents.split(",")) == 2
+            if previous_image:
+                # Only this NEW synthetic namespace: demonstrate that new code
+                # refuses an in-place schema upgrade, BEFORE any migration.
+                before_migrations = sql(source, "SELECT count(*) FROM django_migrations")
+                override = root / "new-code-only.json"
+                override.write_text(json.dumps({"services": {"initialize": {"image": image}}}))
+                attempt = subprocess.run(
+                    source
+                    + ["--file", str(override), "--profile", "setup", "run", "--rm", "initialize"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                assert attempt.returncode != 0
+                assert "recuperacao num piloto novo" in attempt.stdout + attempt.stderr
+                assert sql(source, "SELECT count(*) FROM django_migrations") == before_migrations
+                assert (
+                    sql(source, "SELECT to_regclass('public.inventory_reportnumber') IS NULL")
+                    == "t"
+                )
             # Explicit repair/migrations are idempotent: no duplicate synthetic balances.
             compose(source, "--profile", "setup", "run", "--rm", "initialize")
             assert sql(source, "SELECT count(*) FROM inventory_openingbalance") == "3"
@@ -258,6 +281,29 @@ def main(image):
                 sql(recovered, "SELECT string_agg(sha256,',' ORDER BY id) FROM inventory_document")
                 == expected_documents
             )
+            # Application role (not owner): create a new A2 report, remove only
+            # its bytes, reproduce it exactly, and keep the original evidence.
+            code = "from accounts.models import User,AccessProfile; from inventory.models import Reference,ReportFile,ReportNumber; from inventory.documents import verified_bytes; from inventory.reporting import delete_pdf,regenerate_pdf; from tests.document_fixtures import confirmed_operation; u=User.objects.get(username='windows-smoke-synthetic'); r=Reference.objects.get(code='SYN-WIN-001'); m=confirmed_operation(u,r,kind='entry',units=1,report=True); d=m.documents.get(kind='pdf'); original=verified_bytes(d); identity=str(m.report_number); delete_pdf(actor=u,document_id=d.pk); assert ReportFile.objects.get(document=d).payload is None; regenerate_pdf(actor=u,document_id=d.pk); assert verified_bytes(d)==original and str(ReportNumber.objects.get(movement=m))==identity; assert AccessProfile.objects.get(name='Substituto').active; print('A2 report lifecycle with restricted role: PASS')"
+            compose(
+                recovered,
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "manage.py",
+                "shell",
+                "--verbosity",
+                "0",
+                "-c",
+                code,
+            )
+            assert (
+                sql(
+                    recovered,
+                    "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'",
+                )
+                == "23"
+            )
             # Restore a second time MUST refuse to touch an existing target.
             result = subprocess.run(
                 recovered
@@ -291,11 +337,11 @@ def main(image):
                     recovered,
                     "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'",
                 )
-                == expected_stock
+                == "23"
             )
             validate_scope(recovered, project2)
             print(
-                "Windows payload smoke: isolated setup, least-privilege operation, PDF/signature, restart persistence, backup, separate recovery, existing-target refusal and unchanged source: PASS"
+                "Windows payload smoke: isolated setup, least-privilege operation, PDF/signature, restart persistence, backup, separate recovery, A2 exact reproduction, existing-target refusal and unchanged source: PASS"
             )
         finally:
             # Test-only cleanup: only randomly-created namespaces from THIS process.
@@ -308,4 +354,9 @@ def main(image):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
-    main(parser.parse_args().image)
+    parser.add_argument(
+        "--previous-image",
+        help="Optional old pilot image for a synthetic migration/recovery rehearsal",
+    )
+    args = parser.parse_args()
+    main(args.image, args.previous_image)

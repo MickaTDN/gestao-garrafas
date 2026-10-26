@@ -254,6 +254,7 @@ class MovementLine(models.Model):
     box_capacity = models.PositiveIntegerField(null=True, blank=True)
     boxes = models.PositiveIntegerField(null=True, blank=True)
     units = models.PositiveIntegerField(null=True, blank=True)
+    quantity_checked = models.BooleanField(default=False)
     counted_quantity = models.PositiveIntegerField(null=True, blank=True)
     count_basis = models.JSONField(default=dict, blank=True)
     reason = models.TextField(blank=True)
@@ -392,6 +393,22 @@ class Document(models.Model):
 
     objects = HistoryQuerySet.as_manager()
 
+    @property
+    def has_file(self):
+        if hasattr(self, 'file_present'):
+            return self.file_present
+        if self.payload is not None:
+            return True
+        return ReportFile.objects.filter(document_id=self.pk, payload__isnull=False).exists()
+
+    @property
+    def can_reproduce(self):
+        return self.metadata.get('presentation') == 3 and bool(self.metadata.get('template_key'))
+
+    @property
+    def number(self):
+        return self.metadata.get('report_number') or f'MOV-{self.movement_id}'
+
     def save(self, *args, **kwargs):
         if self.pk or Movement.objects.filter(pk=self.movement_id, status="confirmed").exists():
             raise ValidationError("Documentos históricos são imutáveis.")
@@ -439,3 +456,61 @@ class AuditEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class ReportTemplate(models.Model):
+    """Frozen public rendering assets, shared across reports of the same release."""
+    key = models.CharField(max_length=64, primary_key=True)
+    assets = models.JSONField()
+    objects = AppendOnlyQuerySet.as_manager()
+
+    def save(self, *args, **kwargs):
+        if ReportTemplate.objects.filter(pk=self.pk).exists():
+            raise ValidationError('O modelo histórico do relatório é imutável.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('O modelo histórico do relatório é imutável.')
+
+
+class ReportSequence(models.Model):
+    year = models.PositiveIntegerField(primary_key=True)
+    last_number = models.PositiveBigIntegerField(default=0)
+
+
+class ReportNumber(models.Model):
+    movement = models.OneToOneField(Movement, on_delete=models.PROTECT, related_name='report_number')
+    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name='annual_number')
+    year = models.PositiveIntegerField()
+    number = models.PositiveBigIntegerField()
+    objects = AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['year', 'number'], name='unique_annual_report_number'), models.CheckConstraint(condition=Q(year__gte=1) & Q(year__lte=9999) & Q(number__gte=1), name='valid_annual_report_number')]
+
+    def __str__(self):
+        return f'Mov-{self.number}/{self.year % 100:02}'
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('O número definitivo do relatório é imutável.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Um número de relatório nunca é reutilizado.')
+
+
+class ReportFile(models.Model):
+    """Disposable/reproducible bytes; the Document evidence itself stays immutable."""
+    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name='report_file')
+    payload = models.BinaryField(null=True, editable=False)
+    reproductions = models.PositiveIntegerField(default=0)
+    objects = AppendOnlyQuerySet.as_manager()
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Use o serviço auditado de gestão de relatórios.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('A identidade do relatório não pode ser eliminada.')

@@ -1,5 +1,7 @@
 """Server-rendered operational screens. All writes delegate to domain services."""
 
+from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core import signing
@@ -8,19 +10,23 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods
 
+from accounts.permissions import require_access, require_operation, visible_movements
 from inventory import catalog, operations
 from inventory.models import Movement, Person, Reference
 from inventory.presentation import entered_quantity, stock_quantity
+from inventory.reporting import can_regenerate, issued_filter, with_file_status
 from inventory.services import confirm_movement, owned_draft, reference_state
 
 from .catalog import _errors
 from .catalog_forms import ReferenceForm
 from .forms import StockFilterForm
 from .operation_forms import HeaderForm, LineFormSet, OperationSearchForm, ReviewForm, StartForm
-from .views import _page, administrator_required
+from .views import _page, operation_required, permission_required
 
 
 def _own(request, pk):
@@ -33,13 +39,30 @@ def _own(request, pk):
     return movement
 
 
+def _expired(movement):
+    return bool(
+        movement.pk
+        and (
+            movement.date != timezone.localdate()
+            or timezone.localtime(movement.created_at).date() != timezone.localdate()
+        )
+    )
+
+
 def _catalogue(request, *, active_only=True, name_only=False):
-    form = OperationSearchForm(request.GET) if name_only else StockFilterForm(request.GET)
+    search = (
+        {"q": request.POST.get("search_q", request.GET.get("q", ""))}
+        if request.method == "POST"
+        else request.GET
+    )
+    form = OperationSearchForm(search) if name_only else StockFilterForm(request.GET)
     refs = Reference.objects.select_related("location", "sector").order_by("name", "pk")
     if active_only:
         refs = refs.filter(active=True)
     if form.is_valid():
         data = form.cleaned_data
+        if name_only and not data["q"]:
+            refs = refs.none()
         if data["q"]:
             refs = (
                 refs.filter(name__icontains=data["q"])
@@ -62,6 +85,22 @@ def _pending(request, kind):
         ).order_by("-pk"),
         10,
     ).get_page(request.GET.get("pending_page"))
+
+
+def _search_results(request, movement, refs_page, filter_form):
+    params = request.GET.copy()
+    for key in ("partial", "ref_page"):
+        params.pop(key, None)
+    return render(
+        request,
+        "web/operations/results.html",
+        {
+            "movement": movement,
+            "refs_page": refs_page,
+            "searched": bool(filter_form.is_valid() and filter_form.cleaned_data.get("q")),
+            "ref_params": params.urlencode(),
+        },
+    )
 
 
 def _new_movement(request, kind):
@@ -93,6 +132,8 @@ def _new_movement(request, kind):
         request, active_only=kind != "entry", name_only=kind != "inventory"
     )
     refs_page = Paginator(refs, 20).get_page(request.GET.get("ref_page"))
+    if request.method == "GET" and request.GET.get("partial") == "references":
+        return _search_results(request, movement, refs_page, filter_form)
     if (
         request.method == "POST"
         and header.is_valid()
@@ -103,9 +144,15 @@ def _new_movement(request, kind):
             if header.cleaned_data["revision"] != 0 or len(formset) != 0:
                 raise ValidationError("Selecione as referências antes de introduzir quantidades.")
             add_ids = [int(value) for value in request.POST.getlist("add_reference")]
+            if request.POST.get("action", "").startswith("add:"):
+                add_ids = [int(request.POST["action"].split(":", 1)[1])]
             if not set(add_ids).issubset({ref.pk for ref in refs_page}):
                 raise ValidationError("Seleção fora dos resultados apresentados.")
             action = request.POST.get("action", "save")
+            if action.startswith("add:"):
+                action = "save"
+            if action == "new-reference":
+                require_access(request.user, "catalog_manage")
             reactivate_id = None
             if action.startswith("reactivate:"):
                 reactivate_id = int(action.split(":", 1)[1])
@@ -113,6 +160,7 @@ def _new_movement(request, kind):
                     ref.pk == reactivate_id and not ref.active for ref in refs_page
                 ):
                     raise ValidationError("Reativação inválida.")
+                require_access(request.user, "catalog_manage")
                 action = "reactivate"
             if action not in ("save", "new-reference", "reactivate") or (
                 action == "new-reference" and kind != "entry"
@@ -165,6 +213,7 @@ def _new_movement(request, kind):
             "refs_page": refs_page,
             "ref_params": params.urlencode(),
             "filter_form": filter_form,
+            "searched": bool(filter_form.is_valid() and filter_form.cleaned_data.get("q")),
             "people": Person.objects.filter(active=True).order_by("name"),
             "pending_page": _pending(request, kind),
             "scope_form": scope_form,
@@ -173,15 +222,17 @@ def _new_movement(request, kind):
     )
 
 
-@administrator_required
+@operation_required
 @require_http_methods(["GET", "POST"])
 def start(request, kind):
+    require_operation(request.user, kind)
     return _new_movement(request, kind)
 
 
-@administrator_required
+@operation_required
 @require_GET
 def drafts(request):
+    require_operation(request.user)
     return render(
         request,
         "web/operations/drafts.html",
@@ -189,8 +240,11 @@ def drafts(request):
             "section": "drafts",
             **_page(
                 request,
-                Movement.objects.filter(
-                    created_by=request.user, status="draft", workflow_version=1
+                visible_movements(
+                    request.user,
+                    Movement.objects.filter(
+                        created_by=request.user, status="draft", workflow_version=1
+                    ),
                 ).prefetch_related("lines"),
             ),
         },
@@ -220,7 +274,7 @@ def _initial(movement, lines):
     ]
 
 
-@administrator_required
+@operation_required
 @require_http_methods(["GET", "POST"])
 def edit(request, pk):
     try:
@@ -266,6 +320,8 @@ def edit(request, pk):
     if movement.correction_of_id:
         refs = refs.filter(movement_lines__movement_id=movement.correction_of_id).distinct()
     refs_page = Paginator(refs, 20).get_page(request.GET.get("ref_page"))
+    if request.method == "GET" and request.GET.get("partial") == "references":
+        return _search_results(request, movement, refs_page, filter_form)
     if request.method == "POST" and header.is_valid() and formset.is_valid():
         try:
             rows = []
@@ -291,6 +347,20 @@ def edit(request, pk):
             if not set(add_ids).issubset({ref.pk for ref in refs_page}):
                 raise ValidationError("Seleção fora dos resultados apresentados.")
             action = request.POST.get("action", "save")
+            check_ids = []
+            if action.startswith("add:"):
+                add_ids = [int(action.split(":", 1)[1])]
+                if not set(add_ids).issubset({ref.pk for ref in refs_page}):
+                    raise ValidationError("Seleção fora dos resultados apresentados.")
+                action = "save"
+            if action.startswith("check:"):
+                check_ids = [int(action.split(":", 1)[1])]
+                action = "save"
+            if action.startswith("remove:"):
+                remove.append(int(action.split(":", 1)[1]))
+                action = "save"
+            if action == "new-reference":
+                require_access(request.user, "catalog_manage")
             reactivate_id = None
             if action.startswith("reactivate:"):
                 reactivate_id = int(action.split(":", 1)[1])
@@ -298,6 +368,7 @@ def edit(request, pk):
                     ref.pk == reactivate_id and not ref.active for ref in refs_page
                 ):
                     raise ValidationError("Reativação inválida.")
+                require_access(request.user, "catalog_manage")
                 action = "reactivate"
             if action not in ("save", "review", "new-reference", "recheck", "reactivate"):
                 raise ValidationError("Ação inválida.")
@@ -312,6 +383,7 @@ def edit(request, pk):
                 add_ids=add_ids,
                 remove_ids=remove,
                 recheck=action == "recheck",
+                check_ids=check_ids,
             )
             if action == "reactivate":
                 return redirect("web:operation-reactivate", pk=pk, reference_pk=reactivate_id)
@@ -322,6 +394,16 @@ def edit(request, pk):
                 operations.review_draft(pk, actor=request.user, revision=movement.revision)
                 return redirect("web:operation-review", pk=pk)
             messages.success(request, "Operação guardada. O stock permanece inalterado.")
+            if add_ids and movement.kind != "inventory":
+                # Bring the newly selected reference into view even beyond page 1.
+                order = list(
+                    movement.lines.order_by("reference__name", "pk").values_list(
+                        "reference_id", flat=True
+                    )
+                )
+                page = order.index(add_ids[-1]) // 30 + 1
+                url = reverse("web:operation-edit", args=[pk])
+                return redirect(url + ("?" + urlencode({"page": page}) if page > 1 else ""))
             return redirect(request.get_full_path())
         except (ValidationError, ValueError) as error:
             _errors(
@@ -335,6 +417,10 @@ def edit(request, pk):
             if movement.revision != header.cleaned_data["revision"]:
                 messages.error(request, " ".join(error.messages))
                 return redirect(request.get_full_path())
+    for line in lines:
+        line.entered_display = entered_quantity(
+            line.boxes, line.units, line.quantity or 0, line.box_capacity
+        )
     pairs = list(zip(lines, formset, strict=False))
     params = request.GET.copy()
     params.pop("page", None)
@@ -346,6 +432,7 @@ def edit(request, pk):
         {
             "section": movement.kind,
             "movement": movement,
+            "expired": _expired(movement),
             "header": header,
             "formset": formset,
             "pairs": pairs,
@@ -354,6 +441,7 @@ def edit(request, pk):
             "ref_params": ref_params.urlencode(),
             "refs_page": refs_page,
             "filter_form": filter_form,
+            "searched": bool(filter_form.is_valid() and filter_form.cleaned_data.get("q")),
             "people": Person.objects.filter(active=True).order_by("name"),
             "counted": movement.lines.filter(counted_quantity__isnull=False).count(),
             "total_lines": movement.lines.count(),
@@ -362,7 +450,7 @@ def edit(request, pk):
     )
 
 
-@administrator_required
+@operation_required
 @require_http_methods(["GET", "POST"])
 @sensitive_post_parameters("signature_data")
 def review(request, pk):
@@ -430,6 +518,7 @@ def review(request, pk):
         {
             "section": movement.kind,
             "movement": movement,
+            "expired": _expired(movement),
             "form": form,
             "plans": plans,
             "stale_review": stale_review,
@@ -438,7 +527,7 @@ def review(request, pk):
     )
 
 
-@administrator_required
+@operation_required
 @require_http_methods(["GET", "POST"])
 def cancel(request, pk):
     try:
@@ -470,7 +559,7 @@ def cancel(request, pk):
     )
 
 
-@administrator_required
+@permission_required("catalog_manage")
 @require_http_methods(["GET", "POST"])
 def new_reference(request, pk):
     movement = _own(request, pk)
@@ -505,10 +594,13 @@ def new_reference(request, pk):
     )
 
 
-@administrator_required
+@operation_required
 @require_http_methods(["GET", "POST"])
 def correction(request, pk):
-    original = get_object_or_404(Movement, pk=pk, status="confirmed")
+    require_operation(request.user, "inventory")
+    original = get_object_or_404(
+        visible_movements(request.user, Movement.objects.all()), pk=pk, status="confirmed"
+    )
     form = StartForm(request.POST if request.method == "POST" else None)
     form.fields.pop("inventory_scope")
     form.fields["reason"].required = True
@@ -539,8 +631,11 @@ def correction(request, pk):
 @require_GET
 def detail(request, pk):
     movement = get_object_or_404(
-        Movement.objects.select_related(
-            "person", "created_by", "confirmed_by", "correction_of"
+        visible_movements(
+            request.user,
+            Movement.objects.select_related(
+                "person", "created_by", "confirmed_by", "correction_of"
+            ),
         ).prefetch_related(
             "lines__sources",
             "location_changes__location_before",
@@ -553,20 +648,21 @@ def detail(request, pk):
         pk=pk,
         status="confirmed",
     )
+    pdfs = list(with_file_status(movement.documents.filter(issued_filter(), kind="pdf")))
+    for pdf in pdfs:
+        pdf.allow_regenerate = can_regenerate(request.user, pdf)
     return render(
         request,
         "web/operations/detail.html",
         {
             "section": "history",
             "movement": movement,
-            "pdfs": movement.documents.filter(kind="pdf", payload__isnull=False).defer(
-                "payload", "metadata"
-            ),
+            "pdfs": pdfs,
         },
     )
 
 
-@administrator_required
+@permission_required("catalog_manage")
 @require_http_methods(["GET", "POST"])
 def reactivate(request, pk, reference_pk):
     movement = _own(request, pk)

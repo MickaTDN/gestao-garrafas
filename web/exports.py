@@ -3,7 +3,6 @@
 import io
 
 from django import forms
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import HttpResponse
@@ -15,6 +14,7 @@ from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from inventory.models import AuditEvent, Location, LocationChange, MovementLine, Reference, Sector
 
 from .catalog_forms import StyledFieldsMixin
+from .views import permission_required
 
 
 class ExportForm(StyledFieldsMixin, forms.Form):
@@ -295,7 +295,7 @@ def build_workbook(data):
     return output.getvalue()
 
 
-@login_required
+@permission_required("export")
 @require_GET
 def export(request):
     form = ExportForm(request.GET if request.GET else None)

@@ -258,3 +258,23 @@ serviços transacionais e o esquema mantêm-se. Conferência/PDF de entrada/saí
 usam três colunas e uma função comum de apresentação, conservando os snapshots
 técnicos e os documentos históricos. A identidade visível passa a Gestão Vertente
 Aveludada, sem renomear identificadores de instalação. Ver [Etapa A](etapa-a.md).
+
+## Etapa A2 — capacidades e evidência reproduzível
+
+Perfis personalizados atribuem capacidades verificadas no servidor e serviços,
+com leitura persistente por ação e bloqueio transacional comum às revogações.
+Sem acesso global, o histórico e PDFs limitam-se às operações próprias autorizadas.
+Administrador e Consulta conservam as regras anteriores. A confirmação individual
+de uma quantidade não tem efeito no livro; só a confirmação final o altera.
+
+PDFs A2 separam evidência imutável (`Document`, `ReportNumber`, `ReportTemplate`)
+dos bytes reproduzíveis (`ReportFile`). Número por ano oficial, contador bloqueado,
+snapshots e assinaturas pertencem à mesma transação de confirmação. Eliminação
+prova primeiro a reprodução byte a byte; regeneração exige hash/tamanho originais.
+PDFs/assinaturas anteriores em `Document.payload` não se migram nem renumeram.
+As novas transições têm guardas PostgreSQL e privilégios de coluna específicos.
+
+As migrações são aditivas mas o código antigo não compreende a evidência/perfis
+novos. A atualização Windows usa backup verificado e recuperação num piloto novo,
+com origem preservada. Migração inversa com evidência é bloqueada; a recuperação
+depois de usar A2 exige código compatível. Ver [guia e decisões A2](etapa-a2.md).

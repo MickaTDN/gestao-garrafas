@@ -23,7 +23,7 @@ def _verify(actor, password):
 
 @sensitive_variables("password", "current_password")
 @transaction.atomic
-def create_account(*, actor, username, password, role, current_password):
+def create_account(*, actor, username, password, role, current_password, access_profile=None):
     require_administrator(actor)
     actor = _lock(actor)
     _verify(actor, current_password)
@@ -32,20 +32,27 @@ def create_account(*, actor, username, password, role, current_password):
         raise ValidationError("Perfil inválido.")
     if User.objects.filter(username__iexact=username).exists():
         raise ValidationError("Já existe um utilizador com esse identificador.")
-    account = User(username=username, role=role)
+    _profile(role, access_profile)
+    account = User(
+        username=username, role=role, access_profile=access_profile if role == "custom" else None
+    )
     password_validation.validate_password(password, user=account)
     account.set_password(password)
     account.full_clean()
     account.save()
     AuditEvent.objects.create(
-        actor=actor, action="account.created", details={"user_id": account.pk, "role": role}
+        actor=actor,
+        action="account.created",
+        details={"user_id": account.pk, "role": role, "profile": account.access_profile_id},
     )
     return account
 
 
 @sensitive_variables("current_password")
 @transaction.atomic
-def change_account(*, actor, account_id, role, active, current_password, reason):
+def change_account(
+    *, actor, account_id, role, active, current_password, reason, access_profile=None
+):
     require_administrator(actor)
     actor = _lock(actor)
     _verify(actor, current_password)
@@ -63,17 +70,78 @@ def change_account(*, actor, account_id, role, active, current_password, reason)
         and not User.objects.filter(role="admin", is_active=True).exclude(pk=account.pk).exists()
     ):
         raise ValidationError("É obrigatório manter um administrador ativo.")
-    before = {"role": account.role, "active": account.is_active}
+    before = {
+        "role": account.role,
+        "active": account.is_active,
+        "profile": account.access_profile_id,
+    }
+    _profile(role, access_profile, allow_inactive=not active)
     account.role, account.is_active = role, active
-    account.save(update_fields=["role", "is_active"])
+    account.access_profile = access_profile if role == "custom" else None
+    account.save(update_fields=["role", "is_active", "access_profile"])
     AuditEvent.objects.create(
         actor=actor,
         action="account.updated",
         details={
             "user_id": account.pk,
             "before": before,
-            "after": {"role": role, "active": active},
+            "after": {"role": role, "active": active, "profile": account.access_profile_id},
             "reason": reason.strip(),
         },
     )
     return account
+
+
+def _profile(role, profile, allow_inactive=False):
+    from .models import AccessProfile
+
+    if role == "custom" and (
+        not profile
+        or not AccessProfile.objects.filter(
+            pk=profile.pk, **({} if allow_inactive else {"active": True})
+        ).exists()
+    ):
+        raise ValidationError("Escolha um perfil personalizado ativo.")
+
+
+@transaction.atomic
+def save_profile(*, actor, name, active, capabilities, current_password, reason, profile_id=None):
+    from .models import AccessProfile
+    from .permissions import CAPABILITIES
+
+    require_administrator(actor)
+    actor = _lock(actor)
+    _verify(actor, current_password)
+    name = " ".join(name.split())
+    if not name or len(name) > 100 or type(active) is not bool or not reason.strip():
+        raise ValidationError("Indique nome, estado e motivo da alteração.")
+    if not isinstance(capabilities, (list, tuple)) or set(capabilities) - set(CAPABILITIES):
+        raise ValidationError(
+            "Permissões inválidas; a administração de acessos é exclusiva do Administrador."
+        )
+    if AccessProfile.objects.filter(name__iexact=name).exclude(pk=profile_id).exists():
+        raise ValidationError("Já existe um perfil com esta designação.")
+    profile = (
+        AccessProfile.objects.select_for_update().get(pk=profile_id)
+        if profile_id
+        else AccessProfile()
+    )
+    before = (
+        {"name": profile.name, "active": profile.active, "capabilities": profile.capabilities}
+        if profile.pk
+        else None
+    )
+    profile.name, profile.active, profile.capabilities = name, active, sorted(set(capabilities))
+    profile.full_clean()
+    profile.save()
+    AuditEvent.objects.create(
+        actor=actor,
+        action="profile.updated" if before else "profile.created",
+        details={
+            "profile_id": profile.pk,
+            "before": before,
+            "after": {"name": name, "active": active, "capabilities": profile.capabilities},
+            "reason": reason.strip(),
+        },
+    )
+    return profile

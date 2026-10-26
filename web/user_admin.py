@@ -8,6 +8,7 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.administration import change_account, create_account
+from accounts.models import AccessProfile
 
 from .catalog import _errors
 from .catalog_forms import StyledFieldsMixin
@@ -21,6 +22,12 @@ class AccountCreateForm(StyledFieldsMixin, UserCreationForm):
         label="A sua palavra-passe atual", widget=forms.PasswordInput
     )
 
+    access_profile = forms.ModelChoiceField(
+        queryset=AccessProfile.objects.filter(active=True),
+        required=False,
+        label="Perfil personalizado",
+    )
+
     class Meta(UserCreationForm.Meta):
         model = User
         fields = ["username", "role"]
@@ -29,6 +36,9 @@ class AccountCreateForm(StyledFieldsMixin, UserCreationForm):
 
 class AccountChangeForm(StyledFieldsMixin, forms.Form):
     role = forms.ChoiceField(label="Perfil", choices=User.Role.choices)
+    access_profile = forms.ModelChoiceField(
+        queryset=AccessProfile.objects.all(), required=False, label="Perfil personalizado"
+    )
     active = forms.BooleanField(label="Conta ativa", required=False)
     reason = forms.CharField(label="Motivo da alteração", max_length=500)
     current_password = forms.CharField(
@@ -60,6 +70,7 @@ def create(request):
                 password=form.cleaned_data["password1"],
                 role=form.cleaned_data["role"],
                 current_password=form.cleaned_data["current_password"],
+                access_profile=form.cleaned_data.get("access_profile"),
             )
         except ValidationError as error:
             _errors(form, error)
@@ -81,7 +92,11 @@ def edit(request, pk):
     account = get_object_or_404(User, pk=pk)
     form = AccountChangeForm(
         request.POST if request.method == "POST" else None,
-        initial={"role": account.role, "active": account.is_active},
+        initial={
+            "role": account.role,
+            "active": account.is_active,
+            "access_profile": account.access_profile_id,
+        },
     )
     if request.method == "POST" and form.is_valid():
         try:
@@ -91,6 +106,7 @@ def edit(request, pk):
                 role=form.cleaned_data["role"],
                 active=form.cleaned_data["active"],
                 current_password=form.cleaned_data["current_password"],
+                access_profile=form.cleaned_data.get("access_profile"),
                 reason=form.cleaned_data["reason"],
             )
         except ValidationError as error:

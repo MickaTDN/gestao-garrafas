@@ -18,15 +18,25 @@ from inventory.models import (
 class CatalogTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.admin = get_user_model().objects.create_user(username="synthetic-catalog-admin", role="admin")
-        cls.viewer = get_user_model().objects.create_user(username="synthetic-catalog-viewer", role="viewer")
+        cls.admin = get_user_model().objects.create_user(
+            username="synthetic-catalog-admin", role="admin"
+        )
+        cls.viewer = get_user_model().objects.create_user(
+            username="synthetic-catalog-viewer", role="viewer"
+        )
         cls.location = Location.objects.create(name="Localização de teste Alfa")
         cls.other_location = Location.objects.create(name="Localização de teste Beta")
         cls.sector = Sector.objects.create(name="Setor de teste Alfa", location=cls.location)
-        cls.other_sector = Sector.objects.create(name="Setor de teste Beta", location=cls.other_location)
+        cls.other_sector = Sector.objects.create(
+            name="Setor de teste Beta", location=cls.other_location
+        )
         cls.reference = Reference.objects.create(
-            code="GAR-0007", name="Referência sintética Alfa", location=cls.location,
-            sector=cls.sector, box_capacity=6, current_stock=13,
+            code="GAR-0007",
+            name="Referência sintética Alfa",
+            location=cls.location,
+            sector=cls.sector,
+            box_capacity=6,
+            current_stock=13,
         )
 
     def setUp(self):
@@ -37,13 +47,18 @@ class CatalogTests(TestCase):
 
     def ref_data(self, **changes):
         data = {
-            "name": "Referência sintética Beta", "box_capacity": "6",
-            "location": str(self.location.pk), "sector": str(self.sector.pk),
+            "name": "Referência sintética Beta",
+            "box_capacity": "6",
+            "location": str(self.location.pk),
+            "sector": str(self.sector.pk),
         }
         return {**data, **changes}
 
     def test_reference_created_with_generated_code_and_zero_stock(self):
-        response = self.client.post(self.url("reference-create"), self.ref_data(code="FORGED", current_stock="999", active="0"))
+        response = self.client.post(
+            self.url("reference-create"),
+            self.ref_data(code="FORGED", current_stock="999", active="0"),
+        )
         self.assertEqual(response.status_code, 302)
         created = Reference.objects.get(name="Referência sintética Beta")
         self.assertEqual(created.code, "GAR-0008")
@@ -53,27 +68,39 @@ class CatalogTests(TestCase):
         self.assertEqual(AuditEvent.objects.get().action, "reference.created")
 
     def test_new_reference_unknown_capacity_and_sector_remain_unknown(self):
-        response = self.client.post(self.url("reference-create"), self.ref_data(box_capacity="", sector=""))
+        response = self.client.post(
+            self.url("reference-create"), self.ref_data(box_capacity="", sector="")
+        )
         self.assertEqual(response.status_code, 302)
         created = Reference.objects.get(name="Referência sintética Beta")
         self.assertIsNone(created.box_capacity)
         self.assertIsNone(created.sector)
 
     def test_alert_requires_selected_minimum_and_can_use_zero(self):
-        invalid = self.client.post(self.url("reference-edit", self.reference), self.ref_data(alert_enabled="on", minimum=""))
+        invalid = self.client.post(
+            self.url("reference-edit", self.reference),
+            self.ref_data(alert_enabled="on", minimum=""),
+        )
         self.assertEqual(invalid.status_code, 400)
         self.reference.refresh_from_db()
         self.assertIsNone(self.reference.minimum)
-        valid = self.client.post(self.url("reference-edit", self.reference), self.ref_data(alert_enabled="on", minimum="0"))
+        valid = self.client.post(
+            self.url("reference-edit", self.reference),
+            self.ref_data(alert_enabled="on", minimum="0"),
+        )
         self.assertEqual(valid.status_code, 302)
         self.reference.refresh_from_db()
         self.assertEqual(self.reference.minimum, 0)
 
     def test_disabling_alert_removes_minimum_without_affecting_other_reference(self):
-        other = Reference.objects.create(code="SYN-009", name="Outra ficha sintética", location=self.location, minimum=5)
+        other = Reference.objects.create(
+            code="SYN-009", name="Outra ficha sintética", location=self.location, minimum=5
+        )
         self.reference.minimum = 9
         self.reference.save()
-        response = self.client.post(self.url("reference-edit", self.reference), self.ref_data(minimum="999"))
+        response = self.client.post(
+            self.url("reference-edit", self.reference), self.ref_data(minimum="999")
+        )
         self.assertEqual(response.status_code, 302)
         self.reference.refresh_from_db()
         other.refresh_from_db()
@@ -87,7 +114,8 @@ class CatalogTests(TestCase):
 
     def test_invalid_capacity_minimum_and_mismatched_sector_are_rejected(self):
         for changes in [
-            {"box_capacity": "0"}, {"box_capacity": "1.5"},
+            {"box_capacity": "0"},
+            {"box_capacity": "1.5"},
             {"alert_enabled": "on", "minimum": "-1"},
             {"sector": self.other_sector.pk},
         ]:
@@ -100,15 +128,24 @@ class CatalogTests(TestCase):
     def test_editing_name_capacity_location_keeps_stock_and_historical_snapshots(self):
         movement = Movement.objects.create(kind="inventory", reason="Teste sintético")
         line = MovementLine.objects.create(
-            movement=movement, reference=self.reference, quantity=0,
-            reference_name=self.reference.name, box_capacity=6,
+            movement=movement,
+            reference=self.reference,
+            quantity=0,
+            reference_name=self.reference.name,
+            box_capacity=6,
         )
         movement.status = "confirmed"
         movement.save(update_fields=["status"])
-        response = self.client.post(self.url("reference-edit", self.reference), self.ref_data(
-            box_capacity="12", location=self.other_location.pk, sector=self.other_sector.pk,
-            current_stock="1000", code="FORGED",
-        ))
+        response = self.client.post(
+            self.url("reference-edit", self.reference),
+            self.ref_data(
+                box_capacity="12",
+                location=self.other_location.pk,
+                sector=self.other_sector.pk,
+                current_stock="1000",
+                code="FORGED",
+            ),
+        )
         self.assertEqual(response.status_code, 302)
         self.reference.refresh_from_db()
         line.refresh_from_db()
@@ -116,19 +153,34 @@ class CatalogTests(TestCase):
         self.assertEqual(self.reference.box_capacity, 12)
         self.assertEqual((line.reference_name, line.box_capacity), ("Referência sintética Alfa", 6))
         change = LocationChange.objects.get()
-        self.assertEqual((change.location_before_id, change.location_after_id), (self.location.pk, self.other_location.pk))
-        self.assertEqual((change.sector_before_id, change.sector_after_id), (self.sector.pk, self.other_sector.pk))
+        self.assertEqual(
+            (change.location_before_id, change.location_after_id),
+            (self.location.pk, self.other_location.pk),
+        )
+        self.assertEqual(
+            (change.sector_before_id, change.sector_after_id),
+            (self.sector.pk, self.other_sector.pk),
+        )
 
     def test_get_edit_and_toggle_never_modify_and_deactivation_is_idempotent(self):
-        self.assertEqual(self.client.get(self.url("reference-edit", self.reference)).status_code, 200)
-        self.assertEqual(self.client.get(self.url("reference-toggle", self.reference)).status_code, 200)
+        self.assertEqual(
+            self.client.get(self.url("reference-edit", self.reference)).status_code, 200
+        )
+        self.assertEqual(
+            self.client.get(self.url("reference-toggle", self.reference)).status_code, 200
+        )
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
         self.assertFalse(AuditEvent.objects.exists())
         self.reference.current_stock = 0
         self.reference.save(update_fields=["current_stock"])
         for _ in range(2):
-            self.assertEqual(self.client.post(self.url("reference-toggle", self.reference), {"active": "0"}).status_code, 302)
+            self.assertEqual(
+                self.client.post(
+                    self.url("reference-toggle", self.reference), {"active": "0"}
+                ).status_code,
+                302,
+            )
         self.reference.refresh_from_db()
         self.assertFalse(self.reference.active)
         self.assertEqual(self.reference.current_stock, 0)
@@ -146,9 +198,13 @@ class CatalogTests(TestCase):
         self.assertFalse(AuditEvent.objects.exists())
 
     def test_http_refuses_deactivation_and_ignores_forged_stock(self):
-        response = self.client.post(self.url("reference-toggle", self.reference), {
-            "active": "0", "current_stock": "0",
-        })
+        response = self.client.post(
+            self.url("reference-toggle", self.reference),
+            {
+                "active": "0",
+                "current_stock": "0",
+            },
+        )
         self.assertContains(
             response,
             "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
@@ -161,21 +217,31 @@ class CatalogTests(TestCase):
 
     def test_confirmation_with_stock_shows_message_and_disables_button(self):
         response = self.client.get(self.url("reference-toggle", self.reference))
-        self.assertContains(response,
-                            "Não é possível desativar esta referência porque ainda existem garrafas em stock.")
-        self.assertContains(response, '<button class="btn danger" type="submit" disabled>Confirmar</button>', html=True)
+        self.assertContains(
+            response,
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
+        )
+        self.assertContains(
+            response,
+            '<button class="btn danger" type="submit" disabled>Confirmar</button>',
+            html=True,
+        )
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
 
     def test_deactivation_rechecks_stock_after_confirmation_page_was_opened(self):
         self.reference.current_stock = 0
         self.reference.save(update_fields=["current_stock"])
-        self.assertEqual(self.client.get(self.url("reference-toggle", self.reference)).status_code, 200)
+        self.assertEqual(
+            self.client.get(self.url("reference-toggle", self.reference)).status_code, 200
+        )
         Reference.objects.filter(pk=self.reference.pk).update(current_stock=1)
         response = self.client.post(self.url("reference-toggle", self.reference), {"active": "0"})
-        self.assertContains(response,
-                            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
-                            status_code=400)
+        self.assertContains(
+            response,
+            "Não é possível desativar esta referência porque ainda existem garrafas em stock.",
+            status_code=400,
+        )
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
         self.assertEqual(self.reference.current_stock, 1)
@@ -185,13 +251,22 @@ class CatalogTests(TestCase):
         self.reference.minimum = 1
         self.reference.save(update_fields=["current_stock", "minimum"])
         other = Reference.objects.create(
-            code="SYN-ACTIVE", name="Outra referência ativa sintética",
-            location=self.location, current_stock=5, minimum=5,
+            code="SYN-ACTIVE",
+            name="Outra referência ativa sintética",
+            location=self.location,
+            current_stock=5,
+            minimum=5,
         )
-        movement = Movement.objects.create(kind="inventory", reason="Histórico sintético preservado")
+        movement = Movement.objects.create(
+            kind="inventory", reason="Histórico sintético preservado"
+        )
         line = MovementLine.objects.create(
-            movement=movement, reference=self.reference, quantity=-13,
-            reference_name=self.reference.name, stock_before=13, stock_after=0,
+            movement=movement,
+            reference=self.reference,
+            quantity=-13,
+            reference_name=self.reference.name,
+            stock_before=13,
+            stock_after=0,
         )
         movement.status = "confirmed"
         movement.save(update_fields=["status"])
@@ -203,23 +278,32 @@ class CatalogTests(TestCase):
         line.refresh_from_db()
         self.assertEqual((line.quantity, line.reference_name), (-13, self.reference.name))
         self.client.force_login(self.viewer)
-        stock = self.client.get(self.url("stock"), {"q": self.reference.code})
+        stock = self.client.get(self.url("stock"), {"q": self.reference.name})
         self.assertEqual(stock.context["page_obj"].paginator.count, 0)
         home = self.client.get(self.url("home"))
         self.assertEqual(home.context["reference_count"], 1)
         self.assertEqual(home.context["total_stock"], other.current_stock)
         self.assertEqual(home.context["alert_count"], 1)
-        location = next(loc for loc in home.context["locations"] if loc["name"] == self.location.name)
-        self.assertEqual(location["reference_count"], 1)
+        self.assertNotContains(home, "Localizações existentes")
         history = self.client.get(self.url("history"), {"q": self.reference.code})
         self.assertContains(history, "Histórico sintético preservado")
         self.assertContains(history, self.reference.name)
         self.client.force_login(self.admin)
-        self.assertEqual(self.client.post(self.url("reference-toggle", self.reference), {"active": "1"}).status_code, 302)
+        self.assertEqual(
+            self.client.post(
+                self.url("reference-toggle", self.reference), {"active": "1"}
+            ).status_code,
+            302,
+        )
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
         self.assertEqual(self.reference.current_stock, 0)
-        self.assertEqual(self.client.get(self.url("stock"), {"q": self.reference.code}).context["page_obj"].paginator.count, 1)
+        self.assertEqual(
+            self.client.get(self.url("stock"), {"q": self.reference.name})
+            .context["page_obj"]
+            .paginator.count,
+            1,
+        )
         self.assertEqual(self.client.get(self.url("home")).context["reference_count"], 2)
         self.assertTrue(MovementLine.objects.filter(pk=line.pk).exists())
 
@@ -229,18 +313,41 @@ class CatalogTests(TestCase):
         response = self.client.get(self.url("references"), {"state": "inactive", "q": "GAR-0007"})
         self.assertContains(response, "Referência sintética Alfa")
         self.assertEqual(response.context["page_obj"].paginator.count, 1)
-        self.assertEqual(self.client.post(self.url("reference-toggle", self.reference), {"active": "1"}).status_code, 302)
+        self.assertEqual(
+            self.client.post(
+                self.url("reference-toggle", self.reference), {"active": "1"}
+            ).status_code,
+            302,
+        )
         self.reference.refresh_from_db()
         self.assertTrue(self.reference.active)
 
     def test_location_and_sector_create_edit_and_free_removal(self):
-        response = self.client.post(self.url("location-create"), {"name": "  Novo   local sintético "})
+        response = self.client.post(
+            self.url("location-create"), {"name": "  Novo   local sintético "}
+        )
         self.assertEqual(response.status_code, 302)
         location = Location.objects.get(name="Novo local sintético")
-        self.assertEqual(self.client.post(self.url("sector-create"), {"name": "Novo setor sintético", "location": location.pk}).status_code, 302)
+        self.assertEqual(
+            self.client.post(
+                self.url("sector-create"), {"name": "Novo setor sintético", "location": location.pk}
+            ).status_code,
+            302,
+        )
         sector = location.sectors.get()
-        self.assertEqual(self.client.post(self.url("location-edit", location), {"name": "Local sintético renomeado"}).status_code, 302)
-        self.assertEqual(self.client.post(self.url("sector-edit", sector), {"name": "Setor sintético renomeado", "location": location.pk}).status_code, 302)
+        self.assertEqual(
+            self.client.post(
+                self.url("location-edit", location), {"name": "Local sintético renomeado"}
+            ).status_code,
+            302,
+        )
+        self.assertEqual(
+            self.client.post(
+                self.url("sector-edit", sector),
+                {"name": "Setor sintético renomeado", "location": location.pk},
+            ).status_code,
+            302,
+        )
         self.assertEqual(self.client.get(self.url("sector-delete", sector)).status_code, 200)
         self.assertTrue(Sector.objects.filter(pk=sector.pk).exists())
         self.assertEqual(self.client.post(self.url("sector-delete", sector)).status_code, 302)
@@ -260,39 +367,73 @@ class CatalogTests(TestCase):
     def test_referenced_location_and_sector_are_protected_even_if_reference_inactive(self):
         self.reference.active = False
         self.reference.save()
-        self.assertEqual(self.client.post(self.url("location-delete", self.location)).status_code, 400)
+        self.assertEqual(
+            self.client.post(self.url("location-delete", self.location)).status_code, 400
+        )
         self.assertEqual(self.client.post(self.url("sector-delete", self.sector)).status_code, 400)
         self.assertTrue(Location.objects.filter(pk=self.location.pk).exists())
         self.assertTrue(Sector.objects.filter(pk=self.sector.pk).exists())
         self.assertFalse(AuditEvent.objects.exists())
 
     def test_history_prevents_removing_old_location_after_reference_transfer(self):
-        self.client.post(self.url("reference-edit", self.reference), self.ref_data(location=self.other_location.pk, sector=self.other_sector.pk))
+        self.client.post(
+            self.url("reference-edit", self.reference),
+            self.ref_data(location=self.other_location.pk, sector=self.other_sector.pk),
+        )
         self.assertFalse(self.location.references.exists())
-        self.assertEqual(self.client.post(self.url("location-delete", self.location)).status_code, 400)
+        self.assertEqual(
+            self.client.post(self.url("location-delete", self.location)).status_code, 400
+        )
         self.assertTrue(Sector.objects.filter(pk=self.sector.pk).exists())
         self.assertEqual(self.client.post(self.url("sector-delete", self.sector)).status_code, 400)
 
     def test_used_sector_cannot_move_to_another_location(self):
-        response = self.client.post(self.url("sector-edit", self.sector), {"name": self.sector.name, "location": self.other_location.pk})
+        response = self.client.post(
+            self.url("sector-edit", self.sector),
+            {"name": self.sector.name, "location": self.other_location.pk},
+        )
         self.assertEqual(response.status_code, 400)
         self.sector.refresh_from_db()
         self.assertEqual(self.sector.location_id, self.location.pk)
 
     def test_unused_sector_can_move_and_names_cannot_duplicate_by_case(self):
         free = Sector.objects.create(name="Livre sintético", location=self.location)
-        self.assertEqual(self.client.post(self.url("sector-edit", free), {"name": free.name, "location": self.other_location.pk}).status_code, 302)
+        self.assertEqual(
+            self.client.post(
+                self.url("sector-edit", free),
+                {"name": free.name, "location": self.other_location.pk},
+            ).status_code,
+            302,
+        )
         free.refresh_from_db()
         self.assertEqual(free.location_id, self.other_location.pk)
-        self.assertEqual(self.client.post(self.url("location-create"), {"name": self.location.name.upper()}).status_code, 400)
-        self.assertEqual(self.client.post(self.url("sector-create"), {"name": self.sector.name.upper(), "location": self.location.pk}).status_code, 400)
+        self.assertEqual(
+            self.client.post(
+                self.url("location-create"), {"name": self.location.name.upper()}
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post(
+                self.url("sector-create"),
+                {"name": self.sector.name.upper(), "location": self.location.pk},
+            ).status_code,
+            400,
+        )
 
     def test_catalogue_pages_and_all_mutations_require_administrator(self):
         targets = [
-            ("references", None), ("reference-create", None), ("reference-edit", self.reference),
-            ("reference-toggle", self.reference), ("locations", None), ("location-create", None),
-            ("location-edit", self.location), ("location-delete", self.location),
-            ("sector-create", None), ("sector-edit", self.sector), ("sector-delete", self.sector),
+            ("references", None),
+            ("reference-create", None),
+            ("reference-edit", self.reference),
+            ("reference-toggle", self.reference),
+            ("locations", None),
+            ("location-create", None),
+            ("location-edit", self.location),
+            ("location-delete", self.location),
+            ("sector-create", None),
+            ("sector-edit", self.sector),
+            ("sector-delete", self.sector),
         ]
         self.client.force_login(self.viewer)
         for name, obj in targets:
@@ -307,10 +448,14 @@ class CatalogTests(TestCase):
     def test_catalogue_mutation_requires_csrf(self):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.admin)
-        self.assertEqual(client.post(self.url("reference-create"), self.ref_data()).status_code, 403)
+        self.assertEqual(
+            client.post(self.url("reference-create"), self.ref_data()).status_code, 403
+        )
         self.assertEqual(client.post(self.url("location-delete", self.location)).status_code, 403)
 
     def test_service_also_refuses_consultation_user(self):
         with self.assertRaises(PermissionDenied):
-            save_reference(actor=self.viewer, data={"name": "Tentativa sintética", "location": self.location})
+            save_reference(
+                actor=self.viewer, data={"name": "Tentativa sintética", "location": self.location}
+            )
         self.assertEqual(Reference.objects.count(), 1)
