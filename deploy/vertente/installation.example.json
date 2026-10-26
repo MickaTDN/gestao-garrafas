@@ -1,0 +1,8 @@
+{
+  "Host": "vertente.wifi.example.invalid",
+  "OfficeHost": "garrafas.wifi.example.invalid",
+  "BindIP": "192.168.50.20",
+  "Port": 8444,
+  "AllowedClients": ["192.168.50.31"],
+  "TlsSource": "C:\\ConfiguracaoPrivadaAprovada\\VertenteTLS"
+}
