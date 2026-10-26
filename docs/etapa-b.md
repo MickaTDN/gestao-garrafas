@@ -257,6 +257,8 @@ para uma futura instalação autorizada e isolada, **não uma publicação autom
    `deploy/vertente/export.compose.yaml` e `VA_SIGNING_KEY_FILE`. `origin.vatrust.json` contém
    só origem/chave pública; confirmar fingerprint independente no Android. Não copiar a
    chave privada para publicador, telemóvel, ficheiro de stock, repositório ou backup de dados.
+   O overlay disponibiliza o mesmo segredo read-only à aplicação e ao processo separado
+   `initialize` de preparação; não dá permissões de escrita de autorizações ao web role.
    O overlay tem de fazer parte **da mesma rotina aprovada** de arranque/paragem/recriação
    da Gestão. Atalhos locais base não o incluem automaticamente: a informática deve rever
    a rotina e não recriar o serviço sem esse overlay. Falta de chave recusa exportação.
@@ -267,6 +269,22 @@ para uma futura instalação autorizada e isolada, **não uma publicação autom
    python manage.py vertente_device --request /pasta-privada/aparelho.varequest.json --role owner --confirmed-device-fingerprint FINGERPRINT_CONFIRMADO --output /pasta-privada/aparelho.vagrant.json
    python manage.py vertente_device --request /pasta-privada/outro.varequest.json --role employee --allow-import --confirmed-device-fingerprint OUTRO_FINGERPRINT --output /pasta-privada/outro.vagrant.json
    ```
+
+   Num piloto sintético **novo**, o processo de owner pode ser chamado pela informática
+   com os mesmos parâmetros de projeto/env-file, Compose base e overlay aprovados:
+
+   ```text
+   docker compose --env-file ENV_PRIVADO -f deploy/windows/compose.yaml -f deploy/vertente/export.compose.yaml --profile setup run --rm --no-deps -v PASTA_PRIVADA:/provision initialize python manage.py vertente_device --request /provision/aparelho.varequest.json --role employee --allow-import --confirmed-device-fingerprint FINGERPRINT_CONFIRMADO --output /provision/aparelho.vagrant.json
+   ```
+
+   `VA_SIGNING_KEY_FILE` deve estar definido no processo e apontar para a chave já
+   preparada. `PASTA_PRIVADA` é absoluta, fora do checkout/publicador, com ACL/UID e
+   permissões privadas verificadas pela informática (0700 no sistema Linux de escrita).
+   Não usar ficheiros/pastas reais para ensaiar. A geração inicial de chave usa o mesmo
+   serviço `initialize` com **apenas o Compose base**, antes do overlay, e o comando
+   `vertente_setup --directory /provision/nova-chave`. Estes comandos substituem o comando
+   do serviço pontual; não inicializam outra vez a base. Não atribuir escrita de
+   `consultation_authorizeddevice` à conta web para contornar a separação.
 
    Omitir `--allow-import` para Empregado só de consulta; `--days` entre 1 e 365 limita validade.
    Renovação no mesmo dispositivo/perfil incrementa revisão e exige outro ficheiro novo.
