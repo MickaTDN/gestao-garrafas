@@ -95,6 +95,25 @@ class MovementNumberTests(TestCase):
         self.assertFalse(ReportNumber.objects.exists())
         self.assertEqual(Reference.objects.get(pk=self.ref.pk).current_stock, 30)
 
+    def test_final_no_pdf_choice_overrides_report_preference_in_existing_draft(self):
+        draft = operations.create_draft(actor=self.actor, kind="entry", references=[self.ref])
+        draft = operations.save_draft(
+            draft.pk,
+            actor=self.actor,
+            revision=0,
+            header={"person_name": "Cliente A4 fictício", "report_requested": True},
+            rows=[{"id": draft.lines.get().pk, "units": 2}],
+        )
+        self.assertTrue(draft.report_requested)
+        reviewed, _ = operations.review_draft(draft.pk, actor=self.actor, revision=draft.revision)
+        movement = confirm_movement(
+            draft.pk, actor=self.actor, review_token=reviewed.review_token, report_requested=False
+        )
+        self.assertFalse(movement.report_requested)
+        self.assertIsNone(movement.report_number.document_id)
+        self.assertFalse(movement.documents.exists())
+        self.assertEqual(movement.report_number.number, 1)
+
     def test_year_change_with_and_without_pdf_uses_official_full_year(self):
         results = []
         for year, report in [(2026, False), (2026, True), (2027, False), (2027, True)]:
@@ -228,6 +247,17 @@ class MovementNumberTests(TestCase):
 
 
 class MovementNumberConcurrencyTests(TransactionTestCase):
+    def test_database_refuses_committing_an_identity_for_a_preparation(self):
+        from inventory.reporting import allocate_number
+
+        actor = get_user_model().objects.create_user(username="a4-premature-number", role="admin")
+        draft = operations.create_draft(actor=actor, kind="entry")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            number = allocate_number(draft.date.year)
+            ReportNumber.objects.create(movement=draft, year=draft.date.year, number=number)
+        self.assertFalse(ReportNumber.objects.exists())
+        self.assertFalse(ReportSequence.objects.exists())
+
     def test_real_concurrent_confirmations_with_and_without_pdf_share_counter(self):
         actors = [
             get_user_model().objects.create_user(username=f"a4-concurrent-{i}", role="admin")

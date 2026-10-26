@@ -11,7 +11,7 @@ BEGIN
   PERFORM 1 FROM inventory_movement m JOIN inventory_reportsequence s ON s.year=NEW.year
   WHERE m.id=NEW.movement_id AND m.status='draft' AND m.kind IN ('entry','exit','inventory')
     AND EXTRACT(YEAR FROM m.date)::integer=NEW.year AND s.last_number>=NEW.number
-    AND ((NEW.document_id IS NULL AND m.kind='entry' AND NOT m.report_requested) OR EXISTS (
+    AND ((NEW.document_id IS NULL AND m.kind='entry') OR EXISTS (
       SELECT 1 FROM inventory_document d WHERE d.id=NEW.document_id AND d.movement_id=m.id
         AND d.kind='pdf' AND d.metadata->>'presentation'='3'
         AND (d.metadata->>'report_year')::integer=NEW.year
@@ -35,6 +35,17 @@ CREATE CONSTRAINT TRIGGER movement_annual_number_guard AFTER UPDATE ON inventory
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   WHEN (NEW.status='confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' AND NEW.workflow_version=1)
   EXECUTE FUNCTION inventory_a4_confirmation_number_guard();
+CREATE FUNCTION inventory_a4_number_confirmation_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM 1 FROM inventory_movement m WHERE m.id=NEW.movement_id AND m.status='confirmed'
+    AND EXTRACT(YEAR FROM m.date)::integer=NEW.year
+    AND (NEW.document_id IS NOT NULL OR (m.kind='entry' AND NOT m.report_requested));
+  IF NOT FOUND THEN RAISE EXCEPTION 'Annual identity may commit only with its confirmed movement' USING ERRCODE='23514'; END IF;
+  RETURN NULL;
+END; $$;
+CREATE CONSTRAINT TRIGGER annual_identity_confirmation_guard AFTER INSERT ON inventory_reportnumber
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+  EXECUTE FUNCTION inventory_a4_number_confirmation_guard();
 CREATE CONSTRAINT TRIGGER movement_annual_number_insert_guard AFTER INSERT ON inventory_movement
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   WHEN (NEW.status='confirmed' AND NEW.workflow_version=1)
@@ -44,6 +55,8 @@ CREATE CONSTRAINT TRIGGER movement_annual_number_insert_guard AFTER INSERT ON in
 REVERSE = """
 DROP TRIGGER IF EXISTS movement_annual_number_guard ON inventory_movement;
 DROP TRIGGER IF EXISTS movement_annual_number_insert_guard ON inventory_movement;
+DROP TRIGGER IF EXISTS annual_identity_confirmation_guard ON inventory_reportnumber;
+DROP FUNCTION IF EXISTS inventory_a4_number_confirmation_guard();
 DROP FUNCTION IF EXISTS inventory_a4_confirmation_number_guard();
 CREATE OR REPLACE FUNCTION inventory_a2_number_insert_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
