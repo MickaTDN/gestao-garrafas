@@ -9,6 +9,8 @@ import {
   ID,
   UUID,
   MAX_FILE,
+  calendarDate,
+  today,
   bytes,
   encode,
   keyRecord,
@@ -224,15 +226,13 @@ export async function enroll(bundle, fingerprint) {
     "Limite de chaves históricas atingido. Contacte a informática.",
   );
   await commit(saved, (tx) =>
-    tx
-      .objectStore("meta")
-      .put({
-        id: "trust",
-        value: {
-          source_id: bundle.source_id,
-          keys: [{ ...bundle.keys[0], revoked: false }, ...retired],
-        },
-      }),
+    tx.objectStore("meta").put({
+      id: "trust",
+      value: {
+        source_id: bundle.source_id,
+        keys: [{ ...bundle.keys[0], revoked: false }, ...retired],
+      },
+    }),
   );
   lock();
 }
@@ -409,7 +409,7 @@ export function validateVault(v, source) {
         ID.test(o.reference_id) &&
         text(o.name, 250) &&
         timestamp(o.created_at) &&
-        /^\d{4}-\d{2}-\d{2}$/.test(o.ordered_on),
+        calendarDate(o.ordered_on),
     );
     insist(o.quantity === null || integer(o.quantity, 1));
     insist(o.box_capacity === null || integer(o.box_capacity, 1));
@@ -612,12 +612,7 @@ export function quantity(boxes, units, capacity, { optional = false } = {}) {
 }
 export async function createOrder(
   referenceId,
-  {
-    boxes = null,
-    units = null,
-    note = "",
-    ordered_on = new Date().toISOString().slice(0, 10),
-  } = {},
+  { boxes = null, units = null, note = "", ordered_on = today() } = {},
 ) {
   const saved = await raw(),
     g = await authorization(saved),
@@ -628,8 +623,7 @@ export async function createOrder(
   const total = quantity(boxes, units, ref.box_capacity, { optional: true });
   insist(typeof note === "string" && note.length <= 1000);
   insist(
-    /^\d{4}-\d{2}-\d{2}$/.test(ordered_on) &&
-      ordered_on <= new Date().toISOString().slice(0, 10),
+    calendarDate(ordered_on) && ordered_on <= today(),
     "Data de encomenda inválida.",
   );
   v.orders.push({

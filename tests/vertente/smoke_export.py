@@ -7,7 +7,7 @@ from pathlib import Path
 from tests.windows.smoke_stack import free_port, make_state, run
 
 
-def main(image):
+def main(image, *, preserve_volumes=False):
     command = None
     with tempfile.TemporaryDirectory(prefix="gg-va7-export-") as temporary:
         try:
@@ -71,7 +71,11 @@ print(json.dumps({'sequence':data['sequence'],'references':len(data['references'
             )
         finally:
             if command:
-                run(command + ["down", "--volumes", "--remove-orphans"])
+                run(
+                    command
+                    + ["down", "--remove-orphans"]
+                    + ([] if preserve_volumes else ["--volumes"])
+                )
 
 
 if __name__ == "__main__":
@@ -79,4 +83,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
-    main(parser.parse_args().image)
+    parser.add_argument("--preserve-volumes", action="store_true")
+    args = parser.parse_args()
+    main(args.image, preserve_volumes=args.preserve_volumes)

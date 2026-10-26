@@ -28,6 +28,9 @@ jobs:
         run: |
           uv run ruff check .
           uv run python scripts/build_vertente.py --check
+          node --check vertente/assets/app.js
+          node --check vertente/assets/domain.js
+          node --check vertente/assets/store.js
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput

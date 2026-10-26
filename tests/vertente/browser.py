@@ -13,7 +13,7 @@ from pathlib import Path
 from django.test import SimpleTestCase
 from playwright.sync_api import sync_playwright
 
-from tests.vertente.fixtures import fixture, snapshot
+from tests.vertente.fixtures import fixture, snapshot, wait_offline_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -97,6 +97,7 @@ class VertenteBrowserTests(SimpleTestCase):
     def refresh(self):
         self.page.get_by_role("button", name="Stock", exact=True).click()
         self.page.get_by_role("heading", name="Última atualização de stock", exact=True).wait_for()
+        self.page.locator("#content[aria-busy]").wait_for(state="detached")
 
     def new_order(self, units=None, ref="1", **fields):
         self.call("createOrder", ref, {"boxes": None, "units": units, **fields})
@@ -140,6 +141,9 @@ class VertenteBrowserTests(SimpleTestCase):
                 "button", name="Criar / exportar pedido do dispositivo", exact=True
             ).click()
         request = json.loads(Path(d.value.path()).read_text())
+        self.page.get_by_role("status").filter(
+            has_text="Pedido de autorização preparado"
+        ).wait_for()
         authorization = grant(self.key, self.trust, request)
         self.page.get_by_label("Autorização assinada do dispositivo", exact=True).set_input_files(
             {
@@ -179,11 +183,17 @@ class VertenteBrowserTests(SimpleTestCase):
             "0 garrafas · capacidade da caixa não definida", exact=True
         ).wait_for()
         self.assertLessEqual(self.page.evaluate("document.documentElement.scrollWidth"), 393)
+        if root := os.getenv("STOCK_SCREENSHOTS"):
+            Path(root).mkdir(parents=True, exist_ok=True)
+            self.page.screenshot(path=str(Path(root) / "stock-mobile.png"), full_page=True)
         self.page.set_viewport_size({"width": 1366, "height": 900})
         self.refresh()
         search = self.page.get_by_label("Pesquisar pelo nome", exact=True)
         search.fill("VA-001")
         self.assertEqual(self.page.locator(".reference").count(), 0)
+        if root := os.getenv("STOCK_SCREENSHOTS"):
+            search.fill("")
+            self.page.screenshot(path=str(Path(root) / "stock-desktop.png"), full_page=True)
         self.assertEqual(self.context.cookies(), [])
 
     def test_employee_without_import_cannot_access_owner_service_or_backup(self):
@@ -282,6 +292,12 @@ class VertenteBrowserTests(SimpleTestCase):
 
     def test_orders_any_stock_optional_quantity_blank_fields_and_zero_rejection(self):
         self.provision()
+        refs = json.loads(
+            __import__("base64").urlsafe_b64decode(snapshot(self.key, self.trust)["payload"] + "==")
+        )["references"]
+        refs[2]["bottles"] = 60
+        self.call("importSnapshot", snapshot(self.key, self.trust, sequence=2, references=refs))
+        self.refresh()
         self.page.get_by_role("button", name="Tinto Fictício", exact=True).click()
         self.page.get_by_role("button", name="Criar encomenda", exact=True).click()
         self.assertEqual(self.page.get_by_label("Caixas", exact=True).input_value(), "")
@@ -506,7 +522,7 @@ class VertenteBrowserTests(SimpleTestCase):
         self.new_order(6)
         self.page.evaluate("async()=>{await navigator.serviceWorker.ready;}")
         self.page.reload()
-        self.page.wait_for_function("navigator.serviceWorker.controller!==null")
+        wait_offline_shell(self.page)
         self.context.set_offline(True)
         self.page.reload()
         self.page.get_by_role("heading", name="Última atualização de stock", exact=True).wait_for()
@@ -647,3 +663,39 @@ class VertenteBrowserTests(SimpleTestCase):
             "()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));}"
         )
         self.assertEqual(self.page.get_by_label("Garrafas soltas", exact=True).input_value(), "13")
+
+    def test_order_calendar_dates_and_historical_capacity_are_validated(self):
+        from tests.vertente.fixtures import receipt
+
+        self.provision()
+        for value in ["2026-02-31", "2026-13-01", "9999-01-01"]:
+            with self.assertRaises(Exception):
+                self.new_order(6, ordered_on=value)
+        self.call("createOrder", "1", {"boxes": 2, "units": 0})
+        o = self.call("state")["orders"][0]
+        refs = json.loads(
+            __import__("base64").urlsafe_b64decode(snapshot(self.key, self.trust)["payload"] + "==")
+        )["references"]
+        refs[0]["box_capacity"] = 12
+        self.import_receipts(
+            [receipt(801, bottles=12, boxes=1, units=0, capacity=12, confirmed_at=self.after(o))],
+            references=refs,
+        )
+        saved = self.call("state")
+        self.assertEqual(saved["orders"][0]["quantity"], 12)
+        self.assertEqual(saved["orders"][0]["box_capacity"], 6)
+        self.assertEqual(saved["orders"][0]["state"], "received")
+
+    def test_success_notice_waits_for_the_refreshed_owner_interface(self):
+        self.provision()
+        self.page.reload()
+        self.page.get_by_role("button", name="Desbloquear", exact=True).wait_for()
+        self.page.evaluate(
+            "()=>{const original=crypto.subtle.verify.bind(crypto.subtle);crypto.subtle.verify=async(...args)=>{await new Promise(ok=>setTimeout(ok,120));return original(...args);};}"
+        )
+        self.page.get_by_label("Frase-passe do cofre", exact=True).fill(self.password)
+        self.page.get_by_role("button", name="Desbloquear", exact=True).click()
+        self.page.get_by_role("status").filter(has_text="Cofre desbloqueado").wait_for()
+        self.assertEqual(self.page.get_by_role("button", name="Desbloquear", exact=True).count(), 0)
+        self.page.get_by_role("button", name="Água de Ensaio", exact=True).click()
+        self.page.get_by_role("button", name="Criar encomenda", exact=True).wait_for()

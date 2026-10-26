@@ -72,7 +72,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #ad8bbf;
+  outline: 3px solid #6a9f84;
   outline-offset: 3px;
 }
 input,
@@ -113,7 +113,7 @@ small,
 }
 .header p {
   font-size: 13px;
-  color: #e2d6e8;
+  color: #dceadd;
 }
 .header button {
   background: #f6f3ee;
@@ -165,7 +165,7 @@ nav button[aria-current="page"] {
 .stamp {
   padding: 18px 20px;
   border: 1px solid var(--line);
-  background: #eee8f1;
+  background: #eaf0e8;
   border-radius: 16px;
   margin-bottom: 20px;
 }
@@ -254,8 +254,8 @@ nav button[aria-current="page"] {
   color: var(--red);
 }
 .badge.absent {
-  background: #eee8f1;
-  color: #564860;
+  background: #eaf0e8;
+  color: #3f5749;
 }
 .actions {
   display: flex;
@@ -327,7 +327,7 @@ dialog {
   color: var(--ink);
 }
 dialog::backdrop {
-  background: #231b3099;
+  background: #102e2899;
 }
 dialog p {
   white-space: pre-wrap;

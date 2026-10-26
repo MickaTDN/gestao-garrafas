@@ -210,3 +210,92 @@ class StageBExportTests(TransactionTestCase):
             self.assertEqual((self.admin.password, self.ref.current_stock), (before[0], 118))
         finally:
             MigrationExecutor(connection).migrate(latest)
+
+    def test_receipts_preserve_actual_boxes_units_and_unknown_capacity(self):
+        from inventory import operations
+        from inventory.services import confirm_movement
+
+        draft = operations.create_draft(actor=self.admin, kind="entry", references=[self.ref])
+        line = draft.lines.get()
+        draft = operations.save_draft(
+            draft.pk,
+            actor=self.admin,
+            revision=0,
+            header={"person_name": "Entrega fictícia B"},
+            rows=[{"id": line.pk, "boxes": 2, "units": 3}],
+        )
+        reviewed, _ = operations.review_draft(draft.pk, actor=self.admin, revision=draft.revision)
+        confirm_movement(
+            draft.pk, actor=self.admin, review_token=reviewed.review_token, report_requested=False
+        )
+        self.ref.box_capacity = None
+        self.ref.save(update_fields=["box_capacity"])
+        confirmed_operation(self.admin, self.ref, kind="entry", units=7)
+        data = decode(export_snapshot(actor=self.viewer))
+        self.assertEqual(
+            [(r["boxes"], r["units"], r["box_capacity"], r["bottles"]) for r in data["receipts"]],
+            [(2, 3, 6, 15), (None, 7, None, 7)],
+        )
+        self.assertIsNone(data["references"][0]["box_capacity"])
+
+    def test_provisioning_commands_require_private_outputs_and_fingerprint(self):
+        import hashlib
+
+        request = self.request()
+        path = self.path / "device-request.json"
+        path.write_text(json.dumps(request))
+        fingerprint = hashlib.sha256(base64.urlsafe_b64decode(request["spki"] + "==")).hexdigest()
+        out = self.path / "device.vagrant.json"
+        with self.assertRaises(CommandError):
+            call_command(
+                "vertente_device",
+                request=str(path),
+                output=str(out),
+                role="employee",
+                confirmed_device_fingerprint="0" * 64,
+                stdout=io.StringIO(),
+            )
+        self.assertFalse(AuthorizedDevice.objects.exists())
+        call_command(
+            "vertente_device",
+            request=str(path),
+            output=str(out),
+            role="employee",
+            confirmed_device_fingerprint=fingerprint,
+            stdout=io.StringIO(),
+        )
+        original = out.read_bytes()
+        self.assertFalse(decode(json.loads(original))["can_import"])
+        self.assertEqual(out.stat().st_mode & 0o777, 0o600)
+        with self.assertRaises(CommandError):
+            call_command(
+                "vertente_device",
+                request=str(path),
+                output=str(out),
+                role="employee",
+                confirmed_device_fingerprint=fingerprint,
+                stdout=io.StringIO(),
+            )
+        self.assertEqual(out.read_bytes(), original)
+        self.assertEqual(AuthorizedDevice.objects.get().revision, 1)
+
+    def test_recovery_command_refuses_public_existing_and_incorrect_ranges(self):
+        start = (timezone.now() - timedelta(days=1)).isoformat()
+        end = timezone.now().isoformat()
+        for output in [
+            str(Path.cwd() / "synthetic-should-not-be-created.vareceipts.json"),
+            "relative.json",
+        ]:
+            with self.assertRaises(CommandError):
+                call_command(
+                    "vertente_receipts", start=start, until=end, output=output, stdout=io.StringIO()
+                )
+        out = self.path / "recovery.vareceipts.json"
+        call_command(
+            "vertente_receipts", start=start, until=end, output=str(out), stdout=io.StringIO()
+        )
+        self.assertEqual(json.loads(out.read_text())["format"], "vertente-receipts")
+        with self.assertRaises(CommandError):
+            call_command(
+                "vertente_receipts", start=start, until=end, output=str(out), stdout=io.StringIO()
+            )

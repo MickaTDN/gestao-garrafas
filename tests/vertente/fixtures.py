@@ -108,3 +108,16 @@ def receipt(
         "units": bottles if units is None else units,
         "box_capacity": capacity,
     }
+
+
+def wait_offline_shell(page):
+    # No wait_for_function/eval polling: subsequent polls violate the strict CSP
+    # when readiness is not immediate. Event-driven functions keep CSP unchanged.
+    page.evaluate("""async()=>{
+      await Promise.race([
+        (async()=>{await navigator.serviceWorker.ready;
+          if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));
+        })(),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('Offline shell activation timeout')),12000))
+      ]);
+    }""")

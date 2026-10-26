@@ -1,3 +1,4 @@
+import binascii
 import json
 from pathlib import Path
 
@@ -42,7 +43,7 @@ class Command(BaseCommand):
                 days=options["days"],
             )
             write_json(output, envelope)
-        except (ValidationError, ValueError, OSError, KeyError) as error:
+        except (ValidationError, ValueError, OSError, KeyError, TypeError, binascii.Error) as error:
             raise CommandError(str(error)) from error
         self.stdout.write(
             "Autorização criada. Transfira apenas este ficheiro para o dispositivo confirmado; nunca a chave privada da origem."

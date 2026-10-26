@@ -1,4 +1,3 @@
-
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.dateparse import parse_datetime

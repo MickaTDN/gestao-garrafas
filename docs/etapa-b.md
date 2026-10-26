@@ -273,8 +273,8 @@ para uma futura instalação autorizada e isolada, **não uma publicação autom
 Guardar cópia **cifrada** da chave privada, fingerprint, UUID, contador e autorizações,
 com custódia separada/restrita e restauro ensaiado. O backup PostgreSQL não contém a chave
 privada de assinatura. Uma cópia da base com a mesma identidade não pode tornar-se segunda
-origem operacional concorrente. Depois de restauro, reconciliar stock e preservar maior
-sequência antes de `vertente_sequence`; nunca aumentar um contador para fazer passar stock antigo.
+origem operacional concorrente. Depois de restauro, reconciliar stock **e o histórico completo de Entradas/IDs**, sem
+reutilizar identificadores de movimentos perdidos, e preservar a maior sequência antes de `vertente_sequence`; nunca aumentar um contador para fazer passar stock antigo.
 
 Rotação normal: `vertente_setup --directory NOVA_PASTA --previous-key CHAVE_ANTERIOR` produz
 nova chave e prova de rotação assinada. Confirmar fingerprint novo, importar confiança e

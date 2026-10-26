@@ -12,10 +12,10 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from scripts.build_vertente import PUBLIC
-from tests.vertente.fixtures import fixture, grant, snapshot
+from tests.vertente.fixtures import fixture, grant, snapshot, wait_offline_shell
 from tests.wifi.certificates import certificates
 from tests.wifi.tls_device import tls_device
 from tests.windows.smoke_stack import ROOT, free_port, run
@@ -186,13 +186,13 @@ def main():
                         "async()=>{await Promise.race([navigator.serviceWorker.ready,new Promise((_,r)=>setTimeout(()=>r(new Error('SW timeout')),12000))]);}"
                     )
                     page.reload()
-                    page.wait_for_function("navigator.serviceWorker.controller !== null")
+                    wait_offline_shell(page)
                     session = context.new_cdp_session(page)
                     assert session.send("Page.getAppManifest")["errors"] == []
                     errors = session.send("Page.getInstallabilityErrors")["installabilityErrors"]
                     assert errors == [], errors
                     session.detach()
-                    assert page.locator(".reference").count() == 3
+                    expect(page.locator(".reference")).to_have_count(3)
                     context.set_offline(True)
                     page.reload()
                     page.get_by_role(
@@ -234,4 +234,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:
+        import traceback
+
+        # Synthetic diagnostics only; never emit environment, keys or TLS URLs.
+        detail = (
+            (type(error).__name__ + ": " + str(error))
+            .replace("%", "%25")
+            .replace("\r", "%0D")
+            .replace("\n", "%0A")
+        )
+        print("::error title=Stock HTTPS synthetic validation::" + detail, flush=True)
+        traceback.print_exc()
+        raise SystemExit(1)

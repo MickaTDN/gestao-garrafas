@@ -1,11 +1,4 @@
-import {
-  MAX_FILE,
-  summary,
-  matches,
-  low,
-  pending,
-  orderReceived,
-} from "./domain.js";
+import { MAX_FILE, today, summary, matches, low, pending } from "./domain.js";
 import {
   state,
   enroll,
@@ -61,8 +54,11 @@ async function action(work, success) {
   });
   try {
     const outcome = await work();
-    if (success && outcome !== false) message(success);
     await refresh();
+    if (outcome !== false) {
+      const completed = typeof outcome === "string" ? outcome : success;
+      if (completed) message(completed);
+    }
   } catch (error) {
     message(error.message || "Não foi possível concluir a operação.", true);
   } finally {
@@ -94,6 +90,7 @@ function confirm(title, text) {
 }
 function date(value) {
   return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
@@ -333,8 +330,10 @@ function setup() {
   append(
     device,
     button("Criar / exportar pedido do dispositivo", () =>
-      action(async () =>
-        download(await deviceRequest(), "stock-dispositivo.varequest.json"),
+      action(
+        async () =>
+          download(await deviceRequest(), "stock-dispositivo.varequest.json"),
+        "Pedido de autorização preparado.",
       ),
     ),
   );
@@ -402,7 +401,7 @@ function orderForm(ref, existing = null) {
     }),
     day = field("Data da encomenda", "date", "order-date", {
       required: true,
-      value: existing?.ordered_on || new Date().toISOString().slice(0, 10),
+      value: existing?.ordered_on || today(),
       disabled: !!existing,
     });
   append(
@@ -742,14 +741,14 @@ function settingsView() {
       e.preventDefault();
       action(async () => {
         const result = await importSnapshot(await fileJSON(f.input));
-        message(
+        return (
           (result.recovery
             ? "Receções recuperadas."
             : `${result.references} referências importadas.`) +
-            ` ${result.receipts} linhas de Entrada verificadas.` +
-            (result.gaps
-              ? " Existem encomendas com lacunas históricas; consulte Encomendas."
-              : ""),
+          ` ${result.receipts} linhas de Entrada verificadas.` +
+          (result.gaps
+            ? " Existem encomendas com lacunas históricas; consulte Encomendas."
+            : "")
         );
       });
     });
@@ -863,9 +862,22 @@ function render() {
   else if (section === "settings") settingsView();
   else stockView();
 }
+let refreshVersion = 0;
 async function refresh() {
-  current = await state();
-  render();
+  const version = ++refreshVersion;
+  content.inert = true;
+  content.setAttribute("aria-busy", "true");
+  try {
+    const updated = await state();
+    if (version !== refreshVersion) return;
+    current = updated;
+    render();
+  } finally {
+    if (version === refreshVersion) {
+      content.inert = false;
+      content.removeAttribute("aria-busy");
+    }
+  }
 }
 for (const name of ["stock", "orders", "settings"])
   document.querySelector("#nav-" + name).addEventListener("click", () => {
