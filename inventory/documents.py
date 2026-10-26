@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from PIL import Image, ImageStat, UnidentifiedImageError
 
-from .models import AuditEvent, Document, ReportFile, ReportNumber
+from .models import AuditEvent, Document, ReportFile
 
 MAX_SIGNATURE_BYTES = 256 * 1024
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
@@ -168,14 +168,13 @@ def render_pdf(snapshot, signature=None):
     return render(snapshot, signature)
 
 
-def create_confirmation_documents(movement, *, actor, signature=None):
-    from .reporting import allocate_number, template_key
+def create_confirmation_documents(movement, *, actor, number, signature=None):
+    from .reporting import template_key
 
     signature_document = (
         store_document(movement, kind="signature", payload=signature) if signature else None
     )
     if movement.kind in ("exit", "inventory") or movement.report_requested:
-        number = allocate_number(movement.date.year)
         snapshot = report_snapshot(movement, actor=actor)
         snapshot.update(
             {
@@ -189,6 +188,5 @@ def create_confirmation_documents(movement, *, actor, signature=None):
         document = store_document(
             movement, kind="pdf", payload=render_pdf(snapshot, signature), metadata=snapshot
         )
-        ReportNumber.objects.create(
-            movement=movement, document=document, year=movement.date.year, number=number
-        )
+        return document
+    return None

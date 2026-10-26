@@ -254,6 +254,8 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         page.get_by_role("button", name="Preparar inventário completo", exact=True).click()
         first = page.locator(".operation-line").filter(has_text="Azul sintética operacional")
         second = page.locator(".operation-line").filter(has_text="Verde sintética operacional")
+        first.locator("summary").click()
+        second.locator("summary").click()
         self.assertEqual(first.get_by_label("Caixas", exact=True).input_value(), "")
         self.assertEqual(second.get_by_label("Garrafas soltas", exact=True).input_value(), "")
         first.get_by_label("Caixas", exact=True).fill("2")
@@ -459,6 +461,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
         self.assertIsNone(first.get_attribute("open"))
         self.assertIn("2 caixas + 3 garrafas", first.locator("summary").inner_text())
+        page.locator("#reference-search").get_by_label("Setor", exact=True).select_option("")
         self.add_reference(page, self.second.name)
         second = page.locator(".operation-line").filter(has_text=self.second.name)
         second.get_by_label("Garrafas soltas", exact=True).fill("0")
@@ -589,6 +592,137 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
     def test_a3_password_flow_mobile(self):
         self.a3_password_flow(390)
+
+    def a4_worklist(self, width, full):
+        from inventory.models import AuditEvent, Movement, Sector
+
+        long_name = "Azul sintética operacional — referência fictícia com designação longa para validar a lista de trabalho em computador e telemóvel"
+        self.first.name = long_name
+
+        def prepare():
+            nine = Sector.objects.create(location=self.location, name="Setor 9")
+            ten = Sector.objects.create(location=self.location, name="Setor 10")
+            Reference.objects.filter(pk=self.first.pk).update(sector=nine, name=long_name)
+            Reference.objects.filter(pk=self.second.pk).update(sector=ten)
+
+        self.database_call(prepare)
+        page = self.page("inventory", width)
+        search = page.locator("#reference-search")
+        search.get_by_label("Localização", exact=True).select_option(str(self.location.pk))
+        page.wait_for_function(
+            "() => !document.querySelector('#reference-results').hasAttribute('aria-busy')"
+        )
+        results = page.locator("#reference-results")
+        self.assertIn("Setor 9", results.inner_text())
+        self.assertIn("Setor 10", results.inner_text())
+        self.assertLess(
+            results.inner_text().index("Setor 9"), results.inner_text().index("Setor 10")
+        )
+        self.assertNotIn(self.location.name, results.inner_text())
+        if full:
+            page.get_by_label("Âmbito", exact=True).select_option("full")
+            page.get_by_role("button", name="Preparar inventário completo", exact=True).click()
+            self.assertEqual(page.locator("details.operation-line[open]").count(), 0)
+            first = page.locator(".operation-line").filter(has_text=self.first.name)
+            second = page.locator(".operation-line").filter(has_text=self.second.name)
+            self.assertIn("Setor 9", first.locator("summary").inner_text())
+            self.assertIn("Ainda não contado", first.locator("summary").inner_text())
+            first.locator("summary").click()
+        else:
+            page.get_by_role("button", name=self.first.name, exact=True).click()
+            first = page.locator(".operation-line").filter(has_text=self.first.name)
+            self.assertIsNotNone(first.get_attribute("open"))
+        self.assertIn("location=" + str(self.location.pk), page.url)
+        self.assertEqual(first.get_by_label("Caixas", exact=True).input_value(), "")
+        self.assertEqual(first.get_by_label("Garrafas soltas", exact=True).input_value(), "")
+        first.get_by_label("Garrafas soltas", exact=True).fill("0")
+        first.get_by_label("Motivo da diferença / transferência", exact=True).fill(
+            "Zero físico A4 fictício"
+        )
+        first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertIsNone(first.get_attribute("open"))
+        summary = first.locator("summary").inner_text()
+        self.assertIn("Setor 9", summary)
+        self.assertIn("0 garrafas", summary)
+        before = self.database_call(lambda: AuditEvent.objects.count())
+        if full:
+            first.locator("summary").click()
+        else:
+            page.get_by_role(
+                "link", name="Abrir contagem de " + self.first.name, exact=True
+            ).click()
+        self.assertIsNotNone(first.get_attribute("open"))
+        self.assertEqual(self.database_call(lambda: AuditEvent.objects.count()), before)
+        first.get_by_label("Garrafas soltas", exact=True).fill("14")
+        first.get_by_role("button", name="Confirmar quantidade", exact=True).click()
+        self.assertEqual(self.stocks(), [15, 5])
+        self.assert_responsive(page, width)
+        if full:
+            first.locator("summary").click()
+            first.get_by_role("button", name="Limpar contagem", exact=True).click()
+            self.assertIn("Ainda não contado", first.locator("summary").inner_text())
+            movement = self.database_call(lambda: Movement.objects.latest("pk"))
+            self.assertEqual(self.database_call(lambda: movement.lines.count()), 2)
+            self.assertEqual(
+                self.database_call(
+                    lambda: movement.lines.get(reference_id=self.first.pk).counted_quantity
+                ),
+                None,
+            )
+            second = page.locator(".operation-line").filter(has_text=self.second.name)
+            second.locator("summary").click()
+            self.assertEqual(second.get_by_label("Garrafas soltas", exact=True).input_value(), "")
+        else:
+            # Live name search keeps the saved count; location/sector are shown
+            # when returning to an unrestricted name lookup.
+            page.locator("#reference-search").get_by_label("Localização", exact=True).select_option(
+                ""
+            )
+            page.get_by_label("Pesquisar referência", exact=True).fill(self.first.name)
+            link = page.get_by_role("link", name="Abrir contagem de " + self.first.name, exact=True)
+            page.wait_for_function(
+                "() => !document.querySelector('#reference-results').hasAttribute('aria-busy')"
+            )
+            self.assertIn(self.location.name, link.inner_text())
+            self.assertIn("Setor 9", link.inner_text())
+            self.assertIn("14 garrafas", link.inner_text())
+            link.click()
+            first.get_by_role("button", name="Remover referência", exact=True).click()
+            self.assertEqual(page.locator(".operation-line").count(), 0)
+        self.assertEqual(self.stocks(), [15, 5])
+        self.assert_responsive(page, width)
+
+    def test_a4_partial_worklist_desktop(self):
+        self.a4_worklist(1366, False)
+
+    def test_a4_partial_worklist_mobile(self):
+        self.a4_worklist(390, False)
+
+    def test_a4_full_worklist_desktop(self):
+        self.a4_worklist(1366, True)
+
+    def test_a4_full_worklist_mobile(self):
+        self.a4_worklist(390, True)
+
+    def test_a4_no_pdf_entry_has_visible_official_number(self):
+        from inventory.models import Movement
+
+        page = self.page("entry", 390)
+        self.add_reference(page, self.first.name)
+        page.get_by_label("Pessoa que entregou", exact=True).fill("Cliente A4 browser fictício")
+        page.get_by_label("Garrafas soltas", exact=True).fill("2")
+        page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
+        self.assertIn("Em preparação", page.locator("h1").inner_text())
+        page.locator('select[name="report_requested"]').select_option("no")
+        page.locator('input[name="confirm"]').check()
+        page.get_by_role("button", name="Confirmar entrada", exact=True).click()
+        movement = self.database_call(lambda: Movement.objects.latest("pk"))
+        official = self.database_call(lambda: str(movement.report_number))
+        self.assertIn(official, page.locator("h1").inner_text())
+        self.assertIn("Operação confirmada · " + official, page.locator("body").inner_text())
+        self.assertEqual(self.database_call(lambda: movement.documents.count()), 0)
+        self.assertEqual(self.stocks(), [17, 5])
+        self.assert_responsive(page, 390)
 
 
 class Stage4BrowserTests(StaticLiveServerTestCase):

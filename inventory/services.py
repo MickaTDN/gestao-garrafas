@@ -212,6 +212,8 @@ def confirm_movement(
             "Uma operação de outro dia não pode ser confirmada. Cancele-a ou inicie uma nova operação."
         )
     from .documents import create_confirmation_documents, validate_signature
+    from .models import ReportNumber
+    from .reporting import allocate_number
 
     signature = None
     if validation is not None:
@@ -282,7 +284,13 @@ def confirm_movement(
     movement.confirmed_by = actor
     movement.person_name = movement.person.name if movement.person_id else ""
     movement.report_requested = movement.report_requested or movement.kind == Movement.Kind.EXIT
-    create_confirmation_documents(movement, actor=actor, signature=signature)
+    number = allocate_number(movement.date.year)
+    document = create_confirmation_documents(
+        movement, actor=actor, signature=signature, number=number
+    )
+    identity = ReportNumber.objects.create(
+        movement=movement, document=document, year=movement.date.year, number=number
+    )
     movement.save(
         update_fields=[
             "status",
@@ -302,6 +310,7 @@ def confirm_movement(
             "kind": movement.kind,
             "line_count": len(lines),
             "correction_of": movement.correction_of_id,
+            "number": str(identity),
         },
     )
     return movement

@@ -46,6 +46,12 @@
   form.querySelectorAll('select').forEach(select => select.addEventListener('change', changed));
   form.addEventListener('submit', event => { event.preventDefault(); clearTimeout(timer); submit(); });
   target.addEventListener('click', event => {
+    const chosen = event.target.closest('[data-open-line]');
+    if (chosen) {
+      const line = document.getElementById('inventory-line-' + chosen.dataset.openLine);
+      if (line) { event.preventDefault(); line.open = true; line.scrollIntoView({block: 'start'}); }
+      return;
+    }
     const link = event.target.closest('a');
     if (link && link.getAttribute('href').startsWith('?')) { event.preventDefault(); search(new URL(link.href)); }
   });

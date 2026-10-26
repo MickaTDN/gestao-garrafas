@@ -119,7 +119,7 @@ try {
         Assert-True ($calls -match 'initialize')
         Assert-True ($calls -notmatch 'volume rm|system prune')
     }
-    Test 'A3 refuses an in-place legacy installation before building or migrating' {
+    Test 'A4 refuses an in-place legacy installation before building or migrating' {
         $path=Join-Path $homePath 'installation.json'
         $original=[IO.File]::ReadAllText($path)
         try {
@@ -133,13 +133,28 @@ try {
             Assert-True (Test-Path -LiteralPath (Join-Path $homePath 'secrets\db_owner_password'))
         } finally {[IO.File]::WriteAllText($path,$original)}
     }
-    Test 'A3 refuses an existing A2 pilot without changing its manifest or secrets' {
+    Test 'A4 refuses an existing A2 pilot without changing its manifest or secrets' {
         $path=Join-Path $homePath 'installation.json'
         $original=[IO.File]::ReadAllText($path)
         try {
             $a2=$original | ConvertFrom-Json
             $a2.CodeTrack='A2'
             [IO.File]::WriteAllText($path,($a2 | ConvertTo-Json))
+            $before=Get-FileHash -LiteralPath $path
+            & $module {$script:Calls.Clear()}
+            Assert-Throws {Install-GGPilot -HomePath $homePath -SourceRoot $root -NoShortcuts}
+            Assert-True ((Get-FileHash -LiteralPath $path).Hash -eq $before.Hash)
+            $calls=(& $module {$script:Calls|ConvertTo-Json -Depth 5})
+            Assert-True ($calls -notmatch '"build"|initialize|migrate')
+        } finally {[IO.File]::WriteAllText($path,$original)}
+    }
+    Test 'A4 refuses an existing A3 pilot before build or migrations' {
+        $path=Join-Path $homePath 'installation.json'
+        $original=[IO.File]::ReadAllText($path)
+        try {
+            $a3=$original | ConvertFrom-Json
+            $a3.CodeTrack='A3'
+            [IO.File]::WriteAllText($path,($a3 | ConvertTo-Json))
             $before=Get-FileHash -LiteralPath $path
             & $module {$script:Calls.Clear()}
             Assert-Throws {Install-GGPilot -HomePath $homePath -SourceRoot $root -NoShortcuts}
