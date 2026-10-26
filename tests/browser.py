@@ -5,8 +5,11 @@ import secrets
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
+from django.contrib.staticfiles.handlers import StaticFilesHandler
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.db import connections
+from django.test import SimpleTestCase, override_settings
+from django.test.testcases import LiveServerThread
 from django.urls import reverse
 from playwright.sync_api import sync_playwright
 
@@ -174,20 +177,19 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
     def entry_exit(self, kind, width):
         page = self.page(kind, width)
-        page.get_by_role("button", name="Criar rascunho", exact=True).click()
-        page.get_by_label("Adicionar SYN-OP-1", exact=True).check()
-        page.get_by_label("Adicionar SYN-OP-2", exact=True).check()
+        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
+        page.get_by_label("Adicionar Verde sintética operacional", exact=True).check()
         page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
         edit_url = page.url
         self.assertEqual(
             page.locator(".operation-line").count(), 2, page.locator("body").inner_text()
         )
-        first = page.locator(".operation-line").filter(has_text="SYN-OP-1")
-        second = page.locator(".operation-line").filter(has_text="SYN-OP-2")
+        first = page.locator(".operation-line").filter(has_text="Azul sintética operacional")
+        second = page.locator(".operation-line").filter(has_text="Verde sintética operacional")
         for row in (first, second):
             self.assertEqual(row.get_by_label("Caixas", exact=True).input_value(), "")
             self.assertEqual(row.get_by_label("Garrafas soltas", exact=True).input_value(), "")
-        page.get_by_label("Pessoa que entregou / levantou", exact=True).fill(
+        page.get_by_label("Pessoa que entregou" if kind == "entry" else "Pessoa que levantou", exact=True).fill(
             "Pessoa browser sintética"
         )
         first.get_by_label("Caixas", exact=True).fill("1")
@@ -198,10 +200,10 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         )
         self.assertIn("29" if kind == "entry" else "7", first.locator(".line-after").inner_text())
         self.assert_responsive(page, width)
-        page.get_by_role("button", name="Guardar rascunho", exact=True).click()
+        page.get_by_role("button", name="Guardar operação", exact=True).click()
         self.assertEqual(self.stocks(), [15, 5])
-        page.goto(self.live_server_url + reverse("web:drafts"))
-        page.get_by_role("link", name="Continuar / editar", exact=True).click()
+        page.goto(self.live_server_url + reverse(f"web:{kind}"))
+        page.locator(f'a[href="{edit_url.removeprefix(self.live_server_url)}"]').click()
         self.assertEqual(page.url, edit_url)
         self.assertEqual(page.locator('input[name="form-0-boxes"]').input_value(), "1")
         self.assertEqual(page.locator('input[name="form-1-boxes"]').input_value(), "")
@@ -226,9 +228,9 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
     def inventory_flow(self, width):
         page = self.page("inventory", width)
         page.get_by_label("Âmbito", exact=True).select_option("full")
-        page.get_by_role("button", name="Criar rascunho", exact=True).click()
-        first = page.locator(".operation-line").filter(has_text="SYN-OP-1")
-        second = page.locator(".operation-line").filter(has_text="SYN-OP-2")
+        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        first = page.locator(".operation-line").filter(has_text="Azul sintética operacional")
+        second = page.locator(".operation-line").filter(has_text="Verde sintética operacional")
         self.assertEqual(first.get_by_label("Caixas", exact=True).input_value(), "")
         self.assertEqual(second.get_by_label("Garrafas soltas", exact=True).input_value(), "")
         first.get_by_label("Caixas", exact=True).fill("2")
@@ -247,7 +249,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         )
         self.assertEqual(second.locator(".line-total").inner_text(), "0")
         self.assert_responsive(page, width)
-        page.get_by_role("button", name="Guardar rascunho", exact=True).click()
+        page.get_by_role("button", name="Guardar operação", exact=True).click()
         self.assertEqual(self.stocks(), [15, 5])
         page.get_by_role("button", name="Guardar e conferir operação", exact=True).click()
         self.assertIn("/conferir/", page.url)
@@ -281,6 +283,58 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         self.inventory_flow(390)
 
 
+    def sector_and_new_reference_flow(self, width):
+        from inventory.models import Sector
+
+        origin_sector, destination_sector = self.database_call(lambda: (
+            Sector.objects.create(location=self.location, name="Origem setor fictício"),
+            Sector.objects.create(location=self.destination, name="Destino setor fictício"),
+        ))
+        page = self.page("entry", width)
+        self.assertEqual(page.locator('select[name="location"]').count(), 0)
+        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
+        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        edit_url = page.url
+        page.get_by_label("Garrafas soltas", exact=True).fill("3")
+        page.get_by_role("button", name="Criar nova referência", exact=True).click()
+        self.assertIn("Nova referência na entrada", page.locator("h1").inner_text())
+        page.get_by_label("Designação", exact=True).fill("Nova referência browser fictícia")
+        location = page.get_by_label("Localização", exact=True)
+        sector = page.get_by_label("Setor", exact=True)
+        location.select_option(str(self.location.pk))
+        sector.select_option(str(origin_sector.pk))
+        location.select_option(str(self.destination.pk))
+        self.assertEqual(sector.input_value(), "")
+        self.assertEqual(sector.locator('option:not([disabled])').evaluate_all("options => options.map(o => o.value)"), ["", str(destination_sector.pk)])
+        sector.select_option(str(destination_sector.pk))
+        self.assert_responsive(page, width)
+        page.get_by_role("button", name="Criar referência", exact=True).click()
+        self.assertEqual(page.url, edit_url)
+        self.assertEqual(page.get_by_label("Garrafas soltas", exact=True).input_value(), "3")
+        self.assertEqual(self.stocks(), [0, 15, 5])
+        # The same dynamic selector works when editing the catalogue and counting.
+        page.goto(self.live_server_url + reverse("web:reference-edit", args=[self.first.pk]))
+        page.get_by_label("Localização", exact=True).select_option(str(self.destination.pk))
+        page.get_by_label("Setor", exact=True).select_option(str(destination_sector.pk))
+        page.get_by_role("button", name="Guardar", exact=True).click()
+        page.goto(self.live_server_url + reverse("web:inventory"))
+        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
+        page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
+        sector = page.get_by_label("Setor após inventário", exact=True)
+        self.assertEqual(sector.input_value(), str(destination_sector.pk))
+        page.get_by_label("Localização após inventário", exact=True).select_option(str(self.location.pk))
+        self.assertEqual(sector.input_value(), "")
+        self.assertEqual(sector.locator('option:not([disabled])').evaluate_all("options => options.map(o => o.value)"), ["", str(origin_sector.pk)])
+        self.assertEqual(self.stocks(), [0, 15, 5])
+        self.assert_responsive(page, width)
+
+    def test_sector_filter_and_new_reference_desktop(self):
+        self.sector_and_new_reference_flow(1366)
+
+    def test_sector_filter_and_new_reference_mobile(self):
+        self.sector_and_new_reference_flow(390)
+
+
 class Stage4BrowserTests(StaticLiveServerTestCase):
     database_call = staticmethod(BrowserSmokeTests.database_call)
     setUp = OperationalBrowserTests.setUp
@@ -296,10 +350,9 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         from inventory.models import Movement
 
         page = self.page("exit", width)
-        page.get_by_role("button", name="Criar rascunho", exact=True).click()
-        page.get_by_label("Adicionar SYN-OP-1", exact=True).check()
+        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
         page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
-        page.get_by_label("Pessoa que entregou / levantou", exact=True).fill(
+        page.get_by_label("Pessoa que levantou", exact=True).fill(
             "Pessoa assinatura sintética"
         )
         page.get_by_label("Garrafas soltas", exact=True).fill("2")
@@ -308,13 +361,15 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         canvas = page.locator("#signature-canvas")
 
         def draw():
-            canvas.scroll_into_view_if_needed()
+            canvas.evaluate("element => element.scrollIntoView({block: 'center'})")
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
             bounds = canvas.bounding_box()
             self.assertIsNotNone(bounds)
             points = [
                 (bounds["x"] + bounds["width"] * x, bounds["y"] + bounds["height"] * y)
                 for x, y in [(0.1, 0.7), (0.25, 0.2), (0.4, 0.8), (0.55, 0.3), (0.8, 0.65)]
             ]
+            self.assertTrue(canvas.evaluate("(element, point) => document.elementFromPoint(point[0], point[1]) === element", points[0]))
             if touch:
                 session = page.context.new_cdp_session(page)
                 session.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
@@ -395,10 +450,9 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         self.assertEqual(manifest["errors"], [])
         self.assertEqual(session.send("Page.getInstallabilityErrors")["installabilityErrors"], [])
         session.detach()
-        page.get_by_role("button", name="Criar rascunho", exact=True).click()
-        page.get_by_label("Adicionar SYN-OP-1", exact=True).check()
+        page.get_by_label("Adicionar Azul sintética operacional", exact=True).check()
         page.get_by_role("button", name="Adicionar selecionadas e guardar", exact=True).click()
-        page.get_by_label("Pessoa que entregou / levantou", exact=True).fill(
+        page.get_by_label("Pessoa que entregou", exact=True).fill(
             "Pessoa offline sintética"
         )
         page.get_by_label("Garrafas soltas", exact=True).fill("3")
@@ -452,3 +506,69 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         workbook = load_workbook(io.BytesIO(Path(download.value.path()).read_bytes()))
         self.assertEqual(workbook["Dados"].max_row, 3)
         self.assert_responsive(page, 390)
+
+
+@override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1", "testserver"])
+class PublicBrandBrowserTests(SimpleTestCase):
+    """Real Chromium/public HTTP only. No accounts, stock or database setup."""
+
+    def setUp(self):
+        server = LiveServerThread("localhost", StaticFilesHandler)
+        server.daemon = True
+        server.start()
+        self.addCleanup(server.terminate)
+        self.assertTrue(server.is_ready.wait(10), "Public test server did not start")
+        if server.error:
+            raise server.error
+        self.url = f"http://localhost:{server.port}"
+        playwright = sync_playwright().start()
+        self.addCleanup(playwright.stop)
+        self.browser = playwright.chromium.launch(
+            executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
+            headless=True,
+            args=["--no-sandbox"],
+        )
+        self.addCleanup(self.browser.close)
+
+    def check_login(self, width):
+        import hashlib
+        from pathlib import Path
+
+        page = self.browser.new_page(viewport={"width": width, "height": 900})
+        self.addCleanup(page.close)
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        response = page.goto(self.url + reverse("login"))
+        self.assertEqual(response.status, 200)
+        self.assertEqual(page.title(), "Entrar · Gestão Vertente Aveludada")
+        logo = page.get_by_role("img", name="Copo com Vida", exact=True)
+        logo.wait_for(state="visible")
+        page.wait_for_function("document.querySelector('.brand-logo').naturalWidth > 0")
+        dimensions = logo.evaluate(
+            "image => ({natural:[image.naturalWidth,image.naturalHeight],width:image.clientWidth,height:image.clientHeight})"
+        )
+        self.assertEqual(dimensions["natural"], [1273, 827])
+        self.assertAlmostEqual(dimensions["width"] / dimensions["height"], 1273 / 827, delta=0.02)
+        image = page.request.get(self.url + logo.get_attribute("src"))
+        self.assertEqual(image.status, 200)
+        self.assertEqual(
+            hashlib.sha256(image.body()).hexdigest(),
+            "58e89b8b1c0d930e8418bae77565367f7785e55740ac435c2d3ba88555c24948",
+        )
+        manifest = page.request.get(self.url + reverse("manifest")).json()
+        for icon in manifest["icons"]:
+            self.assertIn("branding/copo-com-vida-", icon["src"])
+            self.assertEqual(page.request.get(self.url + icon["src"]).status, 200)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), width)
+        self.assertEqual(errors, [])
+        if directory := os.getenv("BROWSER_ARTIFACT_DIR"):
+            Path(directory).mkdir(parents=True, exist_ok=True)
+            page.screenshot(
+                path=str(Path(directory) / f"branding-login-{width}.png"), full_page=True
+            )
+
+    def test_original_logo_login_desktop(self):
+        self.check_login(1366)
+
+    def test_original_logo_login_mobile(self):
+        self.check_login(390)

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Reconciliação · Gestão de Garrafas{% endblock %}
+{% block title %}Reconciliação · Gestão Vertente Aveludada{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">RECONCILIAÇÃO</div><h1>Pré-visualização da importação</h1><p class="muted intro-description">{{ preview.import_batch.source_name }}</p></div></div>
 {% if preview.published_at %}<div class="banner"><strong>Publicado em {{ preview.published_at|date:'d/m/Y H:i' }}.</strong> A validação desta publicação ficou guardada.</div>{% else %}<div class="banner"><strong>Stock ainda não publicado.</strong> Reveja os totais e cada referência antes de confirmar.</div>{% endif %}

@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load stock_display %}
-{% block title %}Referências · Gestão de Garrafas{% endblock %}
+{% block title %}Referências · Gestão Vertente Aveludada{% endblock %}
 {% block content %}
 <div class="intro"><div><div class="eyebrow">GESTÃO DO CATÁLOGO</div><h1>Referências</h1><p class="muted intro-description">Gerir fichas e alertas sem alterar o stock ou apagar o histórico.</p></div><a class="btn" href="{% url 'web:reference-create' %}">+ Nova referência</a></div>
 <form method="get" class="toolbar filter-form">
@@ -12,7 +12,7 @@
   <div class="row between table-summary"><strong>{{ page_obj.paginator.count }} referências</strong><small>Inclui referências inativas</small></div>
   <div class="table-wrap"><table><thead><tr><th scope="col">Referência</th><th scope="col" class="hide-sm">Localização</th><th scope="col" class="right">Garrafas</th><th scope="col">Estado</th><th scope="col">Ações</th></tr></thead><tbody>
   {% for reference in page_obj %}<tr>
-    <td><strong>{{ reference.name }}</strong><small>{{ reference.code }}</small></td>
+    <td><strong>{{ reference.name }}</strong></td>
     <td class="hide-sm">{{ reference.location.name }}<small>{{ reference.sector.name|default:'Setor por definir' }}</small></td>
     <td class="right qty">{{ reference.current_stock }}</td>
     <td><span class="chip {% if reference.active %}green{% endif %}">{% if reference.active %}Ativa{% else %}Inativa{% endif %}</span></td>

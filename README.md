@@ -1,4 +1,4 @@
-# Gestão de Garrafas
+# Gestão Vertente Aveludada
 
 Aplicação web baseada no protótipo V3: **Django 5.2 LTS,
 Python 3.12 e PostgreSQL 17**, com o mesmo estilo visual em computador e telemóvel.
@@ -36,6 +36,14 @@ por utilizador. PostgreSQL não publica portas e a aplicação fica em 127.0.0.1
 Não usa a `.env`, o Compose de desenvolvimento ou a base reservada à importação.
 Não executar instruções Linux ou alterar políticas do Windows para contornar
 bloqueios. Nada foi instalado num computador real por esta entrega.
+
+## Melhorias da Etapa A
+
+Entradas, Saídas e Inventário abrem diretamente o formulário. Mantêm-se a
+conferência, confirmação atómica, auditoria e dados das instalações existentes.
+Veja [o âmbito e as decisões](docs/etapa-a.md), os
+[originais e ícones Copo com Vida](static/branding/README.md) e a
+[atualização do piloto sem apagar dados](docs/windows11.md#atualização-da-etapa-a-num-piloto-existente).
 
 ## Executar em desenvolvimento
 

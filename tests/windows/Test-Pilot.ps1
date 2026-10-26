@@ -179,6 +179,10 @@ try {
         $shortcuts=Join-Path $temporary 'shortcuts';$null=New-Item -ItemType Directory -Path $shortcuts
         New-GGShortcuts -HomePath $homePath -ShortcutDirectory $shortcuts
         $links=@(Get-ChildItem -LiteralPath $shortcuts -Filter *.lnk)
+        $displayName = 'Gest' + [char]0x00E3 + 'o Vertente Aveludada'
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ($displayName + ' - Piloto.lnk')))
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ('Parar ' + $displayName + '.lnk')))
+        Assert-True (Test-Path -LiteralPath (Join-Path $shortcuts ('Diagnostico ' + $displayName + '.lnk')))
         Assert-True ($links.Count -eq 3)
         $shell=New-Object -ComObject WScript.Shell
         foreach($link in $links){
@@ -186,6 +190,39 @@ try {
             Assert-True ($shortcut.TargetPath.StartsWith($homePath,[StringComparison]::OrdinalIgnoreCase)) ('Unexpected shortcut target: '+$shortcut.TargetPath+' expected under '+$homePath)
             Assert-True ([string]::IsNullOrEmpty($shortcut.Arguments))
         }
+    }
+    Test 'Original public icon is copied unchanged and used only by the application shortcut' {
+        # Synthetic icon in a disposable source tree; never published as brand artwork.
+        $brandSource=Join-Path $temporary 'synthetic-brand-source'
+        foreach($folder in @('deploy\windows','scripts\windows','static\branding')) {
+            $null=New-Item -ItemType Directory -Path (Join-Path $brandSource $folder) -Force
+        }
+        Copy-Item -LiteralPath (Join-Path $root 'deploy\windows\compose.yaml') -Destination (Join-Path $brandSource 'deploy\windows\compose.yaml')
+        Get-ChildItem -LiteralPath (Join-Path $root 'scripts\windows') -File | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $brandSource 'scripts\windows')}
+        Add-Type -AssemblyName System.Drawing
+        $sourceIcon=Join-Path $brandSource 'static\branding\copo-com-vida.ico'
+        $stream=[IO.File]::Create($sourceIcon)
+        try {[Drawing.SystemIcons]::Application.Save($stream)} finally {$stream.Dispose()}
+        $brandHome=Join-Path $temporary 'synthetic-brand-home'
+        $null=New-GGInstallation -HomePath $brandHome -SourceRoot $brandSource
+        $manifest=Get-FileHash -LiteralPath (Join-Path $brandHome 'installation.json')
+        $secret=Get-FileHash -LiteralPath (Join-Path $brandHome 'secrets\db_app_password')
+        $brandShortcuts=Join-Path $temporary 'synthetic-brand-shortcuts'
+        $null=New-Item -ItemType Directory -Path $brandShortcuts
+        & $module {$script:Calls.Clear()}
+        New-GGShortcuts -HomePath $brandHome -ShortcutDirectory $brandShortcuts
+        $installedIcon=Join-Path $brandHome 'copo-com-vida.ico'
+        Assert-True ((Get-FileHash -LiteralPath $sourceIcon).Hash -eq (Get-FileHash -LiteralPath $installedIcon).Hash)
+        $shell=New-Object -ComObject WScript.Shell
+        foreach($link in Get-ChildItem -LiteralPath $brandShortcuts -Filter *.lnk) {
+            $shortcut=$shell.CreateShortcut($link.FullName)
+            if ($shortcut.TargetPath.EndsWith('Iniciar.cmd')) {
+                Assert-True ($shortcut.IconLocation -eq ($installedIcon+',0'))
+            } else {Assert-True (-not $shortcut.IconLocation.Contains('copo-com-vida.ico'))}
+        }
+        Assert-True ((Get-FileHash -LiteralPath $manifest.Path).Hash -eq $manifest.Hash)
+        Assert-True ((Get-FileHash -LiteralPath $secret.Path).Hash -eq $secret.Hash)
+        Assert-True ((& $module {$script:Calls.Count}) -eq 0) 'Branding must not call Docker or a database'
     }
     Test 'Command wrappers keep execution policy and privilege decisions with IT' {
         foreach($cmd in Get-ChildItem (Join-Path $root 'scripts\windows') -Filter *.cmd){

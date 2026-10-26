@@ -76,7 +76,9 @@ class OperationWebTests(TestCase):
 
     def test_start_all_three_types_and_drafts_owned_only(self):
         for name in ("entry", "exit", "inventory"):
-            self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 302)
+            url = reverse(f"web:{name}")
+            data = self.payload(self.client.get(url))
+            self.assertEqual(self.client.post(url, data).status_code, 302)
         foreign = operations.create_draft(actor=self.other, kind="entry")
         response = self.client.get(reverse("web:drafts"))
         self.assertEqual(response.context["page_obj"].paginator.count, 3)
@@ -207,7 +209,7 @@ class OperationWebTests(TestCase):
     def test_inactive_search_warning_and_explicit_reactivation_keeps_original(self):
         draft = self.draft()
         url = reverse("web:operation-edit", args=[draft.pk])
-        response = self.client.get(url, {"q": "WEBOP-3"})
+        response = self.client.get(url, {"q": "Inativa sintética"})
         self.assertContains(response, "Esta referência já existe e está inativa")
         self.assertContains(response, self.inactive.code)
         self.assertContains(response, self.location.name)
@@ -334,10 +336,11 @@ class OperationWebTests(TestCase):
                 for i in range(65)
             ]
         )
-        response = self.client.post(
-            reverse("web:inventory") + f"?location={self.destination.pk}",
-            {"inventory_scope": "full"},
-        )
+        start_url = reverse("web:inventory") + f"?location={self.destination.pk}"
+        data = self.payload(self.client.get(start_url))
+        data["inventory_scope"] = "full"
+        response = self.client.post(start_url, data)
+        self.assertEqual(response.status_code, 302)
         draft = Movement.objects.get(inventory_scope="full")
         self.assertEqual(draft.lines.count(), 65)
         self.assertEqual(draft.lines.filter(counted_quantity__isnull=True).count(), 65)
@@ -447,3 +450,221 @@ class OperationWebTests(TestCase):
             client.post(reverse("web:operation-cancel", args=[draft.pk])).status_code, 403
         )
         self.assertEqual(AuditEvent.objects.filter(action="movement.confirmed").count(), 0)
+
+    def test_direct_forms_get_is_side_effect_free_and_navigation_hides_drafts(self):
+        for kind in ("entry", "exit", "inventory"):
+            with self.subTest(kind=kind):
+                response = self.client.get(reverse(f"web:{kind}"))
+                self.assertContains(response, 'id="operation-form"')
+                self.assertContains(response, 'id="reference-results"')
+                self.assertContains(response, 'name="date"')
+                self.assertNotContains(response, "Criar rascunho")
+                self.assertNotContains(response, "Os meus rascunhos")
+                self.assertNotContains(response, reverse("web:drafts"))
+                self.assertNotContains(response, "Motivo da correção")
+        self.assertFalse(Movement.objects.exists())
+        self.assertFalse(AuditEvent.objects.exists())
+        self.ref.refresh_from_db()
+        self.assertEqual(self.ref.current_stock, 10)
+
+    def test_first_selection_creates_only_internal_draft_and_audit(self):
+        for kind in ("entry", "exit", "inventory"):
+            with self.subTest(kind=kind):
+                url = reverse(f"web:{kind}")
+                data = self.payload(self.client.get(url))
+                data.update(add_reference=[self.ref.pk, self.unknown.pk])
+                response = self.client.post(url, data)
+                self.assertEqual(response.status_code, 302)
+                draft = Movement.objects.latest("pk")
+                self.assertEqual(
+                    (draft.kind, draft.status, draft.lines.count()), (kind, "draft", 2)
+                )
+                self.assertFalse(draft.lines.exclude(quantity=None).exists())
+                self.assertTrue(draft.audit_events.exists())
+                self.ref.refresh_from_db()
+                self.assertEqual(self.ref.current_stock, 10)
+
+    def test_invalid_first_post_rolls_back_draft_person_and_audit(self):
+        for changes in (
+            {"add_reference": "forged"},
+            {"add_reference": self.inactive.pk},
+            {"revision": 9},
+            {"action": "confirm"},
+            {"action": "new-reference"},
+        ):
+            url = reverse("web:exit")
+            data = self.payload(self.client.get(url))
+            data.update(changes)
+            self.assertEqual(self.client.post(url, data).status_code, 400)
+            self.assertFalse(Movement.objects.exists())
+            self.assertFalse(Person.objects.exists())
+            self.assertFalse(AuditEvent.objects.exists())
+
+        # The inactive entry candidate is visible, so failure occurs inside save_draft,
+        # after create_draft has written its internal record and audit event.
+        url = reverse("web:entry")
+        data = self.payload(self.client.get(url))
+        data["add_reference"] = self.inactive.pk
+        self.assertEqual(self.client.post(url, data).status_code, 400)
+        self.assertFalse(Movement.objects.exists())
+        self.assertFalse(AuditEvent.objects.exists())
+        self.assertFalse(Person.objects.exists())
+
+    def test_entry_exit_search_only_name_ignores_forged_location_and_sector_filters(self):
+        for kind in ("entry", "exit"):
+            url = reverse(f"web:{kind}")
+            response = self.client.get(
+                url, {"q": "garrafa WEB", "location": self.destination.pk, "sector": self.sector.pk}
+            )
+            self.assertEqual(list(response.context["refs_page"]), [self.ref])
+            self.assertNotContains(response, 'name="location"')
+            self.assertNotContains(response, 'name="sector"')
+            self.assertNotContains(response, self.ref.code)
+            self.assertEqual(
+                self.client.get(url, {"q": self.ref.code}).context["refs_page"].paginator.count, 0
+            )
+
+    def test_form_order_and_normal_observations_correction_reason_separate(self):
+        for kind in ("entry", "exit", "inventory"):
+            response = self.client.get(reverse("web:operation-edit", args=[self.draft(kind).pk]))
+            html = response.content.decode()
+            self.assertLess(
+                html.index('aria-label="Pesquisar referências"'),
+                html.index('id="reference-results"'),
+            )
+            self.assertLess(
+                html.index('id="reference-results"'), html.index('id="operation-lines"')
+            )
+            self.assertLess(html.index('id="operation-lines"'), html.index('name="date"'))
+            self.assertLess(html.index('name="date"'), html.index('name="reason"'))
+            self.assertNotIn("Motivo da correção", html)
+            if kind == "entry":
+                self.assertLess(
+                    html.index('id="operation-lines"'), html.index('value="new-reference"')
+                )
+                self.assertLess(html.index('value="new-reference"'), html.index('name="date"'))
+        original = self.reviewed()
+        confirm_movement(
+            original.pk,
+            actor=self.admin,
+            review_token=original.review_token,
+            report_requested=False,
+        )
+        url = reverse("web:operation-correction", args=[original.pk])
+        self.assertContains(self.client.get(url), "Motivo da correção")
+        self.client.post(url, {"reason": ""})
+        self.assertFalse(Movement.objects.filter(correction_of=original).exists())
+
+    def test_operation_review_three_columns_and_box_breakdown_matches_pdf(self):
+        import io
+
+        from pypdf import PdfReader
+
+        for kind, boxes, units, final in (
+            ("entry", 1, 8, "4 caixas"),
+            ("exit", 1, 4, "0 garrafas"),
+        ):
+            with self.subTest(kind=kind):
+                self.ref.refresh_from_db()
+                draft = self.draft(kind)
+                self.post_edit(
+                    draft,
+                    **{
+                        "form-0-boxes": boxes,
+                        "form-0-units": units,
+                        "reason": "Observação sintética",
+                        "action": "review",
+                    },
+                )
+                draft.refresh_from_db()
+                response = self.client.get(reverse("web:operation-review", args=[draft.pk]))
+                self.assertContains(response, "Referência</th>")
+                self.assertContains(
+                    response, "Quantidade a entrar" if kind == "entry" else "Quantidade a sair"
+                )
+                self.assertContains(response, "1 caixa + " + str(units) + " garrafas")
+                self.assertContains(response, final)
+                for hidden in ("Stock anterior", "Variação", "Capacidade", self.ref.code):
+                    self.assertNotContains(response, hidden)
+                confirmed = confirm_movement(
+                    draft.pk,
+                    actor=self.admin,
+                    review_token=draft.review_token,
+                    report_requested=True,
+                )
+                document = confirmed.documents.get(kind="pdf")
+                text = "\n".join(
+                    page.extract_text()
+                    for page in PdfReader(io.BytesIO(bytes(document.payload))).pages
+                )
+                for shown in (
+                    "Quantidade a entrar" if kind == "entry" else "Quantidade a sair",
+                    "1 caixa + " + str(units) + " garrafas",
+                    final,
+                    "Observação sintética",
+                    "Gestão Vertente Aveludada",
+                ):
+                    self.assertIn(shown, text)
+                for hidden in ("Stock antes", "Variação", "capacidade", self.ref.code):
+                    self.assertNotIn(hidden, text)
+                self.assertEqual(document.metadata["lines"][0]["boxes"], boxes)
+                self.assertEqual(document.metadata["lines"][0]["before"], 10)
+                # Separate scenarios, restoring only this synthetic fixture.
+                if kind == "entry":
+                    Reference.objects.filter(pk=self.ref.pk).update(current_stock=10)
+
+    def test_changed_stock_review_never_displays_stale_final_quantity(self):
+        draft = self.reviewed("exit")
+        Reference.objects.filter(pk=self.ref.pk).update(current_stock=9, stock_version=1)
+        response = self.client.get(reverse("web:operation-review", args=[draft.pk]))
+        self.assertContains(response, "Requer nova conferência")
+        self.assertContains(response, " disabled>Confirmar saída")
+        self.assertNotContains(response, "1 caixa + 2 garrafas")
+
+    def test_catalogue_and_inventory_reject_foreign_sector(self):
+        create = self.client.post(
+            reverse("web:reference-create"),
+            {"name": "Outra fictícia", "location": self.location.pk, "sector": self.sector.pk},
+        )
+        self.assertContains(create, "O setor não pertence", status_code=400)
+        edit = self.client.post(
+            reverse("web:reference-edit", args=[self.ref.pk]),
+            {"name": self.ref.name, "location": self.location.pk, "sector": self.sector.pk},
+        )
+        self.assertContains(edit, "O setor não pertence", status_code=400)
+        response = self.post_edit(
+            self.draft("inventory"),
+            **{"form-0-target_location": self.location.pk, "form-0-target_sector": self.sector.pk},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.ref.refresh_from_db()
+        self.assertEqual(
+            (self.ref.location_id, self.ref.sector_id, self.ref.current_stock),
+            (self.location.pk, None, 10),
+        )
+
+    def test_pending_operations_only_own_kind_cancel_keeps_stock_and_history(self):
+        own = self.draft("entry")
+        other_kind = self.draft("exit")
+        foreign = operations.create_draft(actor=self.other, kind="entry")
+        response = self.client.get(reverse("web:entry"))
+        self.assertContains(response, reverse("web:operation-edit", args=[own.pk]))
+        for hidden in (other_kind, foreign):
+            self.assertNotContains(response, reverse("web:operation-edit", args=[hidden.pk]))
+        self.assertRedirects(
+            self.client.post(
+                reverse("web:operation-cancel", args=[own.pk]), {"confirm": "yes", "revision": 0}
+            ),
+            reverse("web:entry"),
+        )
+        self.assertEqual(own.lines.count(), 1)
+        self.assertTrue(own.audit_events.filter(action="movement.cancelled").exists())
+        self.ref.refresh_from_db()
+        self.assertEqual(self.ref.current_stock, 10)
+
+    def test_inventory_type_preserved_during_scope_search(self):
+        response = self.client.get(
+            reverse("web:inventory"), {"inventory_scope": "full", "location": self.location.pk}
+        )
+        self.assertEqual(response.context["scope_form"]["inventory_scope"].value(), "full")
+        self.assertFalse(Movement.objects.exists())

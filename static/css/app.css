@@ -23,3 +23,8 @@ a.nav-btn,a.action,a.btn,.mobile-nav a{text-decoration:none}a.action{color:var(-
 @media(max-width:760px){#operation-form .toolbar{display:grid;grid-template-columns:1fr}.operation-line .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.operation-line .form-grid select{font-size:12px;padding:8px 4px}.filter-form p{width:100%;margin:0}.card form button{width:100%}}
 
 [hidden]{display:none!important}#signature-canvas{display:block;width:100%;height:auto;aspect-ratio:3/1;border:1px dashed #aac4b6;border-radius:10px;background:#fff;touch-action:none}
+
+/* Original Copo com Vida artwork is optional; never distort its aspect ratio. */
+.brand-symbol{width:40px;height:40px;border-radius:10px;flex-shrink:0}.brand-logo{display:block;max-width:100%;height:auto;object-fit:contain}.login-brand{flex-direction:column;align-items:center;text-align:center;gap:18px}.login-brand .brand-logo{width:min(280px,100%)}.brand strong{overflow-wrap:anywhere}.topbar>strong{min-width:0;overflow-wrap:anywhere}
+
+#movement-review{min-width:0;table-layout:fixed}#movement-review th{white-space:normal}#movement-review th:first-child{width:40%}#signature-canvas{scroll-margin-block:100px}

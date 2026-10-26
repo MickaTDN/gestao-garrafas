@@ -12,6 +12,14 @@ class StyledFieldsMixin:
                 field.widget.attrs["class"] = "input"
 
 
+class SectorSelect(forms.Select):
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        if value and hasattr(value, "instance"):
+            option["attrs"]["data-location"] = value.instance.location_id
+        return option
+
+
 class ReferenceForm(StyledFieldsMixin, forms.ModelForm):
     alert_enabled = forms.BooleanField(required=False, label="Ativar alerta de stock mínimo")
     minimum = forms.IntegerField(
@@ -22,6 +30,7 @@ class ReferenceForm(StyledFieldsMixin, forms.ModelForm):
     class Meta:
         model = Reference
         fields = ["name", "box_capacity", "location", "sector", "minimum"]
+        widgets = {"sector": SectorSelect}
         labels = {
             "name": "Designação", "box_capacity": "Garrafas por caixa",
             "location": "Localização", "sector": "Setor",
@@ -29,6 +38,7 @@ class ReferenceForm(StyledFieldsMixin, forms.ModelForm):
         help_texts = {"box_capacity": "Deixe vazio se a capacidade ainda não estiver definida."}
 
     def __init__(self, *args, **kwargs):
+        kwargs.setdefault("label_suffix", "")
         super().__init__(*args, **kwargs)
         self.order_fields(["name", "box_capacity", "location", "sector", "alert_enabled", "minimum"])
         self.fields["alert_enabled"].initial = self.instance.minimum is not None

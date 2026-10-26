@@ -295,5 +295,7 @@ class DeliveryTests(TestCase):
             call_command("collectstatic", interactive=False, verbosity=0)
             response = self.client.get(reverse("service-worker"))
             self.assertContains(response, static("css/app.css"))
-            self.assertContains(response, static("icons/icon-512.png"))
+            from web.branding import icon_asset
+
+            self.assertContains(response, static(icon_asset(512)))
             self.assertNotEqual(static("css/app.css"), "/static/css/app.css")

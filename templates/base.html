@@ -6,22 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#126650">
   <link rel="manifest" href="{% url 'manifest' %}">
-  <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
-  <title>{% block title %}Gestão de Garrafas{% endblock %}</title>
+  <link rel="apple-touch-icon" href="{% static brand_icon %}">
+  <link rel="icon" type="image/png" href="{% static brand_icon %}">
+  <title>{% block title %}Gestão Vertente Aveludada{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
 <a href="#main-content" class="skip-link">Saltar para o conteúdo</a>
 <div class="app-root">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark">GG</div><div><strong>Gestão de Garrafas</strong><span>Gestão de stock</span></div></div>
+    <div class="brand">{% if brand_logo %}<img class="brand-symbol" src="{% static brand_icon %}" alt="">{% endif %}<div><strong>Gestão Vertente Aveludada</strong><span>Gestão de stock</span></div></div>
     <nav class="menu" aria-label="Navegação principal">
       <a class="nav-btn {% if section == 'home' %}active{% endif %}" href="{% url 'web:home' %}"><span class="ico" aria-hidden="true">⌂</span>Início</a>
       <a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>
       {% if user.is_administrator %}
       <a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>
       <a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>
-      <a class="nav-btn {% if section == 'drafts' %}active{% endif %}" href="{% url 'web:drafts' %}"><span class="ico" aria-hidden="true">✎</span>Rascunhos</a>
       <a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>
       {% endif %}
       <a class="nav-btn {% if section == 'export' %}active{% endif %}" href="{% url 'web:export' %}"><span class="ico" aria-hidden="true">⇩</span>Exportar Excel</a>
@@ -36,7 +36,7 @@
   </aside>
   <main class="stage" id="main-content">
     <header class="topbar">
-      <strong>GESTÃO DE GARRAFAS</strong>
+      <strong>GESTÃO VERTENTE AVELUDADA</strong>
       <div class="topbar-right">
         <button class="btn secondary small" id="install-app" hidden type="button">Instalar</button>
         <span class="hide-sm">{{ user.username }}</span>

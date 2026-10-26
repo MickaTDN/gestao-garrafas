@@ -14,7 +14,7 @@ try {
         New-GGPilotAccount -HomePath $installed.Home -Username $username
     }
     Write-Host ('Pasta privada do piloto: ' + $installed.Home)
-    Write-Host 'Use o atalho Gestao de Garrafas - Piloto. Para criar o primeiro administrador, abra CriarUtilizador.cmd na pasta do piloto.'
+    Write-Host ('Use o atalho Gest' + [char]0x00E3 + 'o Vertente Aveludada - Piloto. Para criar o primeiro administrador, abra CriarUtilizador.cmd na pasta do piloto.')
     exit 0
 } catch {
     Write-Host $_.Exception.Message

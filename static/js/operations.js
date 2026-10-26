@@ -2,6 +2,9 @@
 (() => {
   const form = document.querySelector('#operation-form');
   if (!form) return;
+  const scope = document.querySelector('#id_inventory_scope');
+  const searchScope = document.querySelector('#reference-search input[name="inventory_scope"]');
+  if (scope && searchScope) scope.addEventListener('change', () => { searchScope.value = scope.value; });
   document.querySelectorAll('.operation-line').forEach(line => {
     const boxes = line.querySelector('input[name$="-boxes"]');
     const units = line.querySelector('input[name$="-units"]');
@@ -21,19 +24,6 @@
       line.querySelector('.line-after').textContent = after === null ? '—' : `${after} garrafas${equivalent}`;
       line.querySelector('.line-difference').textContent = difference === null ? '—' : (difference > 0 ? '+' : '') + difference;
     };
-    const location = line.querySelector('select[name$="-target_location"]');
-    const sector = line.querySelector('select[name$="-target_sector"]');
-    if (location && sector) {
-      const filterSectors = () => {
-        Array.from(sector.options).forEach(option => {
-          option.hidden = Boolean(option.value && option.dataset.location !== location.value);
-          option.disabled = option.hidden;
-        });
-        if (sector.selectedOptions.length && sector.selectedOptions[0].disabled) sector.value = '';
-      };
-      location.addEventListener('change', filterSectors);
-      filterSectors();
-    }
     boxes.addEventListener('input', update);
     units.addEventListener('input', update);
     update();

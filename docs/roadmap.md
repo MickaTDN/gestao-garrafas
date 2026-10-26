@@ -134,3 +134,12 @@ Não se considera concluída a preservação operacional de todo o histórico en
 o lote reconciliado não tiver sido publicado e verificado. A fonte disponível
 define a cobertura: dados históricos ausentes requerem uma fonte complementar,
 não a criação de movimentos para preencher lacunas.
+
+## Etapa A — melhorias da aplicação principal no piloto
+
+Formulários diretos, continuação dentro de cada operação, pesquisa por nome nas
+entradas/saídas, setores dependentes da localização, conferência/PDF simplificados
+e nome Gestão Vertente Aveludada. Sem alteração das regras de stock ou bases
+instaladas. Identidade Copo com Vida integrada com os originais fornecidos. Ver
+[etapa-a.md](etapa-a.md) e o procedimento de atualização do piloto em
+[windows11.md](windows11.md#atualização-da-etapa-a-num-piloto-existente).
