@@ -15,7 +15,7 @@ from pathlib import Path
 from playwright.sync_api import expect, sync_playwright
 
 from scripts.build_vertente import PUBLIC
-from tests.vertente.fixtures import fixture, grant, snapshot, wait_offline_shell
+from tests.vertente.fixtures import fixture, grant, open_initial_shell, snapshot, wait_offline_shell
 from tests.wifi.certificates import certificates
 from tests.wifi.tls_device import tls_device
 from tests.windows.smoke_stack import ROOT, free_port, run
@@ -164,7 +164,7 @@ def main():
                 try:
                     page = context.new_page()
                     page.set_default_timeout(12000)
-                    page.goto(url)
+                    open_initial_shell(page, url)
                     assert page.title() == "Stock Vertente Aveludada" and page.evaluate(
                         "window.isSecureContext"
                     )

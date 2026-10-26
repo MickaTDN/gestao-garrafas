@@ -121,3 +121,20 @@ def wait_offline_shell(page):
         new Promise((_,reject)=>setTimeout(()=>reject(new Error('Offline shell activation timeout')),12000))
       ]);
     }""")
+
+
+def open_initial_shell(page, url):
+    """Docker bridge events can race Chromium's initial network discovery in CI.
+
+    Only the initial read-only shell GET may retry ERR_NETWORK_CHANGED. TLS errors,
+    application errors and every write remain failures; no security bypass flags.
+    """
+    from playwright.sync_api import Error
+
+    for attempt in range(3):
+        try:
+            return page.goto(url)
+        except Error as error:
+            if "net::ERR_NETWORK_CHANGED" not in str(error) or attempt == 2:
+                raise
+            page.wait_for_timeout(250)

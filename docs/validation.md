@@ -337,3 +337,8 @@ não estiver verde.
 Ficam por validar fisicamente Android/Chrome, certificados/MDM, Wi-Fi/DNS/firewall/NAT,
 seletor/transferência de ficheiros e políticas de armazenamento. Sem testes no PC pessoal,
 sem publicação de dados reais, sem acesso à base reservada e sem merge automático.
+
+O Chrome do runner pode anunciar `ERR_NETWORK_CHANGED` ao descobrir a rede Docker
+no primeiro acesso. Só o GET inicial do shell do ensaio pode repetir esse erro
+específico, no máximo três tentativas curtas. Erros TLS/autenticação continuam a
+falhar; não há repetição de POST nem alteração de segurança na aplicação.
