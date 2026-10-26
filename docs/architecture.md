@@ -305,3 +305,11 @@ A3. Não há backfill, reescrita de documentos ou emissão tardia de relatórios
 O inventário mostra posição física/contagem na lista e abre linhas já selecionadas
 sem escritas. Pesquisa, seleção e âmbito de contagem permanecem distintos.
 Ver [decisões, migração e validação A4](etapa-a4.md). Não há atualização do piloto pessoal.
+
+
+## Etapa B — Stock Vertente Aveludada
+
+Consulta Android offline separada, perfis de dispositivo assinados, encomendas cifradas,
+exportação Stock v2 com Entradas e receções FIFO. Reutiliza seletivamente as Etapas 6/7
+sobre main A4, sem alterar os PR anteriores. Ver [decisões, instalação e limites](etapa-b.md).
+Validação apenas sintética; sem publicação, instalação pessoal ou merge automático.

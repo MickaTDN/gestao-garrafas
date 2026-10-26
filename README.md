@@ -178,3 +178,11 @@ Este comando não faz deploy nem prova disponibilidade de HTTPS ou backups.
 Produção requer segredos próprios, domínio/CSRF configurados, PostgreSQL com TLS,
 proteção de login, permissões mínimas e restauro de backup comprovado, conforme
 a arquitetura. As instruções locais não devem ser usadas como configuração final.
+
+
+## Etapa B — Stock Vertente Aveludada
+
+Consulta Android offline separada, perfis de dispositivo assinados, encomendas cifradas,
+exportação Stock v2 com Entradas e receções FIFO. Reutiliza seletivamente as Etapas 6/7
+sobre main A4, sem alterar os PR anteriores. Ver [decisões, instalação e limites](docs/etapa-b.md).
+Validação apenas sintética; sem publicação, instalação pessoal ou merge automático.

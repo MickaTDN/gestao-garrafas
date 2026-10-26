@@ -119,7 +119,7 @@ try {
         Assert-True ($calls -match 'initialize')
         Assert-True ($calls -notmatch 'volume rm|system prune')
     }
-    Test 'A4 refuses an in-place legacy installation before building or migrating' {
+    Test 'B refuses an in-place legacy installation before building or migrating' {
         $path=Join-Path $homePath 'installation.json'
         $original=[IO.File]::ReadAllText($path)
         try {
@@ -133,7 +133,7 @@ try {
             Assert-True (Test-Path -LiteralPath (Join-Path $homePath 'secrets\db_owner_password'))
         } finally {[IO.File]::WriteAllText($path,$original)}
     }
-    Test 'A4 refuses an existing A2 pilot without changing its manifest or secrets' {
+    Test 'B refuses an existing A2 pilot without changing its manifest or secrets' {
         $path=Join-Path $homePath 'installation.json'
         $original=[IO.File]::ReadAllText($path)
         try {
@@ -148,13 +148,28 @@ try {
             Assert-True ($calls -notmatch '"build"|initialize|migrate')
         } finally {[IO.File]::WriteAllText($path,$original)}
     }
-    Test 'A4 refuses an existing A3 pilot before build or migrations' {
+    Test 'B refuses an existing A3 pilot before build or migrations' {
         $path=Join-Path $homePath 'installation.json'
         $original=[IO.File]::ReadAllText($path)
         try {
             $a3=$original | ConvertFrom-Json
             $a3.CodeTrack='A3'
             [IO.File]::WriteAllText($path,($a3 | ConvertTo-Json))
+            $before=Get-FileHash -LiteralPath $path
+            & $module {$script:Calls.Clear()}
+            Assert-Throws {Install-GGPilot -HomePath $homePath -SourceRoot $root -NoShortcuts}
+            Assert-True ((Get-FileHash -LiteralPath $path).Hash -eq $before.Hash)
+            $calls=(& $module {$script:Calls|ConvertTo-Json -Depth 5})
+            Assert-True ($calls -notmatch '"build"|initialize|migrate')
+        } finally {[IO.File]::WriteAllText($path,$original)}
+    }
+    Test 'B refuses an existing A4 pilot before build or migrations' {
+        $path=Join-Path $homePath 'installation.json'
+        $original=[IO.File]::ReadAllText($path)
+        try {
+            $a4=$original | ConvertFrom-Json
+            $a4.CodeTrack='A4'
+            [IO.File]::WriteAllText($path,($a4 | ConvertTo-Json))
             $before=Get-FileHash -LiteralPath $path
             & $module {$script:Calls.Clear()}
             Assert-Throws {Install-GGPilot -HomePath $homePath -SourceRoot $root -NoShortcuts}

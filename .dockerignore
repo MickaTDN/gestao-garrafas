@@ -35,3 +35,18 @@ attachments
 **/installation.json
 **/pilot.env
 **/*.previous
+
+# Stock consultation signing material and private transfers
+**/*.pem
+**/*.vastock.json
+**/*.vaprefs.json
+**/*.vagrant.json
+**/*.vareceipts.json
+**/*.key
+**/*.crt
+**/*.p12
+**/*.pfx
+**/*.vatrust.json
+**/*.varequest.json
+**/publisher.env
+**/publisher-installation.json

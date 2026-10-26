@@ -1,0 +1,17 @@
+# Explicit overlay for an authorized, independently prepared office stack.
+# The key is mounted read-only in the web app and in the separate owner/setup
+# process. Device authorization never gains database write grants in the web role.
+services:
+  app:
+    environment:
+      VERTENTE_SIGNING_KEY_FILE: /run/secrets/vertente_signing_key
+    secrets:
+      - vertente_signing_key
+  initialize:
+    environment:
+      VERTENTE_SIGNING_KEY_FILE: /run/secrets/vertente_signing_key
+    secrets:
+      - vertente_signing_key
+secrets:
+  vertente_signing_key:
+    file: ${VA_SIGNING_KEY_FILE:?Chave privada externa ao código}

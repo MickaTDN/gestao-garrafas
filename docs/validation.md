@@ -296,3 +296,49 @@ finais estão nos checks do PR. O código não contém migrações ou alteraçõ
 regras de stock. PDFs históricos não são reescritos. A aceitação física dos
 ícones instalados no Windows/PWA depende de atualização manual posterior; não
 foi instalado ou atualizado nada no computador do utilizador.
+
+## Etapa B — Stock Vertente Aveludada sobre main A4
+
+Branch `stageb/stock-vertente-aveludada`, PR em rascunho para `main`; as branches
+#6/#7 não foram alteradas. Recuperação seletiva dos componentes documentada em
+[etapa-b.md](etapa-b.md). Nenhum serviço, stock ou base existente foi adotado.
+
+A suite local final passou **458 testes**, incluindo **51 Chromium** (27 Gestão,
+24 Stock). Inclui autorização assinada de dispositivos/perfis, cofre cifrado,
+importação atómica, falhas IndexedDB, FIFO/receções parciais/sem quantidade,
+capacidades históricas, datas válidas, duplicações/recuos/origem/assinatura,
+lacunas e recuperação por janelas, backup em aparelho novo, offline, CSP e
+regressões A4. Node verifica sintaxe dos módulos; Ruff, Django, migrações e
+`check --deploy` em configuração de produção também passaram.
+
+O publicador foi ensaiado separadamente com TLS/mTLS real confiável, certificados
+revogados recusados, ausência de API/ficheiros privados, elegibilidade PWA e
+consulta/encomendas offline. As esperas de ativação usam eventos de service worker,
+sem polling `eval` incompatível com a CSP. Avisos de sucesso só aparecem depois
+da atualização da interface; navegação aguarda estado e ignora leituras ultrapassadas.
+
+Exportação usando a conta PostgreSQL restrita passou, com stock inalterado, zero,
+capacidade desconhecida, identidade/contador estáveis e nenhuma importação Excel.
+Recuperação **imagem A4 anterior → imagem B** passou em projetos sintéticos novos,
+com origem preservada, recusa de destino ocupado/migração no local, passwords,
+numeração independente do PDF e reprodução fiel de evidências assinadas. Os volumes
+sintéticos novos foram preservados nos ensaios locais.
+
+O build local limpo encontrou DNS indisponível no download Debian do Docker. Para
+os ensaios locais, usou-se a imagem A4 de validação em cache mais o código B e wheels
+das dependências novas, verificadas contra os hashes de `uv.lock`, sem rede no build.
+A CI mantém o build **limpo original**, sem esse atalho. Na primeira revisão publicada,
+a CI passou a suite/build/recuperação/exportação restrita e **37 verificações PowerShell**
+(29 piloto, 8 publicador), mas o ensaio HTTPS final falhou. As correções e esperas CSP
+foram acrescentadas; o estado da revisão final será registado no PR, sem assumir que
+resultados de outra revisão bastam. Não se considera o PR validado enquanto a CI final
+não estiver verde.
+
+Ficam por validar fisicamente Android/Chrome, certificados/MDM, Wi-Fi/DNS/firewall/NAT,
+seletor/transferência de ficheiros e políticas de armazenamento. Sem testes no PC pessoal,
+sem publicação de dados reais, sem acesso à base reservada e sem merge automático.
+
+O Chrome do runner pode anunciar `ERR_NETWORK_CHANGED` ao descobrir a rede Docker
+no primeiro acesso. Só o GET inicial do shell do ensaio pode repetir esse erro
+específico, no máximo três tentativas curtas. Erros TLS/autenticação continuam a
+falhar; não há repetição de POST nem alteração de segurança na aplicação.
