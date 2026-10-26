@@ -241,7 +241,16 @@ class Movement(models.Model):
         return super().delete(*args, **kwargs)
 
     def __str__(self):
-        return f"MOV-{self.pk or '—'} · {self.get_kind_display()}"
+        return f"{self.display_number} · {self.get_kind_display()}"
+
+    @property
+    def display_number(self):
+        if self.status == self.Status.CONFIRMED:
+            try:
+                return str(self.report_number)
+            except ReportNumber.DoesNotExist:
+                return f"Identificador técnico MOV-{self.pk}"
+        return f"{'Em preparação' if self.status == self.Status.DRAFT else 'Cancelado'} · ID técnico {self.pk or 'por atribuir'}"
 
 
 class MovementLine(models.Model):
@@ -407,7 +416,12 @@ class Document(models.Model):
 
     @property
     def number(self):
-        return self.metadata.get('report_number') or f'MOV-{self.movement_id}'
+        if self.kind == 'pdf':
+            try:
+                return str(self.annual_number)
+            except ReportNumber.DoesNotExist:
+                pass
+        return f'MOV-{self.movement_id}'
 
     def save(self, *args, **kwargs):
         if self.pk or Movement.objects.filter(pk=self.movement_id, status="confirmed").exists():

@@ -22,15 +22,19 @@ def available_filter():
 
 
 def with_file_status(queryset):
-    return queryset.annotate(
-        file_present=Case(
-            When(payload__isnull=False, then=Value(True)),
-            default=Exists(
-                ReportFile.objects.filter(document_id=OuterRef("pk"), payload__isnull=False)
-            ),
-            output_field=BooleanField(),
+    return (
+        queryset.annotate(
+            file_present=Case(
+                When(payload__isnull=False, then=Value(True)),
+                default=Exists(
+                    ReportFile.objects.filter(document_id=OuterRef("pk"), payload__isnull=False)
+                ),
+                output_field=BooleanField(),
+            )
         )
-    ).defer("payload")
+        .defer("payload")
+        .select_related("annual_number")
+    )
 
 
 def document_payload(document):

@@ -13,7 +13,7 @@
 <div class="stack">
 {% for movement in page_obj %}
   <details class="card stack movement-details">
-    <summary class="row between wrapping"><div><h2>{% if movement.report_number %}{{ movement.report_number }}{% else %}MOV-{{ movement.pk }}{% endif %} · {{ movement.get_kind_display }}</h2><small>{{ movement.date|date:'d/m/Y' }}{% if movement.occurred_at %} · {{ movement.occurred_at|date:'H:i' }}{% endif %} · {% firstof movement.person_name movement.person.name 'Cliente não identificado' %}</small></div><span class="chip">Confirmado</span></summary>
+    <summary class="row between wrapping"><div><h2>{{ movement.display_number }} · {{ movement.get_kind_display }}</h2><small>{{ movement.date|date:'d/m/Y' }}{% if movement.occurred_at %} · {{ movement.occurred_at|date:'H:i' }}{% endif %} · {% firstof movement.person_name movement.person.name 'Cliente não identificado' %}</small></div><span class="chip">Confirmado</span></summary>
     {% if movement.original_label %}<p><strong>Etiqueta original:</strong> {{ movement.original_label }}</p>{% endif %}
     {% if movement.document_number %}<p><strong>Documento:</strong> {{ movement.document_number }}{% if not movement.person %} · Pessoa não identificada na fonte{% endif %}</p>{% endif %}
     {% for note in movement.source_metadata.annotations %}<p><strong>Observação {{ note.coordinate }}:</strong> {{ note.value }}<br><small>{{ note.decision }}</small></p>{% endfor %}

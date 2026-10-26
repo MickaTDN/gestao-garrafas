@@ -39,3 +39,25 @@ def reserve_login_attempt(username, address):
 
 def successful_login(username):
     LoginLimit.objects.filter(pk=bucket_key("user", username.strip().casefold())).delete()
+
+
+@transaction.atomic
+def reserve_password_attempt(user_id, purpose, address):
+    now = timezone.now()
+    limits = [
+        (bucket_key("password-" + purpose, str(user_id)), settings.LOGIN_ACCOUNT_LIMIT),
+        (bucket_key("password-address-" + purpose, address), settings.LOGIN_ADDRESS_LIMIT),
+    ]
+    rows = []
+    for key, maximum in sorted(limits):
+        row, _ = LoginLimit.objects.get_or_create(key=key, defaults={"window_started": now})
+        row = LoginLimit.objects.select_for_update().get(pk=key)
+        if row.window_started + timedelta(seconds=settings.LOGIN_WINDOW_SECONDS) <= now:
+            row.attempts, row.window_started = 0, now
+        rows.append((row, maximum))
+    allowed = all(row.attempts < maximum for row, maximum in rows)
+    if allowed:
+        for row, _ in rows:
+            row.attempts += 1
+            row.save(update_fields=["attempts", "window_started"])
+    return allowed

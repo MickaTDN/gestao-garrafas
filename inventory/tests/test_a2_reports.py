@@ -1,7 +1,7 @@
 import hashlib
 import io
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from datetime import timezone as dt_timezone
 from threading import Barrier
 from unittest.mock import patch
@@ -77,7 +77,9 @@ class ReportLifecycleTests(TestCase):
         )
 
     def test_previous_day_draft_cannot_be_confirmed_even_after_forging_today_date(self):
-        yesterday = timezone.now() - timedelta(days=1)
+        yesterday = timezone.make_aware(
+            datetime.combine(timezone.localdate() - timedelta(days=1), time(12))
+        )
         with patch("django.utils.timezone.now", return_value=yesterday):
             draft = operations.create_draft(
                 actor=self.admin, kind="entry", references=[self.reference]

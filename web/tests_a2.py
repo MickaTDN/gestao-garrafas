@@ -1,5 +1,5 @@
 import secrets
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from html.parser import HTMLParser
 
 from django.contrib.auth import get_user_model
@@ -261,7 +261,11 @@ class A2WebTests(TestCase):
 
     def test_previous_day_http_confirmation_cannot_be_forged(self):
         draft = self.new()
-        Movement.objects.filter(pk=draft.pk).update(created_at=timezone.now() - timedelta(days=1))
+        Movement.objects.filter(pk=draft.pk).update(
+            created_at=timezone.make_aware(
+                datetime.combine(timezone.localdate() - timedelta(days=1), time(12))
+            )
+        )
         self.edit(
             draft,
             **{

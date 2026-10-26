@@ -2,6 +2,7 @@ import ipaddress
 
 from django.conf import settings
 from django.contrib.auth.views import LoginView
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
 
@@ -34,3 +35,8 @@ class ProtectedLoginView(LoginView):
     def form_valid(self, form):
         successful_login(form.cleaned_data["username"])
         return super().form_valid(form)
+
+    def get_success_url(self):
+        if self.request.user.is_authenticated and self.request.user.must_change_password:
+            return reverse('web:my-account')
+        return super().get_success_url()

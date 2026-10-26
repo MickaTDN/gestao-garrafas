@@ -183,7 +183,7 @@ def history(request):
     )
 
 
-@administrator_required
+@login_required
 @require_GET
 def settings(request):
     return render(request, "web/settings.html", {"section": "settings"})

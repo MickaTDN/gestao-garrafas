@@ -215,6 +215,9 @@ Nada foi instalado no computador do utilizador e não é declarada operação of
 
 ## Atualização da Etapa A num piloto existente
 
+> Para **A2 → A3**, seguir [o guia A3](etapa-a3.md#atualização-manual-a2--a3-no-windows):
+> backup e recuperação numa cópia independente, preservando a A2 na porta 8766.
+
 > Este procedimento aplica-se exclusivamente à Etapa A / PR #8. Para a **Etapa
 > A2**, que acrescenta migrações, seguir [a atualização por cópia recuperada](etapa-a2.md#atualização-segura-do-piloto-windows).
 > Não substituir a imagem da instalação antiga por A2 com os passos abaixo.

@@ -60,10 +60,10 @@ class WebTests(TestCase):
         self.assertEqual(response.context["reference_count"], 2)
         self.assertEqual(response.context["alert_count"], 1)
         self.assertContains(response, "Consulta")
-        self.assertNotContains(response, reverse("web:settings"))
+        self.assertContains(response, reverse("web:settings"))
 
     def test_viewer_cannot_access_management_even_with_direct_url(self):
-        for name in ("settings", "entry", "exit", "inventory", "references"):
+        for name in ("users", "entry", "exit", "inventory", "references"):
             with self.subTest(name=name):
                 self.assertEqual(self.client.get(reverse(f"web:{name}")).status_code, 403)
                 self.assertEqual(self.client.post(reverse(f"web:{name}")).status_code, 403)

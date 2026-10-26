@@ -4,8 +4,10 @@ from django.forms import formset_factory
 from django.utils import timezone
 
 from inventory.models import Location, Sector
+from inventory.ordering import ordered_sectors
 
 from .catalog_forms import SectorSelect, StyledFieldsMixin
+from .forms import StockFilterForm
 
 
 class OperationForm(StyledFieldsMixin, forms.Form):
@@ -30,6 +32,18 @@ class StartForm(OperationForm):
 
 class OperationSearchForm(OperationForm):
     q = forms.CharField(required=False, max_length=200, label="Pesquisar referência")
+
+
+class InventorySearchForm(StockFilterForm):
+    q = forms.CharField(required=False, max_length=200, label="Pesquisar referência")
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("label_suffix", "")
+        super().__init__(*args, **kwargs)
+        self.fields["sector"].widget = SectorSelect()
+        self.fields["sector"].queryset = ordered_sectors(
+            Sector.objects.filter(active=True).select_related("location")
+        )
 
 
 class HeaderForm(OperationForm):
@@ -74,17 +88,28 @@ class LineForm(OperationForm):
 
     def __init__(self, *args, inventory=False, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.is_bound and self.data.get("action") == "remove:" + str(
-            self.data.get(self.add_prefix("id"), "")
-        ):
+        if self.is_bound and self.data.get("action") in {
+            action + str(self.data.get(self.add_prefix("id"), ""))
+            for action in ("remove:", "clear:")
+        }:
             self.data = self.data.copy()
             self.data[self.add_prefix("boxes")] = ""
             self.data[self.add_prefix("units")] = ""
         if inventory:
             self.fields["target_location"].required = True
+            self.fields["target_sector"].queryset = ordered_sectors(
+                Sector.objects.select_related("location")
+            )
         else:
             for field in ("reason", "target_location", "target_sector"):
                 self.fields.pop(field)
+
+    def clean(self):
+        data = super().clean()
+        location, sector = data.get("target_location"), data.get("target_sector")
+        if location and sector and sector.location_id != location.pk:
+            self.add_error("target_sector", "O setor não pertence à localização escolhida.")
+        return data
 
     def clean_basis_token(self):
         try:

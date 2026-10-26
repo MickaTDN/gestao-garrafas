@@ -1,6 +1,16 @@
 from django.urls import path
 
-from . import catalog, exports, import_views, operations, profiles, reports, user_admin, views
+from . import (
+    catalog,
+    exports,
+    import_views,
+    operations,
+    passwords,
+    profiles,
+    reports,
+    user_admin,
+    views,
+)
 
 app_name = "web"
 
@@ -10,6 +20,7 @@ urlpatterns = [
     path("stock/<int:pk>/", views.reference_detail, name="reference-detail"),
     path("historico/", views.history, name="history"),
     path("definicoes/", views.settings, name="settings"),
+    path("definicoes/minha-conta/", passwords.own, name="my-account"),
     path("entradas/", operations.start, {"kind": "entry"}, name="entry"),
     path("saidas/", operations.start, {"kind": "exit"}, name="exit"),
     path("inventario/", operations.start, {"kind": "inventory"}, name="inventory"),
@@ -33,6 +44,7 @@ urlpatterns = [
     path("utilizadores/", user_admin.accounts, name="users"),
     path("utilizadores/novo/", user_admin.create, name="user-create"),
     path("utilizadores/<int:pk>/editar/", user_admin.edit, name="user-edit"),
+    path("utilizadores/<int:pk>/palavra-passe/", passwords.reset, name="user-password-reset"),
     path("exportar/", exports.export, name="export"),
     path("relatorios/", reports.reports, name="reports"),
     path("documentos/<int:pk>/", reports.content, name="document-content"),

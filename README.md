@@ -53,6 +53,13 @@ Consulte [o guia A2, migrações e atualização segura do Windows](docs/etapa-a
 A A2 exige recuperação de backup para uma cópia nova; o procedimento da Etapa A
 sem migrações não se aplica. O piloto instalado não foi atualizado por esta entrega.
 
+**Etapa A3:** identificação pelo número anual realmente emitido, alteração da
+própria palavra-passe e reposição administrativa com alteração obrigatória, e
+inventário com seleção direta, contagens minimizáveis e setores numéricos por
+localização. Ver [o guia A3 e atualização segura A2 → A3](docs/etapa-a3.md).
+Requer uma migração apenas na cópia recuperada; a instalação A2 na porta 8766
+mantém-se preservada, sem atualização automática.
+
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.
 Use o checkout existente; não é necessário criar um worktree. Na raiz do projeto:
 

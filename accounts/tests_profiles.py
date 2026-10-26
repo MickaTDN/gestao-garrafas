@@ -106,7 +106,6 @@ class AccessProfileTests(TestCase):
             self.assertEqual(self.client.get(reverse("web:" + route)).status_code, 200)
         for route in (
             "inventory",
-            "settings",
             "users",
             "user-create",
             "profiles",
@@ -119,7 +118,7 @@ class AccessProfileTests(TestCase):
             for method in (self.client.get, self.client.post):
                 self.assertEqual(method(reverse("web:" + route)).status_code, 403)
         home = self.client.get(reverse("web:home"))
-        for hidden in ("web:inventory", "web:settings", "web:references"):
+        for hidden in ("web:inventory", "web:users", "web:references"):
             self.assertNotContains(home, reverse(hidden))
         self.assertContains(home, "Substituto")
 

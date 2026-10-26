@@ -8,7 +8,6 @@ from django.core import signing
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,14 +17,21 @@ from django.views.decorators.http import require_GET, require_http_methods
 from accounts.permissions import require_access, require_operation, visible_movements
 from inventory import catalog, operations
 from inventory.models import Movement, Person, Reference
+from inventory.ordering import inventory_order
 from inventory.presentation import entered_quantity, stock_quantity
 from inventory.reporting import can_regenerate, issued_filter, with_file_status
 from inventory.services import confirm_movement, owned_draft, reference_state
 
 from .catalog import _errors
 from .catalog_forms import ReferenceForm
-from .forms import StockFilterForm
-from .operation_forms import HeaderForm, LineFormSet, OperationSearchForm, ReviewForm, StartForm
+from .operation_forms import (
+    HeaderForm,
+    InventorySearchForm,
+    LineFormSet,
+    OperationSearchForm,
+    ReviewForm,
+    StartForm,
+)
 from .views import _page, operation_required, permission_required
 
 
@@ -49,13 +55,17 @@ def _expired(movement):
     )
 
 
-def _catalogue(request, *, active_only=True, name_only=False):
+def _catalogue(request, *, active_only=True, name_only=False, for_counts=False):
     search = (
         {"q": request.POST.get("search_q", request.GET.get("q", ""))}
-        if request.method == "POST"
+        if request.method == "POST" and not for_counts
         else request.GET
     )
-    form = OperationSearchForm(search) if name_only else StockFilterForm(request.GET)
+    form = (
+        OperationSearchForm(search)
+        if name_only
+        else InventorySearchForm({**request.GET.dict(), "q": search.get("q", "")})
+    )
     refs = Reference.objects.select_related("location", "sector").order_by("name", "pk")
     if active_only:
         refs = refs.filter(active=True)
@@ -64,18 +74,14 @@ def _catalogue(request, *, active_only=True, name_only=False):
         if name_only and not data["q"]:
             refs = refs.none()
         if data["q"]:
-            refs = (
-                refs.filter(name__icontains=data["q"])
-                if name_only
-                else refs.filter(Q(name__icontains=data["q"]) | Q(code__icontains=data["q"]))
-            )
+            refs = refs.filter(name__icontains=data["q"])
         if data.get("location"):
             refs = refs.filter(location=data["location"])
         if data.get("sector"):
             refs = refs.filter(sector=data["sector"])
     else:
         refs = refs.none()
-    return form, refs
+    return form, refs if name_only else inventory_order(refs)
 
 
 def _pending(request, kind):
@@ -286,8 +292,10 @@ def edit(request, pk):
         "reference__location", "reference__sector", "target_location", "target_sector"
     ).order_by("reference__name", "pk")
     if movement.kind == "inventory":
-        _, filtered_refs = _catalogue(request, active_only=False)
-        line_query = line_query.filter(reference__in=filtered_refs)
+        line_query = inventory_order(line_query, "reference__")
+        if movement.inventory_scope == "full":
+            _, filtered_refs = _catalogue(request, active_only=False, for_counts=True)
+            line_query = line_query.filter(reference__in=filtered_refs)
     lines_page = Paginator(line_query, 30).get_page(request.GET.get("page"))
     lines = list(lines_page.object_list)
     header = HeaderForm(
@@ -356,6 +364,10 @@ def edit(request, pk):
             if action.startswith("check:"):
                 check_ids = [int(action.split(":", 1)[1])]
                 action = "save"
+            if action.startswith("clear:"):
+                if movement.kind != "inventory" or int(action.split(":", 1)[1]) not in posted_ids:
+                    raise ValidationError("Linha inválida para limpar contagem.")
+                action = "save"
             if action.startswith("remove:"):
                 remove.append(int(action.split(":", 1)[1]))
                 action = "save"
@@ -394,13 +406,12 @@ def edit(request, pk):
                 operations.review_draft(pk, actor=request.user, revision=movement.revision)
                 return redirect("web:operation-review", pk=pk)
             messages.success(request, "Operação guardada. O stock permanece inalterado.")
-            if add_ids and movement.kind != "inventory":
+            if add_ids:
                 # Bring the newly selected reference into view even beyond page 1.
-                order = list(
-                    movement.lines.order_by("reference__name", "pk").values_list(
-                        "reference_id", flat=True
-                    )
-                )
+                selected = movement.lines.order_by("reference__name", "pk")
+                if movement.kind == "inventory":
+                    selected = inventory_order(selected, "reference__")
+                order = list(selected.values_list("reference_id", flat=True))
                 page = order.index(add_ids[-1]) // 30 + 1
                 url = reverse("web:operation-edit", args=[pk])
                 return redirect(url + ("?" + urlencode({"page": page}) if page > 1 else ""))
@@ -419,7 +430,10 @@ def edit(request, pk):
                 return redirect(request.get_full_path())
     for line in lines:
         line.entered_display = entered_quantity(
-            line.boxes, line.units, line.quantity or 0, line.box_capacity
+            line.boxes,
+            line.units,
+            (line.counted_quantity if movement.kind == "inventory" else line.quantity) or 0,
+            line.box_capacity,
         )
     pairs = list(zip(lines, formset, strict=False))
     params = request.GET.copy()
@@ -466,9 +480,11 @@ def review(request, pk):
     )
     if movement.kind != "entry":
         form.fields.pop("report_requested")
-    if movement.kind != "exit":
+    if movement.kind not in ("exit", "inventory"):
         form.fields.pop("validation")
         form.fields.pop("signature_data")
+    elif movement.kind == "inventory":
+        form.fields["validation"].label = "Validação do inventário"
     if request.method == "POST" and form.is_valid():
         try:
             confirm_movement(
@@ -476,7 +492,9 @@ def review(request, pk):
                 actor=request.user,
                 review_token=form.cleaned_data["token"],
                 report_requested=form.cleaned_data.get("report_requested"),
-                validation=form.cleaned_data.get("validation"),
+                validation=(form.cleaned_data.get("validation") or None)
+                if movement.kind == "inventory"
+                else form.cleaned_data.get("validation"),
                 signature_data=form.cleaned_data.get("signature_data"),
             )
         except ValidationError as error:
@@ -634,7 +652,7 @@ def detail(request, pk):
         visible_movements(
             request.user,
             Movement.objects.select_related(
-                "person", "created_by", "confirmed_by", "correction_of"
+                "person", "created_by", "confirmed_by", "correction_of", "report_number"
             ),
         ).prefetch_related(
             "lines__sources",
