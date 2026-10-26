@@ -68,8 +68,8 @@ class NumberPresentationTests(TestCase):
 
     def test_entry_without_report_and_legacy_document_keep_technical_identity(self):
         movement = confirmed_operation(self.admin, self.ref, kind="entry", report=False)
-        self.assertIn("Identificador técnico MOV-", str(movement))
-        self.assertFalse(ReportNumber.objects.exists())
+        self.assertEqual(str(movement), f"Mov-1/{movement.date.year % 100:02} · Entrada")
+        self.assertIsNone(movement.report_number.document_id)
         historical = Movement.objects.create(kind="exit", created_by=self.admin)
         document = store_document(
             historical,
@@ -86,7 +86,7 @@ class NumberPresentationTests(TestCase):
             )
         self.assertEqual(document.number, f"MOV-{historical.pk}")
         self.assertEqual(verified_bytes(document), b"%PDF-a3-synthetic-legacy")
-        self.assertFalse(ReportNumber.objects.exists())
+        self.assertEqual(ReportNumber.objects.count(), 1)
 
     def test_number_survives_file_deletion_regeneration_and_new_year(self):
         with patch(

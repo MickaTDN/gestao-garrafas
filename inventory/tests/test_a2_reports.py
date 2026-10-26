@@ -48,21 +48,21 @@ class ReportLifecycleTests(TestCase):
     def confirmed(self, kind="exit", **kwargs):
         return confirmed_operation(self.admin, self.reference, kind=kind, **kwargs)
 
-    def test_number_allocated_only_on_confirmation_with_a_pdf(self):
+    def test_number_allocated_on_confirmation_independently_of_pdf(self):
         draft = operations.create_draft(actor=self.admin, kind="entry", references=[self.reference])
         self.assertFalse(ReportNumber.objects.exists())
         self.assertFalse(ReportSequence.objects.exists())
-        self.confirmed(kind="entry", report=False)
-        self.assertFalse(ReportNumber.objects.exists())
+        without = self.confirmed(kind="entry", report=False)
+        self.assertIsNone(without.report_number.document_id)
         first = self.confirmed(kind="entry", report=True)
         self.reference.refresh_from_db()
         second = self.confirmed()
         self.assertEqual(
             (str(first.report_number), str(second.report_number)),
-            (f"Mov-1/{first.date.year % 100:02}", f"Mov-2/{second.date.year % 100:02}"),
+            (f"Mov-2/{first.date.year % 100:02}", f"Mov-3/{second.date.year % 100:02}"),
         )
         self.assertEqual(first.report_number.year, first.date.year)
-        self.assertEqual(ReportSequence.objects.get(year=first.date.year).last_number, 2)
+        self.assertEqual(ReportSequence.objects.get(year=first.date.year).last_number, 3)
         self.assertEqual(draft.lines.get().quantity, None)
 
     def test_year_reset_uses_official_movement_date_and_four_digit_year(self):

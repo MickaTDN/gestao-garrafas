@@ -493,8 +493,9 @@ class ReportSequence(models.Model):
 
 
 class ReportNumber(models.Model):
+    """Annual movement identity; legacy name retained to preserve existing links."""
     movement = models.OneToOneField(Movement, on_delete=models.PROTECT, related_name='report_number')
-    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name='annual_number')
+    document = models.OneToOneField(Document, on_delete=models.PROTECT, related_name='annual_number', null=True, blank=True)
     year = models.PositiveIntegerField()
     number = models.PositiveBigIntegerField()
     objects = AppendOnlyQuerySet.as_manager()
