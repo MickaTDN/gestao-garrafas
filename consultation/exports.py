@@ -29,7 +29,6 @@ def receipt_rows(start, end):
         MovementLine.objects.filter(
             movement__kind="entry",
             movement__status="confirmed",
-            movement__workflow_version=1,
             movement__occurred_at__gte=start,
             movement__occurred_at__lte=end,
         )
@@ -55,7 +54,7 @@ def receipt_rows(start, end):
         total = (row["boxes"] or 0) * (row["box_capacity"] or 0) + (row["units"] or 0)
         if (
             not 0 < row["quantity"] <= 2147483647
-            or row["quantity"] != total
+            or ((row["boxes"] is not None or row["units"] is not None) and row["quantity"] != total)
             or not row["reference_name"].strip()
         ):
             raise ValidationError(

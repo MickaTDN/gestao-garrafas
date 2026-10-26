@@ -299,3 +299,35 @@ class StageBExportTests(TransactionTestCase):
             call_command(
                 "vertente_receipts", start=start, until=end, output=str(out), stdout=io.StringIO()
             )
+
+    def test_earlier_confirmed_entry_is_included_without_inventing_packaging_or_time(self):
+        from inventory.models import MovementLine
+
+        known = Movement.objects.create(
+            kind="entry", created_by=self.admin, workflow_version=0, occurred_at=timezone.now()
+        )
+        MovementLine.objects.create(
+            movement=known,
+            reference=self.ref,
+            reference_name="Entrada anterior sintética",
+            quantity=4,
+        )
+        known.status = "confirmed"
+        known.save(update_fields=["status"])
+        unknown = Movement.objects.create(kind="entry", created_by=self.admin, workflow_version=0)
+        MovementLine.objects.create(
+            movement=unknown,
+            reference=self.ref,
+            reference_name="Entrada sem hora sintética",
+            quantity=5,
+        )
+        unknown.status = "confirmed"
+        unknown.save(update_fields=["status"])
+        data = decode(export_snapshot(actor=self.viewer))
+        self.assertEqual(len(data["receipts"]), 1)
+        row = data["receipts"][0]
+        self.assertEqual(
+            (row["movement_id"], row["bottles"], row["boxes"], row["units"]),
+            (str(known.pk), 4, None, None),
+        )
+        self.assertIsNone(unknown.occurred_at)

@@ -189,7 +189,9 @@ export function validateReceipts(data) {
         (!r.boxes || r.box_capacity !== null),
     );
     insist(
-      (r.boxes || 0) * (r.box_capacity || 0) + (r.units || 0) === r.bottles &&
+      ((r.boxes === null && r.units === null) ||
+        (r.boxes || 0) * (r.box_capacity || 0) + (r.units || 0) ===
+          r.bottles) &&
         !ids.has(r.id),
     );
     ids.add(r.id);

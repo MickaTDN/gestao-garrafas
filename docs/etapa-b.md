@@ -104,10 +104,14 @@ referências ativas (zero incluído), ID estável, nome, garrafas, capacidade nu
 localização, setor nullable e mínimo nullable. Exclui pessoas, contas, credenciais,
 notas/documentos privados, assinaturas, PDFs e histórico completo.
 
-As Entradas operacionais **confirmadas** (`workflow_version=1`, tipo entry) incluem
+As Entradas **confirmadas** de tipo entry, com instante conhecido, incluem
 ID estável da linha, ID do movimento/referência, data de negócio, instante de confirmação,
 quantidade recebida em garrafas e caixas/soltas/capacidade efetivamente guardadas.
 Não inclui rascunhos, saídas, inventários ou correções de inventário como receções.
+Entradas anteriores ao workflow atual também são reconhecidas quando têm instante
+real; caixas/soltas que não foram historicamente guardadas continuam nulas, sem
+converter ausência em zero nem inventar embalagem. Sem instante não se fabrica uma
+hora para associar uma encomenda posterior.
 Preserva IDs e não infere receções pela subida do saldo.
 
 O serviço usa a transação e o bloqueio de autorização **já existente** nos serviços

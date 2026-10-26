@@ -303,8 +303,8 @@ Branch `stageb/stock-vertente-aveludada`, PR em rascunho para `main`; as branche
 #6/#7 não foram alteradas. Recuperação seletiva dos componentes documentada em
 [etapa-b.md](etapa-b.md). Nenhum serviço, stock ou base existente foi adotado.
 
-A suite local final passou **456 testes**, incluindo **50 Chromium** (27 Gestão,
-23 Stock). Inclui autorização assinada de dispositivos/perfis, cofre cifrado,
+A suite local final passou **458 testes**, incluindo **51 Chromium** (27 Gestão,
+24 Stock). Inclui autorização assinada de dispositivos/perfis, cofre cifrado,
 importação atómica, falhas IndexedDB, FIFO/receções parciais/sem quantidade,
 capacidades históricas, datas válidas, duplicações/recuos/origem/assinatura,
 lacunas e recuperação por janelas, backup em aparelho novo, offline, CSP e

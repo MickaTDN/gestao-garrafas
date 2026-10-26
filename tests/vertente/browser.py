@@ -699,3 +699,17 @@ class VertenteBrowserTests(SimpleTestCase):
         self.assertEqual(self.page.get_by_role("button", name="Desbloquear", exact=True).count(), 0)
         self.page.get_by_role("button", name="Água de Ensaio", exact=True).click()
         self.page.get_by_role("button", name="Criar encomenda", exact=True).wait_for()
+
+    def test_earlier_receipt_with_unknown_original_packaging_keeps_bottle_total(self):
+        from tests.vertente.fixtures import receipt
+
+        self.provision()
+        o = self.new_order(4)
+        r = receipt(901, bottles=4, confirmed_at=self.after(o), capacity=None)
+        r["boxes"] = None
+        r["units"] = None
+        self.import_receipts([r])
+        saved = self.call("state")
+        self.assertEqual(saved["orders"][0]["state"], "received")
+        self.assertEqual(saved["receipts"][0]["units"], None)
+        self.assertEqual(saved["allocations"][0]["bottles"], 4)
