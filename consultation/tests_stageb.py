@@ -97,8 +97,13 @@ class StageBExportTests(TransactionTestCase):
     def test_receipt_recovery_is_signed_bounded_and_does_not_replace_stock(self):
         confirmed_operation(self.admin, self.ref, kind="entry")
         before = list(Reference.objects.values_list("pk", "current_stock", "stock_version"))
-        data = recovery_receipts(start=timezone.now() - timedelta(days=30), end=timezone.now())
+        data = recovery_receipts(
+            start=(timezone.now() - timedelta(days=30)).astimezone(timezone.get_fixed_timezone(60)),
+            end=timezone.now().astimezone(timezone.get_fixed_timezone(60)),
+        )
         self.assertEqual(data["format"], "vertente-receipts")
+        self.assertTrue(decode(data)["coverage"]["from"].endswith("Z"))
+        self.assertTrue(decode(data)["coverage"]["until"].endswith("Z"))
         self.assertNotIn("references", decode(data))
         self.assertEqual(len(decode(data)["receipts"]), 1)
         self.assertEqual(ExportSource.objects.get().sequence, 0)

@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -21,7 +21,7 @@ MAX_BYTES = 8 * 1024 * 1024
 
 
 def instant(value):
-    return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def receipt_rows(start, end):
