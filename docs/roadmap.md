@@ -173,3 +173,11 @@ por localização/setor, setor sempre visível e reabertura da contagem existent
 Migração e recuperação testadas apenas com dados sintéticos; ver [etapa-a4.md](etapa-a4.md).
 Não instalar nem testar no computador pessoal. Preparação empresarial e publicação
 reais continuam fora desta entrega, com revisão/autorização próprias.
+
+
+## Etapa B — Stock Vertente Aveludada
+
+Consulta Android offline separada, perfis de dispositivo assinados, encomendas cifradas,
+exportação Stock v2 com Entradas e receções FIFO. Reutiliza seletivamente as Etapas 6/7
+sobre main A4, sem alterar os PR anteriores. Ver [decisões, instalação e limites](etapa-b.md).
+Validação apenas sintética; sem publicação, instalação pessoal ou merge automático.
