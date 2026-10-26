@@ -294,3 +294,14 @@ sessões anteriores; a alteração própria preserva apenas a sessão atual. Lim
 HMAC independentes do login protegem tentativas concorrentes. A atualização
 Windows A2 → A3 recupera backup para outro destino, nunca migra o piloto instalado
 in-place. Ver [decisões, migração e procedimento A3](etapa-a3.md).
+
+## Etapa A4 — identidade anual do movimento
+
+A confirmação reserva a identidade anual independentemente do PDF. `ReportNumber`
+conserva o nome/IDs históricos, com FK de documento facultativa e movimento
+obrigatório; `ReportSequence` continua único. A guarda PostgreSQL exige identidade
+em novas confirmações operacionais, e números sem PDF impedem uma reversão para
+A3. Não há backfill, reescrita de documentos ou emissão tardia de relatórios.
+O inventário mostra posição física/contagem na lista e abre linhas já selecionadas
+sem escritas. Pesquisa, seleção e âmbito de contagem permanecem distintos.
+Ver [decisões, migração e validação A4](etapa-a4.md). Não há atualização do piloto pessoal.

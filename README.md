@@ -60,6 +60,12 @@ localização. Ver [o guia A3 e atualização segura A2 → A3](docs/etapa-a3.md
 Requer uma migração apenas na cópia recuperada; a instalação A2 na porta 8766
 mantém-se preservada, sem atualização automática.
 
+**Etapa A4:** todas as novas confirmações recebem número anual, mesmo entradas
+sem PDF; inventário com localização/setor visíveis e reabertura direta de contagens.
+Ver [compatibilidade A3 → A4 e validação automática](docs/etapa-a4.md).
+Não instalar nem testar esta entrega no computador pessoal; o piloto existente
+permanece preservado. A futura instalação na empresa terá revisão própria.
+
 Requisitos: Python 3.12, [uv](https://docs.astral.sh/uv/) e Docker com Compose v2.
 Use o checkout existente; não é necessário criar um worktree. Na raiz do projeto:
 

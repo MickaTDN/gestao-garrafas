@@ -164,3 +164,12 @@ seleção direta, confirmação/minimização, setores dependentes e ordenação
 Conserva contagem completa, zero/vazio, transferências, assinaturas, PDFs,
 concorrência e histórico. Migração apenas na cópia recuperada do piloto A2.
 Ver [etapa-a3.md](etapa-a3.md). Sem integração Android ou atualização automática.
+
+## Etapa A4 — correções 26 e 27
+
+Número anual para cada nova confirmação, incluindo entradas sem PDF, na sequência
+comum existente. Históricos sem número não são renumerados. Inventário como lista
+por localização/setor, setor sempre visível e reabertura da contagem existente.
+Migração e recuperação testadas apenas com dados sintéticos; ver [etapa-a4.md](etapa-a4.md).
+Não instalar nem testar no computador pessoal. Preparação empresarial e publicação
+reais continuam fora desta entrega, com revisão/autorização próprias.

@@ -187,13 +187,35 @@ def main(image, previous_image=None, preserve_volumes=False):
                 "-c",
                 code,
             )
+            no_pdf = "from accounts.models import User; from inventory.models import Reference; from tests.document_fixtures import confirmed_operation; u=User.objects.get(username='windows-smoke-synthetic'); r=Reference.objects.get(code='SYN-WIN-001'); confirmed_operation(u,r,kind='entry',units=1,report=False)"
+            compose(
+                source,
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "manage.py",
+                "shell",
+                "--verbosity",
+                "0",
+                "-c",
+                no_pdf,
+            )
+            expected_without_pdf_numbers = sql(
+                source,
+                "SELECT count(n.id) FROM inventory_movement m LEFT JOIN inventory_reportnumber n ON n.movement_id=m.id WHERE m.kind='entry' AND NOT m.report_requested AND m.status='confirmed'",
+            )
+            expected_sequence = sql(
+                source,
+                "SELECT last_number FROM inventory_reportsequence ORDER BY year DESC LIMIT 1",
+            )
             expected_stock = sql(
                 source, "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'"
             )
             expected_documents = sql(
                 source, "SELECT string_agg(sha256,',' ORDER BY id) FROM inventory_document"
             )
-            assert expected_stock == "22" and len(expected_documents.split(",")) == 2
+            assert expected_stock == "23" and len(expected_documents.split(",")) == 2
             if previous_image:
                 # Only this NEW synthetic namespace: demonstrate that new code
                 # refuses an in-place schema upgrade, BEFORE any migration.
@@ -284,6 +306,36 @@ def main(image, previous_image=None, preserve_volumes=False):
                 sql(recovered, "SELECT string_agg(sha256,',' ORDER BY id) FROM inventory_document")
                 == expected_documents
             )
+            assert (
+                sql(
+                    recovered,
+                    "SELECT count(n.id) FROM inventory_movement m LEFT JOIN inventory_reportnumber n ON n.movement_id=m.id WHERE m.kind='entry' AND NOT m.report_requested AND m.status='confirmed'",
+                )
+                == expected_without_pdf_numbers
+            )
+            assert (
+                sql(
+                    recovered,
+                    "SELECT last_number FROM inventory_reportsequence ORDER BY year DESC LIMIT 1",
+                )
+                == expected_sequence
+            )
+            # Every NEW no-PDF entry has an identity; the restored pre-A4 one
+            # remains exactly as it was, with no retroactive number assignment.
+            new_no_pdf = "from accounts.models import User; from inventory.models import Reference,ReportSequence; from tests.document_fixtures import confirmed_operation; u=User.objects.get(username='windows-smoke-synthetic'); r=Reference.objects.get(code='SYN-WIN-001'); previous=ReportSequence.objects.get(year=__import__('django.utils.timezone',fromlist=['localdate']).localdate().year).last_number; m=confirmed_operation(u,r,kind='entry',units=1,report=False); assert m.report_number.number==previous+1 and m.report_number.document_id is None and not m.documents.exists(); print('A4 independent movement identity without PDF: PASS')"
+            compose(
+                recovered,
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "manage.py",
+                "shell",
+                "--verbosity",
+                "0",
+                "-c",
+                new_no_pdf,
+            )
             # Reproduce the pre-upgrade A2 signature/PDF using the new code,
             # before creating any A3 documents. Legacy unique PDFs stay protected.
             if sql(recovered, "SELECT count(*) FROM inventory_reportnumber") != "0":
@@ -322,7 +374,7 @@ def main(image, previous_image=None, preserve_volumes=False):
                     recovered,
                     "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'",
                 )
-                == "23"
+                == "25"
             )
             # A3 password transitions also work with the application role, never
             # owner rights, plaintext logs, or accounts from an existing pilot.
@@ -373,11 +425,11 @@ def main(image, previous_image=None, preserve_volumes=False):
                     recovered,
                     "SELECT current_stock FROM inventory_reference WHERE code='SYN-WIN-001'",
                 )
-                == "23"
+                == "25"
             )
             validate_scope(recovered, project2)
             print(
-                "Windows payload smoke: isolated setup, least-privilege operation, PDF/signature, restart persistence, backup, separate recovery, A2 exact reproduction, existing-target refusal and unchanged source: PASS"
+                "Windows payload smoke: isolated setup, least-privilege operation, PDF/signature, restart persistence, backup, separate recovery, A4 independent numbering and exact reproduction, existing-target refusal and unchanged source: PASS"
             )
         finally:
             # Test-only cleanup: only randomly-created namespaces from THIS process.
