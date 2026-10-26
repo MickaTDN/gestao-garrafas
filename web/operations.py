@@ -105,8 +105,57 @@ def _search_results(request, movement, refs_page, filter_form):
             "refs_page": refs_page,
             "searched": bool(filter_form.is_valid() and filter_form.cleaned_data.get("q")),
             "ref_params": params.urlencode(),
+            **_inventory_list_context(request, movement, refs_page, filter_form),
         },
     )
+
+
+def _inventory_edit_url(request, movement, line_id=None, page=1):
+    params = request.GET.copy()
+    for key in ("partial", "focus", "page", "inventory_scope"):
+        params.pop(key, None)
+    if page > 1:
+        params["page"] = page
+    if line_id:
+        params["focus"] = line_id
+    url = reverse("web:operation-edit", args=[movement.pk])
+    if params:
+        url += "?" + params.urlencode()
+    return url + (f"#inventory-line-{line_id}" if line_id else "")
+
+
+def _inventory_list_context(request, movement, refs_page, form):
+    if movement.kind != "inventory":
+        return {}
+    location = form.cleaned_data.get("location") if form.is_valid() else None
+    context = {"filter_location_id": location.pk if location else None}
+    if not movement.pk or movement.inventory_scope == "full":
+        return context
+    rows = inventory_order(movement.lines.all(), "reference__").values(
+        "pk",
+        "reference_id",
+        "boxes",
+        "units",
+        "counted_quantity",
+        "box_capacity",
+        "quantity_checked",
+    )
+    selected = {row["reference_id"]: (index // 30 + 1, row) for index, row in enumerate(rows)}
+    for reference in refs_page:
+        if reference.pk not in selected:
+            continue
+        page, row = selected[reference.pk]
+        reference.count_line_id = row["pk"]
+        reference.count_url = _inventory_edit_url(request, movement, row["pk"], page)
+        reference.count_status = (
+            "Ainda não contado"
+            if row["counted_quantity"] is None
+            else entered_quantity(
+                row["boxes"], row["units"], row["counted_quantity"], row["box_capacity"]
+            )
+        )
+        reference.count_checked = row["quantity_checked"]
+    return context
 
 
 def _new_movement(request, kind):
@@ -197,6 +246,13 @@ def _new_movement(request, kind):
                 return redirect("web:operation-reference", pk=saved.pk)
             if action == "reactivate":
                 return redirect("web:operation-reactivate", pk=saved.pk, reference_pk=reactivate_id)
+            if kind == "inventory":
+                line = (
+                    saved.lines.filter(reference_id=add_ids[-1]).first()
+                    if add_ids and scope != "full"
+                    else None
+                )
+                return redirect(_inventory_edit_url(request, saved, line.pk if line else None))
             return redirect("web:operation-edit", pk=saved.pk)
         except (ValidationError, ValueError) as error:
             _errors(
@@ -223,6 +279,7 @@ def _new_movement(request, kind):
             "people": Person.objects.filter(active=True).order_by("name"),
             "pending_page": _pending(request, kind),
             "scope_form": scope_form,
+            **_inventory_list_context(request, movement, refs_page, filter_form),
         },
         status=400 if request.method == "POST" else 200,
     )
@@ -324,7 +381,8 @@ def edit(request, pk):
     filter_form, refs = _catalogue(
         request, active_only=movement.kind != "entry", name_only=movement.kind != "inventory"
     )
-    refs = refs.exclude(pk__in=movement.lines.values_list("reference_id", flat=True))
+    if movement.kind != "inventory":
+        refs = refs.exclude(pk__in=movement.lines.values_list("reference_id", flat=True))
     if movement.correction_of_id:
         refs = refs.filter(movement_lines__movement_id=movement.correction_of_id).distinct()
     refs_page = Paginator(refs, 20).get_page(request.GET.get("ref_page"))
@@ -386,6 +444,13 @@ def edit(request, pk):
                 raise ValidationError("Ação inválida.")
             if action == "new-reference" and movement.kind != "entry":
                 raise ValidationError("Só pode criar referências numa entrada.")
+            if (
+                movement.kind == "inventory"
+                and movement.lines.filter(reference_id__in=add_ids).exists()
+            ):
+                raise ValidationError(
+                    "Esta referência já está selecionada. Abra a contagem existente na lista."
+                )
             movement = operations.save_draft(
                 pk,
                 actor=request.user,
@@ -413,8 +478,13 @@ def edit(request, pk):
                     selected = inventory_order(selected, "reference__")
                 order = list(selected.values_list("reference_id", flat=True))
                 page = order.index(add_ids[-1]) // 30 + 1
+                if movement.kind == "inventory":
+                    line_id = movement.lines.get(reference_id=add_ids[-1]).pk
+                    return redirect(_inventory_edit_url(request, movement, line_id, page))
                 url = reverse("web:operation-edit", args=[pk])
                 return redirect(url + ("?" + urlencode({"page": page}) if page > 1 else ""))
+            if movement.kind == "inventory":
+                return redirect(_inventory_edit_url(request, movement, page=lines_page.number))
             return redirect(request.get_full_path())
         except (ValidationError, ValueError) as error:
             _errors(
@@ -459,6 +529,10 @@ def edit(request, pk):
             "people": Person.objects.filter(active=True).order_by("name"),
             "counted": movement.lines.filter(counted_quantity__isnull=False).count(),
             "total_lines": movement.lines.count(),
+            "focus_line_id": int(request.GET.get("focus", "0"))
+            if request.GET.get("focus", "0").isdigit() and len(request.GET.get("focus", "0")) < 19
+            else None,
+            **_inventory_list_context(request, movement, refs_page, filter_form),
         },
         status=400 if request.method == "POST" else 200,
     )
@@ -487,7 +561,7 @@ def review(request, pk):
         form.fields["validation"].label = "Validação do inventário"
     if request.method == "POST" and form.is_valid():
         try:
-            confirm_movement(
+            confirmed = confirm_movement(
                 pk,
                 actor=request.user,
                 review_token=form.cleaned_data["token"],
@@ -502,7 +576,12 @@ def review(request, pk):
         else:
             messages.success(
                 request,
-                "Operação confirmada. Os relatórios solicitados ou obrigatórios foram guardados.",
+                f"Operação confirmada · {confirmed.display_number}. "
+                + (
+                    "Relatório PDF guardado."
+                    if confirmed.report_number.document_id
+                    else "Sem relatório PDF, conforme escolhido."
+                ),
             )
             return redirect("web:operation-detail", pk=pk)
     # Show exactly what was reviewed, not silently refreshed quantities.
