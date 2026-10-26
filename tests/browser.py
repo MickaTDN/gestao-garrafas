@@ -596,10 +596,13 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
     def a4_worklist(self, width, full):
         from inventory.models import AuditEvent, Movement, Sector
 
+        long_name = "Azul sintética operacional — referência fictícia com designação longa para validar a lista de trabalho em computador e telemóvel"
+        self.first.name = long_name
+
         def prepare():
             nine = Sector.objects.create(location=self.location, name="Setor 9")
             ten = Sector.objects.create(location=self.location, name="Setor 10")
-            Reference.objects.filter(pk=self.first.pk).update(sector=nine)
+            Reference.objects.filter(pk=self.first.pk).update(sector=nine, name=long_name)
             Reference.objects.filter(pk=self.second.pk).update(sector=ten)
 
         self.database_call(prepare)

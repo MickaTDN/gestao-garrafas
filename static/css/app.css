@@ -40,3 +40,5 @@ details.operation-line>summary{cursor:pointer;display:list-item;padding:4px 0}de
 .inventory-position{display:block;color:var(--dim);font-size:12px;font-weight:500;white-space:normal}.inventory-choice{white-space:normal}details.operation-line>summary .inventory-position{margin-top:4px}
 
 .inventory-line .line-summary-quantity{float:none;display:block;margin-top:4px}
+
+#operation-form[data-kind=inventory] .reference-choice{white-space:normal}.inventory-line>summary{overflow-wrap:anywhere}
