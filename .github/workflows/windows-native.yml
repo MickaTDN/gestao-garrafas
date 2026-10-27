@@ -11,14 +11,17 @@ permissions:
   contents: read
 jobs:
   windows-native-synthetic:
+    name: windows-native-synthetic
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
       - name: Install locked tools
@@ -63,12 +66,15 @@ jobs:
       - name: Actual synthetic EXE installation, services, update, recovery and uninstall
         shell: pwsh
         run: uv run python tests/native_windows/windows_smoke.py "$env:RUNNER_TEMP\gva-native"
-      - name: Publish SYNTHETIC installers only (unsigned, non-production)
-        if: always()
-        uses: actions/upload-artifact@v4
+      # No PR/push upload. This never publishes an official release. A fork can
+      # edit its own CI; no resulting artefact is approved or signed by the company.
+      - name: Retain unapproved synthetic installers after manual main execution only
+        if: >-
+          always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'MickaTDN/gestao-garrafas'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: GVA-SYNTHETIC-UNSIGNED-NOT-FOR-PRODUCTION-${{ github.sha }}
+          name: UNAPPROVED-SYNTHETIC-UNSIGNED-NOT-FOR-DISTRIBUTION-${{ github.sha }}
           path: |
             ${{ runner.temp }}/gva-native/artifacts/*.exe
             ${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt
-          retention-days: 14
+          retention-days: 3
