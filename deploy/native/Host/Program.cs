@@ -27,7 +27,7 @@ static class Program
         {
             if (args.Length == 3 && args[0] == "--ci-wizard")
             {
-                if (Channel != "synthetic" || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true") throw new UserError("Apenas validação sintética na CI.");
+                if (Channel != "synthetic") throw new UserError("Apenas validação sintética na CI.");
                 var requestData = JsonDocument.Parse(File.ReadAllText(args[2])).RootElement;
                 string action = requestData.TryGetProperty("archive", out _) ? "recover" : File.Exists(Path.Combine(Root, "installation.json")) ? "update" : "install";
                 return Run(Path.Combine(args[1], "payload"), action, args[2], args[1]);
@@ -39,7 +39,7 @@ static class Program
             Application.Run(new Dashboard()); return 0;
         }
         catch (Exception error)
-        { if (Channel == "synthetic" && Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") { File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("RUNNER_TEMP")!, "gva-native", "host-error.txt"), error is UserError ? error.Message : error.GetType().Name); return 1; }
+        { if (Channel == "synthetic") { string log = Environment.GetEnvironmentVariable("RUNNER_TEMP") is string ci ? Path.Combine(ci, "gva-native") : Path.GetTempPath(); File.WriteAllText(Path.Combine(log, "host-error.txt"), error is UserError ? error.Message : error.GetType().Name); return 1; }
           MessageBox.Show("Não foi possível concluir a operação. Preserve os dados e contacte a informática.\n" + (error is UserError ? error.Message : error.GetType().Name), "Gestão Vertente Aveludada", MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
     }
 
@@ -67,7 +67,10 @@ static class Program
         if (File.Exists(Path.Combine(Root, "installation.json")))
         {
             var old = Version.Parse(State.GetProperty("version").GetString()!);
-            if (old >= Version.Parse(next.GetProperty("version").GetString()!) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Nenhum dado foi alterado.");
+            var incoming = Version.Parse(next.GetProperty("version").GetString()!);
+            bool uninstalled = State.TryGetProperty("uninstalled", out var removed) && removed.GetBoolean();
+            bool repair = uninstalled && old == incoming;
+            if ((old >= incoming && !repair) || (uninstalled && !repair) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Após desinstalar, reponha primeiro a versão exata.");
             if (File.Exists(Path.Combine(Root, "maintenance.json"))) throw new UserError("Manutenção interrompida. É necessária recuperação pela informática.");
         }
     }

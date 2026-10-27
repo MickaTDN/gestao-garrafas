@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 def run(args, *, expected=0, **kwargs):
-    result = subprocess.run(list(map(str, args)), timeout=1200, **kwargs)
+    result = subprocess.run(list(map(str, args)), timeout=480, **kwargs)
     if result.returncode != expected:
         raise RuntimeError(
             f"Synthetic command failed: {Path(str(args[0])).name}, exit={result.returncode}"
@@ -32,6 +32,7 @@ def main(directory):
     phrase = "synthetic-recovery-only-never-use-in-production"
 
     def install(version):
+        print("::notice::Native smoke: installing " + version, flush=True)
         request = directory / f"request-{version}.json"
         request.write_text(
             json.dumps(
@@ -48,11 +49,13 @@ def main(directory):
             [
                 directory / f"artifacts/GVA-synthetic-{version}-win-x64.exe",
                 "/S",
+                "/CITestRequest=" + str(request),
             ],
             env={**os.environ, "GVA_CI_REQUEST": str(request)},
         )
 
     install("1.0.0")
+    print("::notice::Native smoke: initial installation complete", flush=True)
     state = json.loads((root / "installation.json").read_text())
     release = Path(state["release"])
     sys.path.insert(0, str(release / "app"))
@@ -198,6 +201,29 @@ def main(directory):
         assert conn.execute(
             "SELECT rolsuper,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user"
         ).fetchone() == (False, False, False)
+    # Reinstall matching code after uninstall, preserving the SAME cluster/data.
+    # This is not a downgrade, migration or synthetic reseed.
+    uninstaller = (
+        Path(os.environ["ProgramFiles"]) / "GestaoVertenteAveludada-synthetic/Uninstall.exe"
+    )
+    run([uninstaller, "/S"])
+    for _ in range(60):
+        if not uninstaller.exists():
+            break
+        time.sleep(1)
+    time.sleep(1)
+    assert json.loads((root / "installation.json").read_text())["uninstalled"] is True
+    install("1.1.0")
+    health_http(root)
+    assert json.loads((root / "installation.json").read_text())["uninstalled"] is False
+    assert (root / "signing/signing.pem").read_bytes() == key_before
+    with connection(root) as conn:
+        assert conn.execute(
+            "SELECT source_id::text,sequence FROM consultation_exportsource"
+        ).fetchone() == (source[0], source[1] + 1)
+        assert (
+            conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
+        )
     # Actual service/DB failure after migration: all services remain disabled,
     # a durable journal blocks restart, and only NEW-root recovery may resume.
     from native_windows.maintenance import UpdateActions
@@ -253,6 +279,7 @@ def main(directory):
         [
             directory / "artifacts/GVA-synthetic-1.1.0-win-x64.exe",
             "/S",
+            "/CITestRequest=" + str(recovery_request),
         ],
         env={**os.environ, "GVA_CI_REQUEST": str(recovery_request)},
     )
@@ -286,6 +313,10 @@ if __name__ == "__main__":
     except Exception as error:
         host = Path(os.environ["RUNNER_TEMP"]) / "gva-native/host-error.txt"
         detail = host.read_text() if host.is_file() else str(error)
+        root = Path(os.environ["PROGRAMDATA"]) / "GestaoVertenteAveludada-Teste"
+        marker = root / "maintenance.json"
+        if marker.is_file():
+            detail += "; journal=" + marker.read_text()
         print(
             "::error::Native Windows smoke: "
             + type(error).__name__

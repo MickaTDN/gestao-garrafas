@@ -71,6 +71,7 @@ def recover(root, release, manifest, request):
             config = json.loads(publisher.read_text())
             write_json(publisher, {**config, "enabled": False})
         state["release"] = str(release)
+        state["uninstalled"] = False
         write_json(root / "installation.json", state)
         configure(root, release, create=True)
         prepare_acl(root)
@@ -125,6 +126,53 @@ def approve_recovery(root, request):
             write_json(root / "recovery-approved.json", {"identity_and_history_reviewed": True})
             (root / "maintenance.json").unlink()
             (root / "recovery-verified.json").unlink()
+        except Exception:
+            disable_all()
+            stop_all()
+            raise
+        finally:
+            (root / "activation-permit").unlink(missing_ok=True)
+
+
+def repair_program(root, release, manifest, request):
+    """Reinstall matching authenticated code after uninstall, without reseeding/migrating."""
+    from .install import health_http
+    from .maintenance import UpdateActions
+    from .runtime import manage
+    from .state import exclusive
+    from .windows import activate, disable_all, stop_all
+
+    root = Path(root)
+    with exclusive(root):
+        state = read_state(root)
+        if (
+            not state.get("uninstalled")
+            or manifest["version"] != state["version"]
+            or (root / "maintenance.json").exists()
+        ):
+            raise UnsafeOperation(
+                "Repor programa exige a versão exata, desinstalação reconhecida e ausência de manutenção interrompida."
+            )
+        write_json(
+            root / "maintenance.json", {"phase": "repair-program", "version": state["version"]}
+        )
+        write_json(root / "installation.json", {**state, "release": str(release)})
+        try:
+            configure(root, release, create=True)
+            actions = UpdateActions(
+                root, release, request["recovery_key"], request["recovery_password"]
+            )
+            actions.backup_and_restore_check()
+            manage(root, "check", "--fail-level", "WARNING")
+            manage(root, "migrate", "--check")  # Never migrates during repair.
+            stop_all()
+            write_json(
+                root / "installation.json", {**state, "release": str(release), "uninstalled": False}
+            )
+            (root / "activation-permit").write_text(str(release))
+            activate(root)
+            health_http(root)
+            (root / "maintenance.json").unlink()
         except Exception:
             disable_all()
             stop_all()

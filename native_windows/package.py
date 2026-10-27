@@ -84,10 +84,13 @@ def verify(root, trust_path, installed=None):
         if minimum > current:
             raise ValueError
         if installed:
+            old = version(installed["version"])
+            repair = installed.get("uninstalled") is True and old == current
             if (
                 installed["channel"] != manifest["channel"]
-                or version(installed["version"]) >= current
-                or version(installed["version"]) < minimum
+                or (old >= current and not repair)
+                or (installed.get("uninstalled") is True and not repair)
+                or old < minimum
             ):
                 raise UnsafeOperation(
                     "Atualização antiga, repetida ou incompatível. Os dados não foram alterados."

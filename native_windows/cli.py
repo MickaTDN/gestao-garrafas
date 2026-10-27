@@ -107,14 +107,19 @@ def main():
 
         initial(root, release, manifest, request, trust_path)
     elif args.action == "update":
-        from .maintenance import UpdateActions
-        from .state import update
+        if installed.get("uninstalled") is True:
+            from .recover import repair_program
 
-        update(
-            root,
-            manifest,
-            UpdateActions(root, release, request["recovery_key"], request["recovery_password"]),
-        )
+            repair_program(root, release, manifest, request)
+        else:
+            from .maintenance import UpdateActions
+            from .state import update
+
+            update(
+                root,
+                manifest,
+                UpdateActions(root, release, request["recovery_key"], request["recovery_password"]),
+            )
     elif args.action == "recover":
         from .recover import recover
 
@@ -131,6 +136,11 @@ def main():
         from .windows import uninstall
 
         uninstall()
+        if (root / "installation.json").is_file():
+            from .state import write_json
+
+            state = json.loads((root / "installation.json").read_text())
+            write_json(root / "installation.json", {**state, "uninstalled": True})
     elif args.action == "approve-recovery":
         from .recover import approve_recovery
 

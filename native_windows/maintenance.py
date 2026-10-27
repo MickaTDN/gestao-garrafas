@@ -76,9 +76,9 @@ def evidence(conn):
     ):
         # Stable per-row hash and ordering also checks binary payloads, identities and credentials.
         rows = conn.execute(
-            sql.SQL("SELECT md5(row_to_json(t)::text) FROM {} t ORDER BY 1").format(
-                sql.Identifier(table)
-            )
+            sql.SQL(
+                "SELECT encode(sha256(convert_to(row_to_json(t)::text,'UTF8')),'hex') FROM {} t ORDER BY 1"
+            ).format(sql.Identifier(table))
         )
         h = hashlib.sha256()
         count = 0

@@ -130,3 +130,19 @@ class PackageTests(TestCase):
         with self.assertRaises(UnsafeOperation):
             refuse_reparse(link / "new-directory")
         self.assertEqual(list(target.iterdir()), [])
+
+    def test_same_version_only_repairs_a_recognized_uninstall(self):
+        self.assertEqual(
+            verify(
+                self.bundle,
+                self.trust,
+                {"version": "1.1.0", "channel": "synthetic", "uninstalled": True},
+            )["version"],
+            "1.1.0",
+        )
+        with self.assertRaises(UnsafeOperation):
+            verify(
+                self.bundle,
+                self.trust,
+                {"version": "1.0.0", "channel": "synthetic", "uninstalled": True},
+            )

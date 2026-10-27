@@ -3,6 +3,7 @@ Unicode true
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "WinVer.nsh"
+!include "FileFunc.nsh"
 !ifndef Version
   !error "Version required"
 !endif
@@ -48,11 +49,11 @@ Function .onInit
   SetRegView 64
   SetShellVarContext all
   ${IfNot} ${RunningX64}
-    MessageBox MB_ICONSTOP "É necessário Windows x64."
+    MessageBox MB_ICONSTOP "É necessário Windows x64." /SD IDOK
     Abort
   ${EndIf}
   ${IfNot} ${AtLeastWin11}
-    MessageBox MB_ICONSTOP "É necessário Windows 11 (ou ambiente descartável compatível de CI)."
+    MessageBox MB_ICONSTOP "É necessário Windows 11 (ou ambiente descartável compatível de CI)." /SD IDOK
     Abort
   ${EndIf}
   InitPluginsDir
@@ -81,8 +82,9 @@ Section "Instalar ou atualizar"
 !if "${Channel}" == "synthetic"
   ReadEnvStr $Result "GITHUB_ACTIONS"
   ReadEnvStr $CIRequest "GVA_CI_REQUEST"
-  ${If} $Result == "true"
-  ${AndIf} $CIRequest != ""
+  ${GetParameters} $0
+  ${GetOptions} $0 "/CITestRequest=" $CIRequest
+  ${If} $CIRequest != ""
     StrCpy $Arguments '--ci-wizard "$INSTDIR\releases\${Version}" "$CIRequest"'
   ${EndIf}
 !endif
