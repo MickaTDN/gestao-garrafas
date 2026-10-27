@@ -1,6 +1,7 @@
 # Disposable CI only. No execution-policy bypass and no changes on user computers.
 param([Parameter(Mandatory=$true)][string]$Root,[Parameter(Mandatory=$true)][string]$Release)
 $ErrorActionPreference='Stop'
+try {
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Disposable CI only' }
 $state=Get-Content -Raw -LiteralPath (Join-Path $Root 'installation.json')|ConvertFrom-Json
 if ($state.channel -ne 'synthetic' -or $state.database -ne 'gva_native_synthetic') { throw 'Synthetic installation required' }
@@ -10,7 +11,7 @@ $null=New-LocalUser -Name $name -Password $password -Description 'Disposable nat
 Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $name
 $probe=Join-Path $env:ProgramData ('gva-probe-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $probe
-& icacls.exe $probe /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' ($env:COMPUTERNAME+'\'+$name+':(OI)(CI)M')|Out-Null
+& icacls.exe $probe /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' /grant:r '*S-1-5-32-544:(OI)(CI)F' /grant:r ($env:COMPUTERNAME+'\'+$name+':(OI)(CI)M')|Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Probe ACL failed' }
 @'
 import json,sys,urllib.request
@@ -45,4 +46,9 @@ try {
 } finally {
  # Only this freshly generated CI account; no existing users/directories touched.
  Remove-LocalUser -Name $name
+}
+
+} catch {
+ Write-Host ('::error::Standard user probe: '+$_.Exception.Message+'; '+$_.ScriptStackTrace.Replace("`n",' '))
+ exit 1
 }

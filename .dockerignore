@@ -50,3 +50,9 @@ attachments
 **/*.varequest.json
 **/publisher.env
 **/publisher-installation.json
+
+# Native build output and encrypted archives are not runtime source.
+deploy/native/Host/bin
+deploy/native/Host/obj
+**/*.gvabackup
+**/*.gvabackup.partial
