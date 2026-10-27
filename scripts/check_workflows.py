@@ -25,6 +25,11 @@ ARTIFACT_PATHS = {
     "${{ runner.temp }}/gva-native/artifacts/*.exe",
     "${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt",
 }
+NATIVE_JOB_GUARD = (
+    "github.repository == 'MickaTDN/gestao-garrafas' && "
+    "(github.event_name != 'pull_request' || "
+    "github.event.pull_request.head.repo.full_name == github.repository)"
+)
 
 
 class UniqueLoader(yaml.BaseLoader):
@@ -77,6 +82,8 @@ def validate(workflow, approved):
             errors.append(prefix + "no privileged environments, inherited secrets or reusable jobs")
         if "permissions" in job and job["permissions"] not in ({}, {"contents": "read"}):
             errors.append(prefix + "job must not expand permissions")
+        if name == "windows-native-synthetic" and job.get("if", "").strip() != NATIVE_JOB_GUARD:
+            errors.append(prefix + "native service/ACL installation must not run for fork PRs")
         try:
             if not 1 <= int(job.get("timeout-minutes", "0")) <= 60:
                 raise ValueError

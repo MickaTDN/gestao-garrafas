@@ -8,6 +8,7 @@ from scripts.check_workflows import (
     APPROVED,
     ARTIFACT_GUARD,
     ARTIFACT_PATHS,
+    NATIVE_JOB_GUARD,
     ROOT,
     load_workflow,
     validate,
@@ -79,6 +80,13 @@ class WorkflowSecurityTests(unittest.TestCase):
     def test_duplicate_yaml_keys_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "duplicate YAML key"):
             load_workflow("permissions: {}\npermissions: {contents: write}\n")
+
+    def test_native_service_installation_requires_the_internal_repository_guard(self):
+        job = {"runs-on": "windows-2025", "timeout-minutes": "60", "steps": []}
+        self.workflow["jobs"]["windows-native-synthetic"] = job
+        self.assertTrue(validate(self.workflow, self.approved))
+        job["if"] = NATIVE_JOB_GUARD
+        self.assertEqual(validate(self.workflow, self.approved), [])
 
     def upload(self):
         return {
