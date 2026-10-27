@@ -23,6 +23,8 @@ jobs:
           python -m pip install uv==0.12.23
           uv sync --frozen
           choco install nsis --version=3.11 --yes --no-progress
+      - name: Real NTFS and virtual-service ACL safeguards (fresh synthetic files)
+        run: uv run python tests/native_windows/acl_probe.py
       - name: Fetch synthetic vendor inputs (never release trust)
         shell: powershell
         run: .\scripts\native\Prepare-TestInputs.ps1 -Directory "$env:RUNNER_TEMP\gva-native"
