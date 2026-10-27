@@ -1,7 +1,7 @@
 name: Native Windows installer
 on:
   push:
-    branches: [stagec/windows-native-installer]
+    branches: [main, stagec/windows-native-installer]
   pull_request:
   workflow_dispatch:
 concurrency:
