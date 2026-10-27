@@ -7,7 +7,7 @@ from pathlib import Path
 from .crypto_backup import decrypt
 from .install import create_cluster, prepare_acl
 from .maintenance import evidence, extract_verified, grants, pg_tool
-from .package import UnsafeOperation
+from .package import UnsafeOperation, refuse_reparse
 from .runtime import read_state
 from .state import write_json
 from .windows import administrator, configure, protect
@@ -16,6 +16,8 @@ from .windows import administrator, configure, protect
 def recover(root, release, manifest, request):
     administrator()
     root = Path(root)
+    refuse_reparse(root)
+    refuse_reparse(release)
     if root.exists() and any(root.iterdir()):
         raise UnsafeOperation(
             "A recuperação exige uma pasta NOVA; nenhum dado existente foi substituído."

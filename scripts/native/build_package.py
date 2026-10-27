@@ -108,6 +108,8 @@ def build(args):
                     "source": item["source"],
                 }
             )
+    if args.synthetic_migration_probe and policy["channel"] != "synthetic":
+        raise UnsafeOperation("A migração de ensaio nunca pode entrar num pacote de distribuição.")
     app = payload / "app"
     app.mkdir()
     for folder in (
@@ -126,6 +128,13 @@ def build(args):
             ROOT / folder,
             app / folder,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "tests"),
+        )
+    if args.synthetic_migration_probe:
+        (app / "consultation/migrations/0003_native_synthetic_probe.py").write_text(
+            "from django.db import migrations\n"
+            "class Migration(migrations.Migration):\n"
+            "    dependencies = [('consultation', '0002_authorizeddevice')]\n"
+            "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
         )
     for file in ("manage.py", "pyproject.toml", "uv.lock"):
         shutil.copy2(ROOT / file, app / file)
@@ -229,6 +238,7 @@ def build(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--synthetic-migration-probe", action="store_true")
     for arg in ("version", "minimum-version", "policy", "key", "inputs", "output"):
         parser.add_argument("--" + arg, required=True)
     try:

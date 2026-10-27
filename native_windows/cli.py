@@ -15,7 +15,33 @@ def data_root():
     suffix = (
         "GestaoVertenteAveludada-Teste" if channel == "synthetic" else "GestaoVertenteAveludada"
     )
-    return Path(os.environ["PROGRAMDATA"]) / suffix
+    if os.name != "nt":
+        raise UnsafeOperation("Este instalador exige Windows.")
+    # Read the Windows known folder, not an overrideable PROGRAMDATA variable.
+    import ctypes
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [
+            ("Data1", wintypes.DWORD),
+            ("Data2", wintypes.WORD),
+            ("Data3", wintypes.WORD),
+            ("Data4", ctypes.c_ubyte * 8),
+        ]
+
+    import uuid
+
+    folder = GUID.from_buffer_copy(uuid.UUID("62AB5D82-FDC1-4DC3-A9DD-070D1D495D97").bytes_le)
+    pointer = ctypes.c_void_p()
+    result = ctypes.windll.shell32.SHGetKnownFolderPath(
+        ctypes.byref(folder), 0, None, ctypes.byref(pointer)
+    )
+    if result:
+        raise UnsafeOperation("Não foi possível localizar ProgramData de forma segura.")
+    try:
+        return Path(ctypes.wstring_at(pointer)) / suffix
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(pointer)
 
 
 def main():
@@ -42,6 +68,9 @@ def main():
     parser.add_argument("--stop-file")
     args = parser.parse_args()
     root = data_root()
+    from .package import refuse_reparse
+
+    refuse_reparse(root)
     if args.action == "service":
         from .runtime import service
 
@@ -92,8 +121,12 @@ def main():
         recover(root, release, manifest, request)
     elif args.action == "backup":
         from .maintenance import backup
+        from .state import exclusive
 
-        backup(root)
+        with exclusive(root):
+            if (root / "maintenance.json").exists():
+                raise UnsafeOperation("Há manutenção por concluir; não inicie outro backup manual.")
+            backup(root)
     elif args.action == "uninstall":
         from .windows import uninstall
 
@@ -108,8 +141,12 @@ def main():
         enable(root, request)
     elif args.action == "publisher":
         from .publisher import configure_publisher
+        from .state import exclusive
 
-        configure_publisher(root, request["configuration"])
+        with exclusive(root):
+            if (root / "maintenance.json").exists():
+                raise UnsafeOperation("Há manutenção por concluir.")
+            configure_publisher(root, request["configuration"])
 
 
 if __name__ == "__main__":

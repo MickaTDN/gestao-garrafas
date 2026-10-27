@@ -111,3 +111,12 @@ def verify(root, trust_path, installed=None):
     except Exception as error:
         raise UnsafeOperation("Pacote inválido, alterado ou sem assinatura autorizada.") from error
     return manifest
+
+
+def refuse_reparse(path):
+    path = Path(path)
+    for part in (path, *path.parents):
+        if part.is_symlink() or part.is_junction():
+            raise UnsafeOperation(
+                "Não são permitidos links/junções nas pastas de programa ou dados."
+            )

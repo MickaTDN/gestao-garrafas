@@ -12,7 +12,7 @@ from psycopg import sql
 
 from .crypto_backup import create_recovery_key
 from .maintenance import connection, grants
-from .package import UnsafeOperation
+from .package import UnsafeOperation, refuse_reparse
 from .runtime import manage, read_state
 from .state import write_json
 from .windows import SERVICES, activate, administrator, configure, free_port, native, protect
@@ -134,6 +134,8 @@ def create_cluster(root):
 def initial(root, release, manifest, request, trust_path):
     administrator()
     root, release = Path(root), Path(release)
+    refuse_reparse(root)
+    refuse_reparse(release)
     if root.exists() and any(root.iterdir()):
         raise UnsafeOperation("A pasta privada já existe. Instalação recusada; não foi adotada.")
     if len(request.get("password", "")) < 12 or not request.get("username"):

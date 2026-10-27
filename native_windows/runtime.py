@@ -54,6 +54,10 @@ def service(root, kind, stop_file):
     root = Path(root)
     state = read_state(root)
     release = Path(state["release"])
+    if Path(__file__).resolve().parents[1] != (release / "app").resolve():
+        raise UnsafeOperation(
+            "Serviço de uma versão antiga recusado. Use apenas a versão instalada."
+        )
     permit = root / "activation-permit"
     permitted = permit.is_file() and permit.read_text() == state["release"]
     if kind != "postgres" and (root / "maintenance.json").exists() and not permitted:

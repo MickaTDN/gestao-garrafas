@@ -7,7 +7,14 @@ from unittest import TestCase
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from native_windows.package import CONTEXT, UnsafeOperation, regular_tree, verify, version
+from native_windows.package import (
+    CONTEXT,
+    UnsafeOperation,
+    refuse_reparse,
+    regular_tree,
+    verify,
+    version,
+)
 
 
 class PackageTests(TestCase):
@@ -111,3 +118,15 @@ class PackageTests(TestCase):
             with self.subTest(value=value), self.assertRaises(UnsafeOperation):
                 version(value)
         self.assertGreater(version("1.10.0"), version("1.9.0"))
+
+    def test_rejects_reparse_ancestors_before_installation_writes(self):
+        target = self.root / "existing-protected-data"
+        target.mkdir()
+        link = self.root / "redirect"
+        try:
+            link.symlink_to(target, target_is_directory=True)
+        except OSError:
+            self.skipTest("Creating symlinks is not permitted on this test host")
+        with self.assertRaises(UnsafeOperation):
+            refuse_reparse(link / "new-directory")
+        self.assertEqual(list(target.iterdir()), [])

@@ -16,7 +16,11 @@ Name "Gestão Vertente Aveludada (${Channel})"
 OutFile "${Bundle}\..\artifacts\GVA-${Channel}-${Version}-win-x64.exe"
 InstallDir "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}"
 RequestExecutionLevel admin
+!if "${Channel}" == "synthetic"
+SetCompressor zlib
+!else
 SetCompressor /SOLID lzma
+!endif
 Icon "..\..\static\branding\copo-com-vida.ico"
 UninstallIcon "..\..\static\branding\copo-com-vida.ico"
 VIProductVersion "${Version}.0"
@@ -26,7 +30,6 @@ VIAddVersionKey "FileVersion" "${Version}"
 VIAddVersionKey "LegalCopyright" "Copo com Vida"
 !define MUI_WELCOMEPAGE_TEXT "Instala Python privado, PostgreSQL 17, aplicação e backups. Guarda dados separados do programa. Requer informática para serviços e NTFS. Não altera DNS ou firewall. Canal ${Channel}; os pacotes synthetic servem apenas para dados fictícios."
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -36,6 +39,12 @@ Var Result
 Var Arguments
 Var CIRequest
 Function .onInit
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
+  Pop $1
+  ${If} $1 == 183
+    SetErrorLevel 1
+    Abort "Já existe uma instalação ou desinstalação em curso."
+  ${EndIf}
   SetRegView 64
   SetShellVarContext all
   ${IfNot} ${RunningX64}
@@ -58,6 +67,9 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 Section "Instalar ou atualizar"
+  StrCmp $INSTDIR "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}" +3
+    SetErrorLevel 1
+    Abort "Use a pasta de programa protegida definida pelo instalador."
   IfFileExists "$INSTDIR\releases\${Version}\package.json" 0 +3
     SetErrorLevel 1
     Abort "Não se substituem versões já instaladas."
@@ -89,6 +101,14 @@ Section "Instalar ou atualizar"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayIcon" "$INSTDIR\GVA.Native.exe"
 SectionEnd
+Function un.onInit
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
+  Pop $1
+  ${If} $1 == 183
+    SetErrorLevel 1
+    Abort "Há instalação/manutenção em curso."
+  ${EndIf}
+FunctionEnd
 Section "Uninstall"
   SetRegView 64
   SetShellVarContext all

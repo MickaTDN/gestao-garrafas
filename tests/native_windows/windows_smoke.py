@@ -89,12 +89,22 @@ def main(directory):
         )
         return json.loads(Path(filename).read_text())
 
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from tests.native_windows.tls_probe import main as tls_probe
+
+    tls_probe(root, directory)
+    tls_before = {
+        path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
+    }
     packet_before = export_stock(root / "runtime/web/before.vastock.json")
     with connection(root) as conn:
         assert conn.execute(
             "SELECT count(*),sum(current_stock) FROM inventory_reference"
         ).fetchone() == (3, 33)
         assert conn.execute("SELECT count(*) FROM inventory_importbatch").fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT to_regclass('public.gva_native_ci_probe')").fetchone()[0] is None
+        )
         source = conn.execute(
             "SELECT source_id::text,sequence FROM consultation_exportsource"
         ).fetchone()
@@ -123,6 +133,14 @@ def main(directory):
     health_http(root)
     assert json.loads((root / "installation.json").read_text())["version"] == "1.1.0"
     assert (root / "signing/signing.pem").read_bytes() == key_before
+    assert {
+        path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
+    } == tls_before
+    with connection(root) as conn:
+        assert (
+            conn.execute("SELECT label FROM gva_native_ci_probe WHERE id=1").fetchone()[0]
+            == "synthetic-forward-migration"
+        )
     packet_after = export_stock(root / "runtime/web/after.vastock.json")
     import base64
 

@@ -44,10 +44,12 @@ jobs:
         run: |
           $root="$env:RUNNER_TEMP\gva-native"
           foreach ($version in @('1.0.0','1.1.0')) {
-            uv run python scripts/native/build_package.py --version $version --minimum-version 1.0.0 --policy "$root\policy.json" --key "$root\signing.pem" --inputs "$root\inputs.json" --output "$root\package-$version"
+            $probe = @()
+            if ($version -eq '1.1.0') { $probe = @('--synthetic-migration-probe') }
+            uv run python scripts/native/build_package.py --version $version --minimum-version 1.0.0 --policy "$root\policy.json" --key "$root\signing.pem" --inputs "$root\inputs.json" --output "$root\package-$version" @probe
             if ($LASTEXITCODE -ne 0) { throw 'Package build failed' }
             New-Item -ItemType Directory -Path "$root\artifacts" -Force | Out-Null
-            $compilerOutput = & 'C:\Program Files (x86)\NSIS\makensis.exe' "/DVersion=$version" "/DBundle=$root\package-$version" '/DChannel=synthetic' deploy/native/installer.nsi 2>&1
+            $compilerOutput = & 'C:\Program Files (x86)\NSIS\makensis.exe' '/V2' '/INPUTCHARSET' 'UTF8' "/DVersion=$version" "/DBundle=$root\package-$version" '/DChannel=synthetic' deploy/native/installer.nsi 2>&1
             $compilerExit = $LASTEXITCODE
             $compilerOutput | ForEach-Object { Write-Host $_ }
             if ($compilerExit -ne 0) { Write-Host ('::error::NSIS: '+($compilerOutput -join ' ')); throw 'Installer build failed' }
@@ -57,8 +59,11 @@ jobs:
         shell: pwsh
         run: uv run python tests/native_windows/windows_smoke.py "$env:RUNNER_TEMP\gva-native"
       - name: Publish SYNTHETIC installers only (unsigned, non-production)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: GVA-SYNTHETIC-UNSIGNED-NOT-FOR-PRODUCTION-${{ github.sha }}
-          path: ${{ runner.temp }}/gva-native/artifacts/
+          path: |
+            ${{ runner.temp }}/gva-native/artifacts/*.exe
+            ${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt
           retention-days: 14
