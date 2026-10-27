@@ -14,6 +14,8 @@ O instalador **NSIS** reúne um Python privado (sem instalação global),
 dependências exatas do `uv.lock`, PostgreSQL17 privado, **Waitress3** (WSGI
 compatível com Windows), anfitrião **.NET10 LTS** e NGINX para o publicador opcional.
 .NET é distribuído com o programa; não exige instalar separadamente esse runtime.
+O lançador é um executável autónomo; os serviços usam runtime privado descompactado
+em ProgramFiles para não partilhar caches de extração entre contas de serviço.
 O Python é a distribuição mantida `python-build-standalone`; guardar origem,
 licenças, versões e hashes dos fornecedores. Reavaliar as atualizações de segurança
 antes de cada distribuição. Não usar o antigo Python3.12.10 embeddable sem os

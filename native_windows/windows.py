@@ -88,7 +88,9 @@ def stop(name):
     for _ in range(150):
         if stopped(name):
             return
-        subprocess.run(["sc.exe", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["sc.exe", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
         time.sleep(1)
     raise UnsafeOperation("O serviço não terminou de forma controlada. Atualização interrompida.")
 
@@ -99,7 +101,7 @@ def configure(root, release, *, create=False, only=None):
             continue
         if kind == "publisher" and not (Path(root) / "publisher.json").exists():
             continue
-        binary = f'"{Path(release) / "host/GVA.Native.exe"}" --service {kind}'
+        binary = f'"{Path(release) / "service/GVA.Native.exe"}" --service {kind}'
         command = [
             "sc.exe",
             "create" if create else "config",

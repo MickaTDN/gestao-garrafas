@@ -219,6 +219,33 @@ def build(args):
             file=sys.stderr,
         )
         raise UnsafeOperation("Falha na compilação do anfitrião Windows.")
+    # Windows service identities must not share .NET's self-extraction cache.
+    # Publish an unpacked private runtime in read-only ProgramFiles for services;
+    # the standalone launcher/preflight remains a single executable.
+    service_host = payload / "service"
+    result = subprocess.run(
+        [
+            "dotnet",
+            "publish",
+            str(ROOT / "deploy/native/Host/Host.csproj"),
+            "-c",
+            "Release",
+            "-o",
+            str(service_host),
+            "-p:NativeTrust=" + str(Path(args.policy).resolve()),
+            "-p:PublishSingleFile=false",
+            "-p:IncludeNativeLibrariesForSelfExtract=false",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode:
+        print(
+            "::error::Service host compile: "
+            + (result.stdout + result.stderr)[-10000:].replace("\n", " "),
+            file=sys.stderr,
+        )
+        raise UnsafeOperation("Falha na compilação do anfitrião de serviços Windows.")
     if policy["channel"] == "release":
         if not args.host_sign_command:
             raise UnsafeOperation(
@@ -233,7 +260,8 @@ def build(args):
             raise UnsafeOperation(
                 "O comando de assinatura deve ser uma lista JSON de argumentos, sem shell nem segredos."
             )
-        subprocess.run([*command, str(host / "GVA.Native.exe")], check=True)
+        for executable in (host / "GVA.Native.exe", service_host / "GVA.Native.exe"):
+            subprocess.run([*command, str(executable)], check=True)
     manifest = {
         "schema": 1,
         "version": args.version,

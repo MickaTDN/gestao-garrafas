@@ -31,6 +31,7 @@ class PackageTests(TestCase):
             "postgres/bin/pg_restore.exe",
             "app/manage.py",
             "host/GVA.Native.exe",
+            "service/GVA.Native.exe",
             "nginx/nginx.exe",
         ):
             path = self.bundle / "payload" / name

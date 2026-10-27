@@ -105,6 +105,7 @@ def verify(root, trust_path, installed=None):
             "postgres/bin/pg_restore.exe",
             "app/manage.py",
             "host/GVA.Native.exe",
+            "service/GVA.Native.exe",
             "nginx/nginx.exe",
         }
         if not required.issubset(actual):
