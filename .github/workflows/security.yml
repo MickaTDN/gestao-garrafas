@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   workflow-and-dependency-security:
+    name: workflow-and-dependency-security
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,7 +28,7 @@ jobs:
         run: |
           uv run --frozen --group security python -m unittest discover -s tests/security -v
           uv run --frozen --group security python scripts/check_workflows.py
-          uv run --frozen --group security zizmor --offline --persona pedantic --min-severity low --min-confidence low .github/workflows
+          uv run --frozen --group security zizmor --offline --persona auditor --min-severity informational --min-confidence low --no-ignores .github/workflows
       - name: Audit hashed runtime dependencies against current advisories
         run: |
           uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/runtime-requirements.txt"

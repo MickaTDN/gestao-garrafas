@@ -119,8 +119,8 @@ class PublicRulesetTests(unittest.TestCase):
         self.assertEqual(rules["pull_request"]["parameters"]["required_approving_review_count"], 0)
         checks = rules["required_status_checks"]["parameters"]["required_status_checks"]
         actual = {
-            name for path in (ROOT / ".github/workflows").glob("*.y*ml")
-            for name in load_workflow(path.read_text())["jobs"]
+            job.get("name", name) for path in (ROOT / ".github/workflows").glob("*.y*ml")
+            for name, job in load_workflow(path.read_text())["jobs"].items()
         }
         self.assertTrue({check["context"] for check in checks} <= actual)
         self.assertNotIn("windows-native-synthetic", {check["context"] for check in checks})

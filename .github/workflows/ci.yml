@@ -9,6 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   django-postgresql:
+    name: django-postgresql
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -59,6 +60,7 @@ jobs:
         run: docker compose down
 
   windows-powershell:
+    name: windows-powershell
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
