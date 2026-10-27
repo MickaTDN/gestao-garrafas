@@ -10,7 +10,7 @@ Mantém Django5.2 LTS, Python3.12 e PostgreSQL17. A aplicação e a PWA Stock da
 Etapa B são reutilizadas. Não há alterações a entradas, saídas, inventários,
 permissões, assinaturas, PDFs, histórico ou às respetivas migrações.
 
-O instalador **Inno Setup** reúne um Python privado (sem instalação global),
+O instalador **NSIS** reúne um Python privado (sem instalação global),
 dependências exatas do `uv.lock`, PostgreSQL17 privado, **Waitress3** (WSGI
 compatível com Windows), anfitrião **.NET10 LTS** e NGINX para o publicador opcional.
 .NET é distribuído com o programa; não exige instalar separadamente esse runtime.
@@ -228,7 +228,7 @@ e encomendas offline continuam no Android e nos seus backups cifrados, não no P
 
 ## Compilar e distribuir — informática/desenvolvimento
 
-1. Usar Windows descartável, Python de build, uv0.12.23, .NET10 SDK e Inno Setup6.
+1. Usar Windows descartável, Python de build, uv0.12.23, .NET10 SDK e NSIS3.
 2. Obter/rever arquivos Python3.12 atualizado, PostgreSQL17 e NGINX Windows;
    validar SHA-256 por origem independente e guardar versões/licenças. Não instalar
    globalmente PostgreSQL ou Python durante o empacotamento.
@@ -243,8 +243,7 @@ e encomendas offline continuam no Android e nos seus backups cifrados, não no P
    absoluto, `sha256`, `version` e `source` público sem credenciais.
 6. Executar `scripts/native/build_package.py` com `--version`, `--minimum-version`,
    `--policy`, `--key`, `--inputs`, `--output` novo fora do checkout.
-7. Compilar `deploy/native/installer.iss` com `Version`, `Bundle`, `Channel` e uma
-   ferramenta Authenticode empresarial (`SignToolName`). Assinar também o
+7. Compilar `deploy/native/installer.nsi` com `Version`, `Bundle`, `Channel` e assinatura Authenticode empresarial com signtool. Assinar também o
    desinstalador; timestamp e validação de cadeia/revogação são obrigatórios.
 8. Verificar a assinatura final e publicar apenas instalador, versão, SHA-256 e
    instruções. Nunca publicar chave de assinatura, recuperação, certificados de

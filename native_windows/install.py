@@ -181,48 +181,61 @@ def initial(root, release, manifest, request, trust_path):
     write_json(root / "package-policy.json", json.loads(Path(trust_path).read_text()))
     write_json(root / "installation.json", state)
     write_json(root / "maintenance.json", {"phase": "initializing", "version": state["version"]})
-    configure(root, release, create=True)
-    (root / "secrets").mkdir()
-    django_key = secrets.token_urlsafe(64)
-    for name, user in (("owner", "gva_owner"), ("app", "gva_web")):
-        write_json(
-            root / f"secrets/{name}.json",
-            {"username": user, "password": secrets.token_urlsafe(48), "django_key": django_key},
+    try:
+        configure(root, release, create=True)
+        (root / "secrets").mkdir()
+        django_key = secrets.token_urlsafe(64)
+        for name, user in (("owner", "gva_owner"), ("app", "gva_web")):
+            write_json(
+                root / f"secrets/{name}.json",
+                {"username": user, "password": secrets.token_urlsafe(48), "django_key": django_key},
+            )
+        write_json(root / "backup-policy.json", {"retain": 14, "copy_to": None})
+        (root / "recovery-public.pem").write_bytes(public)
+        with recovery.open("xb") as stream:
+            stream.write(private)
+        protect(recovery)
+        prepare_acl(root)
+        create_cluster(root)
+        manage(root, "migrate", "--noinput")
+        grants(root)
+        # Dedicated GUI supplies input on stdin; credentials never appear in process arguments.
+        import subprocess
+
+        from .runtime import environment
+
+        subprocess.run(
+            [str(release / "python/python.exe"), "-B", "-m", "native_windows.provision"],
+            input=json.dumps(
+                {
+                    "username": request["username"],
+                    "password": request["password"],
+                    "synthetic": request["synthetic"],
+                }
+            ).encode(),
+            env=environment(root, owner=True),
+            cwd=release / "app",
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=120,
         )
-    write_json(root / "backup-policy.json", {"retain": 14, "copy_to": None})
-    (root / "recovery-public.pem").write_bytes(public)
-    with recovery.open("xb") as stream:
-        stream.write(private)
-    protect(recovery)
-    prepare_acl(root)
-    create_cluster(root)
-    manage(root, "migrate", "--noinput")
-    grants(root)
-    # Dedicated GUI supplies input on stdin; credentials never appear in process arguments.
-    import subprocess
+        manage(root, "vertente_setup", "--directory", str(root / "signing"))
+        manage(root, "check", "--fail-level", "WARNING")
+        (root / "maintenance.json").unlink()
+        activate(root)
+    except Exception:
+        from .windows import disable_all, stop_all
 
-    from .runtime import environment
-
-    subprocess.run(
-        [str(release / "python/python.exe"), "-B", "-m", "native_windows.provision"],
-        input=json.dumps(
-            {
-                "username": request["username"],
-                "password": request["password"],
-                "synthetic": request["synthetic"],
-            }
-        ).encode(),
-        env=environment(root, owner=True),
-        cwd=release / "app",
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        timeout=120,
-    )
-    manage(root, "vertente_setup", "--directory", str(root / "signing"))
-    manage(root, "check", "--fail-level", "WARNING")
-    (root / "maintenance.json").unlink()
-    activate(root)
+        try:
+            disable_all()
+            stop_all()
+        finally:
+            write_json(
+                root / "maintenance.json",
+                {"phase": "initialization-failed", "version": state["version"]},
+            )
+        raise
 
 
 def health_http(root):

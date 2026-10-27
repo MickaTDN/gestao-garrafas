@@ -94,9 +94,50 @@ def evidence(conn):
     return values
 
 
+def validate_material(root):
+    """A restorable database without its matching signing identity is insufficient."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    root = Path(root)
+    required = (
+        "secrets/owner.json",
+        "secrets/app.json",
+        "signing/signing.pem",
+        "signing/origin.vatrust.json",
+        "package-policy.json",
+        "recovery-public.pem",
+    )
+    if any(not (root / name).is_file() or (root / name).is_symlink() for name in required):
+        raise UnsafeOperation(
+            "Configuração/chaves incompletas. Backup e atualização recusados; não regenere a identidade Android."
+        )
+    key = serialization.load_pem_private_key(
+        (root / "signing/signing.pem").read_bytes(), password=None
+    )
+    if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
+        raise UnsafeOperation("Chave Android inválida.")
+    der = key.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    trust = json.loads((root / "signing/origin.vatrust.json").read_text())
+    public = base64.urlsafe_b64encode(der).rstrip(b"=").decode()
+    if not any(item["spki"] == public for item in trust["keys"]):
+        raise UnsafeOperation("A confiança Android não corresponde à chave da instalação.")
+    with connection(root) as conn:
+        row = conn.execute(
+            "SELECT source_id::text FROM consultation_exportsource WHERE id=1"
+        ).fetchone()
+        if not row or row[0] != trust["source_id"]:
+            raise UnsafeOperation("A origem Android não corresponde à base desta instalação.")
+
+
 def backup(root):
     root = Path(root)
     state = read_state(root)
+    validate_material(root)
     target_root = root / "backups"
     # Daily service sees only this admin-configured path; never accepts browser file paths.
     config = json.loads((root / "backup-policy.json").read_text())

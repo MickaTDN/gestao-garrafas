@@ -3,7 +3,7 @@
 Estado: proposta implementada para homologação sintética, PR em rascunho.
 
 O objetivo é remover a dependência de Docker Desktop/WSL2 sem reescrever Django,
-PostgreSQL ou a PWA da Etapa B. Inno Setup fornece assistente, UAC e desinstalação;
+PostgreSQL ou a PWA da Etapa B. NSIS fornece assistente, UAC e desinstalação;
 Python privado e wheels bloqueadas evitam um Python global. Waitress substitui
 apenas Gunicorn no Windows. Um anfitrião .NET10 LTS autocontido implementa serviços
 e atalhos sem consola. O navegador mantido pela empresa evita distribuir Chromium

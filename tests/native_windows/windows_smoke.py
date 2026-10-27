@@ -47,11 +47,9 @@ def main(directory):
         run(
             [
                 directory / f"artifacts/GVA-synthetic-{version}-win-x64.exe",
-                "/VERYSILENT",
-                "/SUPPRESSMSGBOXES",
-                "/NORESTART",
-                "/CITestRequest=" + str(request),
-            ]
+                "/S",
+            ],
+            env={**os.environ, "GVA_CI_REQUEST": str(request)},
         )
 
     install("1.0.0")
@@ -162,10 +160,7 @@ def main(directory):
     result = subprocess.run(
         [
             str(directory / "artifacts/GVA-synthetic-1.0.0-win-x64.exe"),
-            "/VERYSILENT",
-            "/SUPPRESSMSGBOXES",
-            "/NORESTART",
-            "/CITestRequest=" + str(request),
+            "/S",
         ],
         timeout=120,
     )
@@ -185,13 +180,36 @@ def main(directory):
         assert conn.execute(
             "SELECT rolsuper,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user"
         ).fetchone() == (False, False, False)
+    # Actual service/DB failure after migration: all services remain disabled,
+    # a durable journal blocks restart, and only NEW-root recovery may resume.
+    from native_windows.maintenance import UpdateActions
+    from native_windows.state import update
+
+    class InterruptedUpdate(UpdateActions):
+        def migrate(self):
+            super().migrate()
+            raise RuntimeError("Synthetic interruption after migration")
+
+    current_release = Path(json.loads((root / "installation.json").read_text())["release"])
+    try:
+        update(root, {"version": "1.2.0"}, InterruptedUpdate(root, current_release, key, phrase))
+        raise AssertionError("Synthetic update should fail")
+    except RuntimeError as error:
+        assert str(error) == "Synthetic interruption after migration"
+    assert (root / "maintenance.json").is_file()
+    for name in SERVICES.values():
+        if name == SERVICES["publisher"]:
+            continue
+        result = subprocess.run(["sc.exe", "start", name], capture_output=True)
+        assert result.returncode != 0  # disabled persists across OS restarts
+    encrypted = max((root / "backups").glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime)
     # Uninstaller removes only code/services; private state, keys and encrypted backups survive.
     uninstall = next(
         Path(os.environ["ProgramFiles"])
         .joinpath("GestaoVertenteAveludada-synthetic")
-        .glob("unins*.exe")
+        .glob("Uninstall.exe")
     )
-    run([uninstall, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+    run([uninstall, "/S"])
     for _ in range(30):
         if not uninstall.exists():
             break
@@ -215,12 +233,10 @@ def main(directory):
     )
     run(
         [
-            directory / "artifacts/GVA-synthetic-1.0.0-win-x64.exe",
-            "/VERYSILENT",
-            "/SUPPRESSMSGBOXES",
-            "/NORESTART",
-            "/CITestRequest=" + str(recovery_request),
-        ]
+            directory / "artifacts/GVA-synthetic-1.1.0-win-x64.exe",
+            "/S",
+        ],
+        env={**os.environ, "GVA_CI_REQUEST": str(recovery_request)},
     )
     assert (root / "recovery-verified.json").is_file()
     assert (root / "maintenance.json").is_file()
@@ -235,12 +251,9 @@ def main(directory):
             ).fetchone()[0]
             == 2
         )
-        assert (
-            conn.execute(
-                "SELECT source_id::text,sequence FROM consultation_exportsource"
-            ).fetchone()
-            == source
-        )
+        assert conn.execute(
+            "SELECT source_id::text,sequence FROM consultation_exportsource"
+        ).fetchone() == (source[0], source[1] + 1)
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
     print(
         "Native installer: fresh EXE, services stop/start, 1.0→1.1, verified encrypted restore, downgrade refusal, stable Android identity, non-destructive uninstall: PASS"
