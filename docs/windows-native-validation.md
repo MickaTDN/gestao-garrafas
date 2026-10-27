@@ -5,9 +5,8 @@ instalações Windows, volumes e backups do utilizador não são acedidos/altera
 
 ## Resultados locais
 
-**480 testes aprovados** na regressão completa inicial em PostgreSQL17 isolado
-(227,976s). Foram acrescentados dois testes de empacotamento seguro: agora são24
-nativos, todos aprovados isoladamente; a execução final passa a482 testes. Incluem51 testes Chromium das aplicações de gestão e Stock, operações,
+**482 testes aprovados** em PostgreSQL17 isolado (241,140s):458 existentes e24
+nativos. Incluem51 testes Chromium das aplicações de gestão e Stock, operações,
 concorrência, perfis, PDFs, exportações assinadas, backups e recuperação existentes.
 
 Os24 nativos cobrem assinatura/inventário/versionamento, chave errada, ficheiros
@@ -43,9 +42,12 @@ Os workflows executam:
 - Recusa de downgrade, desinstalação sem destruição e reposição da mesma versão
   sem reseed/migração.
 
-Resultados finais e links da CI serão completados após a revisão final. A
-instalação inicial real e o probe NTFS já passaram; uma falha no teste de conta
-sem privilégios está a ser corrigida antes de declarar o ciclo integral validado.
+Os resultados de cada revisão, eventuais falhas e artefactos estão no
+[PR13](https://github.com/MickaTDN/gestao-garrafas/pull/13) e nos workflows
+[Checks](https://github.com/MickaTDN/gestao-garrafas/actions/workflows/ci.yml) e
+[Native Windows installer](https://github.com/MickaTDN/gestao-garrafas/actions/workflows/windows-native.yml).
+O ciclo integral Windows deve terminar com sucesso na revisão a homologar;
+a simples compilação ou um resultado de revisão anterior não o substituem.
 Os instaladores compilados são **SYNTHETIC / UNSIGNED / NOT FOR PRODUCTION**.
 Usar o par de versões do **mesmo artefacto/run**: a autoridade temporária muda
 entre execuções e instalações diferentes não aceitam pacotes de outra autoridade.
