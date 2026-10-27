@@ -77,6 +77,9 @@ A base reservada ao Excel e os backups/instalações existentes não foram usado
   depois de o workflow existir nessa branch. Retenção futura de três dias e nome
   `UNAPPROVED-SYNTHETIC-UNSIGNED-NOT-FOR-DISTRIBUTION-*`. Nada foi removido dos
   artefactos antigos.
+  O job que instala serviços e testa ACLs está adicionalmente bloqueado para
+  PR de forks e para execuções fora do repositório original. Não se usa um runner
+  Windows da empresa; permissões locais de testes só existem no runner efémero.
 
 Os 41 avisos anteriores são tratados individualmente em
 [dependency-triage.md](dependency-triage.md), com função afetada, utilização pela
@@ -150,6 +153,10 @@ apenas depois de o workflow do PR #13 ser integrado por decisão do proprietári
 ter corrido num SHA aprovado e estar disponível nas futuras revisões de PR.
 Adicionar agora um check inexistente bloquearia o desenvolvimento. Os nomes
 propostos devem ser confirmados no GitHub antes de ativar a regra.
+Um job ignorado num PR de fork não comprova homologação Windows. Antes de integrar
+alterações externas ao instalador, rever o código e preparar um PR numa branch
+interna autorizada para executar os testes nativos. Não considerar o estado
+`skipped` como aprovação nem usar o simples nome do check para contornar isto.
 
 ## Artefactos, logs e limitações de acesso
 
@@ -181,7 +188,7 @@ Resultados finais locais:
 | Django/PostgreSQL 17, na branch de segurança baseada em main | **460 passaram**, sem falhas ou skips. |
 | Chromium computador/telemóvel, incluído nos 460 | **51 passaram**, incluindo fluxos da Gestão e Stock offline. |
 | Testes unitários nativos, na linha do PR #13 | **24 passaram**; não substituem instalação Windows real. |
-| Política de workflows e proposta de ruleset | **13 passaram** em cada linha; não contar a repetição como testes distintos. |
+| Política de workflows e proposta de ruleset | **14 passaram** em cada linha; não contar a repetição como testes distintos. |
 | Zizmor offline, persona auditor, todos os níveis de severidade/confiança, sem ignores | Sem achados nos dois workflows principais e nos três da linha C. |
 | pip-audit dos dois lockfiles de execução | **Zero avisos conhecidos** na consulta de 27-10-2026. |
 | PDFs sintéticos emitidos com dependências antigas | **Três reproduzidos byte a byte** após atualização. |
