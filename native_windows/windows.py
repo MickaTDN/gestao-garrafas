@@ -44,17 +44,18 @@ def administrator():
 
 def protect(path, grants=()):
     """Explicit DACL; names use SIDs except Windows virtual service accounts."""
+    flags = "(OI)(CI)" if Path(path).is_dir() else ""
     command = [
         "icacls.exe",
         str(path),
         "/inheritance:r",
         "/grant:r",
-        "*S-1-5-18:(OI)(CI)F",
+        f"*S-1-5-18:{flags}F",
         "/grant:r",
-        "*S-1-5-32-544:(OI)(CI)F",
+        f"*S-1-5-32-544:{flags}F",
     ]
     for account, access in grants:
-        command += ["/grant:r", f"NT SERVICE\\{SERVICES[account]}:(OI)(CI){access}"]
+        command += ["/grant:r", f"NT SERVICE\\{SERVICES[account]}:{flags}{access}"]
     native(command)
 
 
