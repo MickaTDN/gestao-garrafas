@@ -50,10 +50,11 @@ def protect(path, grants=()):
         "/inheritance:r",
         "/grant:r",
         "*S-1-5-18:(OI)(CI)F",
+        "/grant:r",
         "*S-1-5-32-544:(OI)(CI)F",
     ]
     for account, access in grants:
-        command.append(f"NT SERVICE\\{SERVICES[account]}:(OI)(CI){access}")
+        command += ["/grant:r", f"NT SERVICE\\{SERVICES[account]}:(OI)(CI){access}"]
     native(command)
 
 

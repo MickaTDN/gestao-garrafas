@@ -49,6 +49,10 @@ Var CIRequest
 Function .onInit
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
   Pop $1
+  ${If} $0 == 0
+    SetErrorLevel 1
+    Abort "Não foi possível obter o bloqueio de instalação. Contacte a informática."
+  ${EndIf}
   ${If} $1 == 183
     SetErrorLevel 1
     Abort "Já existe uma instalação ou desinstalação em curso."
@@ -113,6 +117,10 @@ SectionEnd
 Function un.onInit
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
   Pop $1
+  ${If} $0 == 0
+    SetErrorLevel 1
+    Abort "Não foi possível obter o bloqueio de instalação. Contacte a informática."
+  ${EndIf}
   ${If} $1 == 183
     SetErrorLevel 1
     Abort "Há instalação/manutenção em curso."

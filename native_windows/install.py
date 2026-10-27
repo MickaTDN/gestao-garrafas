@@ -223,6 +223,11 @@ def initial(root, release, manifest, request, trust_path):
             + phase
             + ": "
             + (str(error) if isinstance(error, UnsafeOperation) else type(error).__name__)
+            + (
+                ("; ficheiro=" + Path(error.filename).name)
+                if isinstance(error, OSError) and error.filename
+                else ""
+            )
         ) from error
 
 
