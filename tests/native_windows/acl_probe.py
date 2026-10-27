@@ -41,6 +41,7 @@ def main():
                 ]
             )
             names.append(name)
+            assert windows.service_state(name) == 1
             windows.native(["sc.exe", "sidtype", name, "unrestricted"])
         prepare_acl(root)
         for path in (root / "secrets/owner.json", root / "secrets/app.json"):

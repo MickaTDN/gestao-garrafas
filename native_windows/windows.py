@@ -66,21 +66,50 @@ def free_port(port):
         sock.bind(("127.0.0.1", port))
 
 
+def service_state(name):
+    """Invariant SCM API: never parse localized sc.exe output on Portuguese Windows."""
+    from ctypes import wintypes
+
+    class Status(ctypes.Structure):
+        _fields_ = [
+            (field, wintypes.DWORD)
+            for field in ("type", "state", "accepted", "exit", "specific", "checkpoint", "hint")
+        ]
+
+    api = ctypes.WinDLL("advapi32", use_last_error=True)
+    api.OpenSCManagerW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
+    api.OpenSCManagerW.restype = wintypes.HANDLE
+    api.OpenServiceW.argtypes = [wintypes.HANDLE, wintypes.LPCWSTR, wintypes.DWORD]
+    api.OpenServiceW.restype = wintypes.HANDLE
+    api.QueryServiceStatus.argtypes = [wintypes.HANDLE, ctypes.POINTER(Status)]
+    api.QueryServiceStatus.restype = wintypes.BOOL
+    api.CloseServiceHandle.argtypes = [wintypes.HANDLE]
+    manager = api.OpenSCManagerW(None, None, 1)
+    if not manager:
+        raise UnsafeOperation("Não foi possível consultar o gestor de serviços Windows.")
+    handle = None
+    try:
+        handle = api.OpenServiceW(manager, name, 4)
+        if not handle:
+            if ctypes.get_last_error() == 1060:
+                return None
+            raise UnsafeOperation("Não foi possível consultar o serviço autorizado.")
+        status = Status()
+        if not api.QueryServiceStatus(handle, ctypes.byref(status)):
+            raise UnsafeOperation("Não foi possível obter o estado do serviço.")
+        return status.state
+    finally:
+        if handle:
+            api.CloseServiceHandle(handle)
+        api.CloseServiceHandle(manager)
+
+
 def exists(name):
-    return (
-        subprocess.run(
-            ["sc.exe", "query", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        ).returncode
-        == 0
-    )
+    return service_state(name) is not None
 
 
 def stopped(name):
-    # Query numeric service state through the .NET host, never localized sc text.
-    result = subprocess.run(["sc.exe", "query", name], capture_output=True, text=True)
-    import re
-
-    return result.returncode == 0 and bool(re.search(r"STATE\s*:\s*1\s", result.stdout))
+    return service_state(name) in (None, 1)
 
 
 def stop(name):
@@ -158,11 +187,17 @@ def activate(root):
                     "delayed-auto" if kind != "postgres" else "auto",
                 ]
             )
-            result = subprocess.run(["sc.exe", "query", name], capture_output=True, text=True)
-            import re
-
-            if not re.search(r"STATE\s*:\s*4\s", result.stdout):
+            state = service_state(name)
+            if state not in (2, 4):
                 native(["sc.exe", "start", name])
+            for _ in range(150):
+                if service_state(name) == 4:
+                    break
+                time.sleep(1)
+            else:
+                raise UnsafeOperation(
+                    "O serviço não ficou disponível; preserve os dados e consulte o diagnóstico."
+                )
 
 
 def uninstall():
