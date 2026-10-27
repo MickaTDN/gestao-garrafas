@@ -69,6 +69,7 @@ def main(phase):
                 )
             value = {
                 "instance": state["instance"],
+                "package_sha256": state["package_sha256"],
                 "evidence": evidence(conn),
                 "signing": digest(root / "signing/signing.pem"),
             }
@@ -89,6 +90,7 @@ def main(phase):
         with connection(root) as conn:
             assert matching_evidence(evidence(conn), previous["evidence"])
         assert previous["instance"] == state["instance"]
+        assert previous["package_sha256"] == state["package_sha256"]
         assert previous["signing"] == digest(root / "signing/signing.pem")
         from native_windows.install import health_http
 

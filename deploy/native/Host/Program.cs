@@ -241,7 +241,7 @@ sealed class NativeService : ServiceBase
         info.Environment["GVA_NATIVE_CHANNEL"] = Program.Channel;
         child = Process.Start(info)!;
         string errorFile = Path.Combine(Program.Root, "runtime", kind, "last-error.txt");
-        child.ErrorDataReceived += (_, e) => { if (e.Data != null) try { if (!File.Exists(errorFile) || new System.IO.FileInfo(errorFile).Length < 131072) File.AppendAllText(errorFile, e.Data + Environment.NewLine); } catch (IOException) { } };
+        child.ErrorDataReceived += (_, e) => { if (e.Data != null) try { if (!File.Exists(errorFile) || new System.IO.FileInfo(errorFile).Length < 131072) File.AppendAllText(errorFile, e.Data + Environment.NewLine); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } };
         child.BeginErrorReadLine();
         child.EnableRaisingEvents = true;
         child.Exited += (_, _) => { if (!stopping) { ExitCode = 1; Stop(); } };
