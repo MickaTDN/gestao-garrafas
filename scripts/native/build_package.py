@@ -219,6 +219,21 @@ def build(args):
             file=sys.stderr,
         )
         raise UnsafeOperation("Falha na compilação do anfitrião Windows.")
+    if policy["channel"] == "release":
+        if not args.host_sign_command:
+            raise UnsafeOperation(
+                "A distribuição exige assinatura Authenticode do anfitrião por uma ferramenta empresarial autorizada."
+            )
+        command = json.loads(args.host_sign_command)
+        if (
+            not isinstance(command, list)
+            or not command
+            or any(not isinstance(item, str) for item in command)
+        ):
+            raise UnsafeOperation(
+                "O comando de assinatura deve ser uma lista JSON de argumentos, sem shell nem segredos."
+            )
+        subprocess.run([*command, str(host / "GVA.Native.exe")], check=True)
     manifest = {
         "schema": 1,
         "version": args.version,
@@ -239,6 +254,9 @@ def build(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--synthetic-migration-probe", action="store_true")
+    parser.add_argument(
+        "--host-sign-command", help="JSON argv of approved enterprise signer; no passwords on argv"
+    )
     for arg in ("version", "minimum-version", "policy", "key", "inputs", "output"):
         parser.add_argument("--" + arg, required=True)
     try:

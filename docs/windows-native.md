@@ -81,6 +81,13 @@ migração de uma instalação anterior requer um procedimento separado e autori
 Os canais usam os mesmos nomes de serviço: não são instalados simultaneamente no
 mesmo Windows; usar VMs separadas para homologação e produção.
 
+Após uma desinstalação normal, pode repor o programa com **o instalador exato da
+mesma versão**, confirmado pela política instalada e pelo marcador de desinstalação.
+O assistente exige chave/frase, ensaia o restauro e verifica o esquema, sem executar
+migrações nem voltar a criar dados fictícios. Só depois autoriza atualizações para
+versões superiores. Uma desinstalação com manutenção interrompida exige recuperação
+isolada; não se contorna o diário com a reposição do programa.
+
 ## Arranque, encerramento e diagnóstico
 
 Os serviços arrancam automaticamente com o Windows, pela ordem das dependências.
@@ -162,6 +169,10 @@ empresarial conserva a cópia local e não aplica retenção. Monitorizar fichei
 Sem chave **e** frase, não existe recuperação. Guardar duas cópias protegidas da
 chave, a frase em cofre separado e os instaladores exatos das versões dos backups.
 Uma cópia no mesmo disco não protege contra avaria/roubo.
+Durante a construção/validação há ficheiros temporários em claro dentro da pasta
+privada NTFS. Uma falha de energia pode deixar resíduos nessa área; a informática
+deve tratá-los como dados sensíveis. O arquivo publicado é sempre cifrado. Não se
+promete apagamento seguro de um SSD nem se altera BitLocker automaticamente.
 
 ## Recuperação consistente
 
@@ -216,8 +227,8 @@ confiança Android, emissão/revogação por dispositivo, CRL atualizada e firew
 específica dependem da informática. Não criar port forwarding nem exceções globais.
 
 “Manutenção → Preparar publicador” valida a configuração e `nginx -t`, instala o
-serviço **desativado**. A ativação é uma ação posterior da informática, após
-revisão de certificados, IP e firewall. Não altera políticas ou rede por conta própria.
+serviço **desativado**. A ativação é uma ação posterior no botão administrativo de aprovação da rede,
+após revisão de certificados, IP e firewall. Não altera políticas ou rede por conta própria.
 Os comandos `vertente_device`, `vertente_receipts`, `vertente_sequence` continuam
 na ferramenta privada da instalação, para a informática; a autorização dos papéis
 Proprietário/Empregado mantém prova de posse e fingerprint independente.
@@ -242,9 +253,14 @@ e encomendas offline continuam no Android e nos seus backups cifrados, não no P
 5. Passar `inputs.json` com `python`, `postgres`, `nginx`, cada qual com `archive`
    absoluto, `sha256`, `version` e `source` público sem credenciais.
 6. Executar `scripts/native/build_package.py` com `--version`, `--minimum-version`,
-   `--policy`, `--key`, `--inputs`, `--output` novo fora do checkout.
-7. Compilar `deploy/native/installer.nsi` com `Version`, `Bundle`, `Channel` e assinatura Authenticode empresarial com signtool. Assinar também o
-   desinstalador; timestamp e validação de cadeia/revogação são obrigatórios.
+   `--policy`, `--key`, `--inputs`, `--output` novo fora do checkout. Distribuição
+   exige `--host-sign-command` (lista JSON da ferramenta empresarial/HSM, sem
+   palavras-passe nos argumentos), aplicada antes do inventário assinado.
+7. Compilar `deploy/native/installer.nsi` com `Version`, `Bundle`, `Channel` e
+   `SignCommand`, uma ferramenta Authenticode empresarial/HSM sem segredos na
+   linha de comandos. Os hooks `!finalize` e `!uninstfinalize` exigem sucesso
+   na assinatura do instalador e desinstalador. Timestamp e validação de
+   cadeia/revogação são obrigatórios. Sem a ferramenta, o build release é recusado.
 8. Verificar a assinatura final e publicar apenas instalador, versão, SHA-256 e
    instruções. Nunca publicar chave de assinatura, recuperação, certificados de
    clientes/servidor, configuração privada, backup ou credenciais.

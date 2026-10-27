@@ -13,6 +13,13 @@ Unicode true
 !ifndef Channel
   !error "Channel required"
 !endif
+!if "${Channel}" == "release"
+!ifndef SignCommand
+  !error "Release requires an authorized Authenticode SignCommand (no secrets in command line)"
+!endif
+!finalize '${SignCommand} "%1"' = 0
+!uninstfinalize '${SignCommand} "%1"' = 0
+!endif
 Name "Gestão Vertente Aveludada (${Channel})"
 OutFile "${Bundle}\..\artifacts\GVA-${Channel}-${Version}-win-x64.exe"
 InstallDir "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}"
