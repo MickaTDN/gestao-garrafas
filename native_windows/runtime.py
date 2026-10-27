@@ -39,15 +39,23 @@ def environment(root, *, owner=False):
 def manage(root, *arguments):
     state = read_state(root)
     release = Path(state["release"])
-    subprocess.run(
-        [str(release / "python/python.exe"), "-B", str(release / "app/manage.py"), *arguments],
-        env=environment(root, owner=True),
-        cwd=release / "app",
-        check=True,
-        timeout=600,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.run(
+            [str(release / "python/python.exe"), "-B", str(release / "app/manage.py"), *arguments],
+            env=environment(root, owner=True),
+            cwd=release / "app",
+            check=True,
+            timeout=600,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError as error:
+        raise UnsafeOperation(
+            "Falha no comando Django de manutenção: "
+            + arguments[0]
+            + ". Código "
+            + str(error.returncode)
+        ) from error
 
 
 def service(root, kind, stop_file):
@@ -66,6 +74,39 @@ def service(root, kind, stop_file):
     if kind == "postgres":
         # PostgreSQL owns WAL and crash recovery. Never use fsync=off or immediate shutdown.
         pg = release / "postgres/bin/pg_ctl.exe"
+        if not (root / "cluster/PG_VERSION").is_file():
+            bootstrap = root / "runtime/postgres/bootstrap-password"
+            if not bootstrap.is_file() or any((root / "cluster").iterdir()):
+                raise UnsafeOperation(
+                    "Cluster ausente/incompleto: inicialização automática recusada."
+                )
+            try:
+                subprocess.run(
+                    [
+                        str(release / "postgres/bin/initdb.exe"),
+                        "-D",
+                        str(root / "cluster"),
+                        "--username=gva_cluster",
+                        "--encoding=UTF8",
+                        "--locale=C",
+                        "--auth=scram-sha-256",
+                        "--pwfile",
+                        str(bootstrap),
+                    ],
+                    check=True,
+                    timeout=120,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                (root / "cluster/postgresql.conf").write_text(
+                    f"listen_addresses = '127.0.0.1'\nport = {state['db_port']}\nfsync = on\nsynchronous_commit = on\nfull_page_writes = on\npassword_encryption = 'scram-sha-256'\n",
+                    encoding="ascii",
+                )
+                (root / "cluster/pg_hba.conf").write_text(
+                    "host all all 127.0.0.1/32 scram-sha-256\n", encoding="ascii"
+                )
+            finally:
+                bootstrap.unlink(missing_ok=True)
         subprocess.run(
             [
                 str(pg),

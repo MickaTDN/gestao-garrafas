@@ -18,14 +18,21 @@ SERVICES = {
 
 
 def native(args, **kwargs):
-    return subprocess.run(
-        list(map(str, args)),
-        check=True,
-        timeout=120,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        **kwargs,
+    result = subprocess.run(
+        list(map(str, args)), timeout=120, capture_output=True, text=True, **kwargs
     )
+    if result.returncode:
+        detail = ""
+        if os.getenv("GVA_NATIVE_CHANNEL") == "synthetic" and os.getenv("GITHUB_ACTIONS") == "true":
+            detail = ": " + (result.stdout + result.stderr)[-1800:]
+        raise UnsafeOperation(
+            "Falha no componente "
+            + Path(str(args[0])).name
+            + "; código "
+            + str(result.returncode)
+            + detail
+        )
+    return result
 
 
 def administrator():

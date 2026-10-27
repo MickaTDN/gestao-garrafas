@@ -2,7 +2,6 @@
 
 import json
 import secrets
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -59,41 +58,15 @@ def create_cluster(root):
     owner = json.loads((root / "secrets/owner.json").read_text())
     app = json.loads((root / "secrets/app.json").read_text())
     cluster_password = secrets.token_urlsafe(48)
-    with tempfile.TemporaryDirectory(dir=root, prefix=".initialize-") as temporary:
-        password_file = Path(temporary) / "password"
-        password_file.write_text(cluster_password)
-        native(
-            [
-                release / "postgres/bin/initdb.exe",
-                "-D",
-                root / "cluster",
-                "--username=gva_cluster",
-                "--encoding=UTF8",
-                "--locale=C",
-                "--auth=scram-sha-256",
-                "--pwfile",
-                password_file,
-            ]
+    if any((root / "cluster").iterdir()):
+        raise UnsafeOperation(
+            "A inicialização exige um cluster NOVO vazio; nenhum cluster existente é adotado."
         )
-    # IPv4 loopback only, even if a local environment variable requests another host.
-    (root / "cluster/postgresql.conf").write_text(
-        f"listen_addresses = '127.0.0.1'\nport = {state['db_port']}\nfsync = on\nsynchronous_commit = on\nfull_page_writes = on\npassword_encryption = 'scram-sha-256'\n",
-        encoding="ascii",
-    )
-    (root / "cluster/pg_hba.conf").write_text(
-        "host all all 127.0.0.1/32 scram-sha-256\n", encoding="ascii"
-    )
-    # initdb was run elevated. Transfer only the NEW cluster to its dedicated service.
-    native(
-        [
-            "icacls.exe",
-            root / "cluster",
-            "/grant:r",
-            f"NT SERVICE\\{SERVICES['postgres']}:(OI)(CI)M",
-            "/T",
-            "/Q",
-        ]
-    )
+    # initdb must run as the low-privilege PostgreSQL identity. Running it as
+    # elevated installer would drop admin groups and lose access to the private DACL.
+    password_file = root / "runtime/postgres/bootstrap-password"
+    with password_file.open("x") as handle:
+        handle.write(cluster_password)
     native(["sc.exe", "config", SERVICES["postgres"], "start=", "demand"])
     native(["sc.exe", "start", SERVICES["postgres"]])
     for attempt in range(60):
@@ -183,6 +156,7 @@ def initial(root, release, manifest, request, trust_path):
     write_json(root / "package-policy.json", json.loads(Path(trust_path).read_text()))
     write_json(root / "installation.json", state)
     write_json(root / "maintenance.json", {"phase": "initializing", "version": state["version"]})
+    phase = "register-services"
     try:
         configure(root, release, create=True)
         (root / "secrets").mkdir()
@@ -197,15 +171,20 @@ def initial(root, release, manifest, request, trust_path):
         with recovery.open("xb") as stream:
             stream.write(private)
         protect(recovery)
+        phase = "acl"
         prepare_acl(root)
+        phase = "cluster-bootstrap"
         create_cluster(root)
+        phase = "django-migrations"
         manage(root, "migrate", "--noinput")
+        phase = "sql-grants"
         grants(root)
         # Dedicated GUI supplies input on stdin; credentials never appear in process arguments.
         import subprocess
 
         from .runtime import environment
 
+        phase = "account-provisioning"
         subprocess.run(
             [str(release / "python/python.exe"), "-B", "-m", "native_windows.provision"],
             input=json.dumps(
@@ -222,11 +201,14 @@ def initial(root, release, manifest, request, trust_path):
             stderr=subprocess.DEVNULL,
             timeout=120,
         )
+        phase = "android-identity"
         manage(root, "vertente_setup", "--directory", str(root / "signing"))
+        phase = "django-check"
         manage(root, "check", "--fail-level", "WARNING")
         (root / "maintenance.json").unlink()
+        phase = "service-activation"
         activate(root)
-    except Exception:
+    except Exception as error:
         from .windows import disable_all, stop_all
 
         try:
@@ -235,9 +217,14 @@ def initial(root, release, manifest, request, trust_path):
         finally:
             write_json(
                 root / "maintenance.json",
-                {"phase": "initialization-failed", "version": state["version"]},
+                {"phase": phase, "failed": True, "version": state["version"]},
             )
-        raise
+        raise UnsafeOperation(
+            "Instalação interrompida na etapa "
+            + phase
+            + ": "
+            + (str(error) if isinstance(error, UnsafeOperation) else type(error).__name__)
+        ) from error
 
 
 def health_http(root):
