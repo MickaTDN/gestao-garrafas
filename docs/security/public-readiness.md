@@ -271,29 +271,42 @@ PostgreSQL sintéticos; isso não homologa os caminhos de recuperação Windows.
    Validações em Windows/Android físicos e instalação na empresa continuam fases
    distintas, não realizadas aqui.
 
-## Coordenação da futura integração com o PR #13
+## Coordenação da futura integração com os PR #14 e #13
 
-As duas linhas contêm as correções, e os seus lockfiles foram validados
-separadamente. Uma simulação `git merge-tree` da futura junção detetou **dois
-conflitos de conteúdo**, em `pyproject.toml` e `uv.lock`, devido à dependência
-Waitress da instalação nativa. A simulação não alterou branches, ficheiros ou a
-main. Não foi criado qualquer merge para esconder o problema.
+O PR de segurança foi criado pelo proprietário como **#14**, com destino a main.
+A API continua bloqueada neste ambiente. Os cabeçalhos dos dois PR foram
+confirmados através de refs Git; os estados Draft e os resultados da CI devem
+ser confirmados na interface do GitHub. Nenhum estado de revisão foi alterado
+por esta preparação.
 
-Recomendação: rever primeiro o PR de segurança baseado em main. Se o proprietário
-o integrar, atualizar depois a branch do PR #13 por um merge normal de main,
-durante revisão, sem rebase destrutivo, squash ou force-push. Na resolução:
+Os conflitos anteriormente detetados em `pyproject.toml` e `uv.lock` foram
+**resolvidos por alinhamento dos manifestos**, sem criar merge, rebase ou reescrita.
+O PR #14 passa a declarar também `waitress>=3.0.2,<4`, já necessário e auditado
+para o perfil nativo Windows do PR #13. Isso antecipa apenas a dependência comum:
+não muda o servidor de arranque atual nem introduz os serviços nativos em main.
 
-1. Manter `pillow>=13.0.0,<14`, `cryptography>=50.0.2,<51` e o grupo `security`.
-2. **Conservar `waitress>=3.0.2,<4`** no projeto nativo; não escolher cegamente
-   a versão completa de um dos dois ficheiros e perder essa dependência.
-3. Regenerar/validar o lockfile com `uv lock`, verificar que mantém Pillow 13.0.0,
-   cryptography 50.0.2 e Waitress 3.0.2, sem atualizações alheias à resolução.
-4. Rever o diff e repetir os testes de segurança, aplicação e Windows sobre o
-   SHA resultante. Não integrar #13 enquanto existirem conflitos ou checks
-   obrigatórios pendentes. Não usar a CI de um SHA anterior como aprovação.
+O lockfile foi regenerado com uv. Apenas Waitress 3.0.2 foi acrescentado ao
+manifesto/lock da C.1; mantiveram-se Pillow 13.0.0, cryptography 50.0.2, Django
+5.2.18 e todas as outras versões. Os dois ficheiros ficaram **idênticos byte a
+byte** aos do PR #13. Os seus SHA-256 são:
 
-Esta é uma instrução concreta de resolução para o momento da integração, não uma
-fusão autorizada ou executada nesta tarefa. O PR #13 continua a apontar para main.
+- `pyproject.toml`: `304fb6773b32410466e762f969daf5a982b2e9b1d93b1850ad0a2541b8dcf759`.
+- `uv.lock`: `cb7bda2c531165c83defa1cb0d628ed5b6958f7781b56087629ab29110b34b42`.
+
+Uma nova simulação `git merge-tree --write-tree` terminou com exit code 0, sem
+conflitos. O conteúdo combinado é igual à árvore do PR #13 para as revisões
+simuladas: nenhuma funcionalidade nativa se perde e nenhum código operacional
+é reescrito. A simulação cria apenas um objeto temporário no clone de trabalho;
+não altera main, branches remotas ou o estado dos PR.
+
+Ordem recomendada para revisão: #14 e, depois, #13. Quando o proprietário decidir
+integrá-los, repetir a verificação de conflitos e a CI dos novos SHAs. Não usar
+um resultado antigo para aprovar uma branch que tenha entretanto mudado. Ambos
+os PR permanecem para revisão; esta tarefa não executa qualquer merge.
+
+A lista objetiva das verificações manuais, separando o que precede a publicação
+do que só é possível no Free depois de público, está em
+[github-public-checklist.md](github-public-checklist.md).
 
 ## Fontes oficiais verificadas
 
