@@ -150,6 +150,11 @@ def backup(root):
     ):
         staging = Path(temporary)
         with connection(root) as conn:
+            size = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
+            if shutil.disk_usage(target_root).free < 3 * size + 256 * 1024**2:
+                raise UnsafeOperation(
+                    "Espaço insuficiente para backup e restauro de ensaio; cópias anteriores conservadas."
+                )
             conn.execute("SELECT pg_advisory_lock(73194622)")
             conn.execute("SELECT pg_advisory_lock(73194621)")
             try:

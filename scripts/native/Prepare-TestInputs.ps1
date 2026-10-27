@@ -1,6 +1,7 @@
 # CI ONLY. Builds synthetic packages; never supplies a production trust anchor.
 param([Parameter(Mandatory=$true)][string]$Directory)
 $ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'This helper is restricted to disposable CI.' }
 $null=New-Item -ItemType Directory -Path $Directory
 $pythonName='cpython-3.12.16+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz'
@@ -13,7 +14,8 @@ if ($pythonHash -ne '1f2ab53880fc67ea323398c6388e05af28addc99a8e389209f08a51fdff
 # builds require separately reviewed PostgreSQL17 + NGINX archives and SHA-256.
 $pg=Get-ChildItem 'C:\Program Files\PostgreSQL\17' -ErrorAction Stop
 $pgArchive=Join-Path $Directory 'postgres.zip'
-Compress-Archive -Path 'C:\Program Files\PostgreSQL\17\bin','C:\Program Files\PostgreSQL\17\lib','C:\Program Files\PostgreSQL\17\share' -DestinationPath $pgArchive
+& tar.exe -a -cf $pgArchive -C 'C:\Program Files\PostgreSQL\17' bin lib share
+if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL binary archive failed' }
 # Official NGINX source over HTTPS, recorded in synthetic provenance. This is
 # NOT accepted as an independently reviewed production vendor lock.
 $nginxUrl='https://nginx.org/download/nginx-1.30.0.zip'

@@ -43,10 +43,19 @@ static class Program
           MessageBox.Show("Não foi possível concluir a operação. Preserve os dados e contacte a informática.\n" + (error is UserError ? error.Message : error.GetType().Name), "Gestão Vertente Aveludada", MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
     }
 
+    [StructLayout(LayoutKind.Sequential)] sealed class MemoryStatus { public uint length = (uint)Marshal.SizeOf<MemoryStatus>(); public uint load; public ulong totalPhysical, availablePhysical, totalPage, availablePage, totalVirtual, availableVirtual, availableExtended; }
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatus status);
+
     static void Preflight(string manifestPath, string installer)
     {
         var anchor = File.Exists(Path.Combine(Root, "package-policy.json")) ? JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "package-policy.json"))).RootElement : Trust;
         if (Channel == "release") Authenticode.Verify(installer, anchor.GetProperty("authenticode_sha256").GetString()!);
+        if (Channel == "release")
+        {
+            var memory = new MemoryStatus();
+            if (!GlobalMemoryStatusEx(memory) || memory.totalPhysical < 15UL * 1024 * 1024 * 1024) throw new UserError("É necessário um computador com pelo menos 16 GB de RAM.");
+            if (new DriveInfo(Path.GetPathRoot(Root)!).AvailableFreeSpace < 8L * 1024 * 1024 * 1024) throw new UserError("Espaço livre insuficiente. A informática deve reservar espaço para dados, cópias e restauro.");
+        }
         byte[] raw = File.ReadAllBytes(manifestPath);
         using var key = ECDsa.Create(); key.ImportFromPem(anchor.GetProperty("public_key").GetString()!);
         byte[] context = System.Text.Encoding.UTF8.GetBytes("gva-windows-package-v1\0");
