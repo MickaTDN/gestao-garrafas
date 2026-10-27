@@ -142,7 +142,17 @@ def build(args):
     def write(path, value):
         Path(path).write_text(json.dumps(value, sort_keys=True, indent=2), encoding="utf-8")
 
-    write(app / "native-provenance.json", provenance)
+    write(
+        app / "native-provenance.json",
+        {
+            "vendors": provenance,
+            "source_commit": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+            ).strip(),
+            "version": args.version,
+            "channel": policy["channel"],
+        },
+    )
     requirements = output / "requirements.txt"
     with requirements.open("w") as handle:
         subprocess.run(

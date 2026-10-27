@@ -45,8 +45,10 @@ jobs:
           foreach ($version in @('1.0.0','1.1.0')) {
             uv run python scripts/native/build_package.py --version $version --minimum-version 1.0.0 --policy "$root\policy.json" --key "$root\signing.pem" --inputs "$root\inputs.json" --output "$root\package-$version"
             if ($LASTEXITCODE -ne 0) { throw 'Package build failed' }
-            & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "/DVersion=$version" "/DBundle=$root\package-$version" '/DChannel=synthetic' deploy/native/installer.iss
-            if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+            $compilerOutput = & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "/DVersion=$version" "/DBundle=$root\package-$version" '/DChannel=synthetic' deploy/native/installer.iss
+            $compilerExit = $LASTEXITCODE
+            $compilerOutput | ForEach-Object { Write-Host $_ }
+            if ($compilerExit -ne 0) { Write-Host ('::error::Inno Setup: '+($compilerOutput -join ' ')); throw 'Installer build failed' }
           }
           Get-ChildItem "$root\artifacts\*.exe" | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+$_.Name } | Set-Content -Encoding ascii "$root\artifacts\SHA256SUMS.txt"
       - name: Actual synthetic EXE installation, services, update, recovery and uninstall
