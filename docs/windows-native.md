@@ -37,7 +37,7 @@ um executável que converta Django em servidor de desenvolvimento.
 | Aplicação | `NT SERVICE\GVAWeb`, SQL `gva_web` sem superuser, CREATEDB ou DDL |
 | Migrações | administrador autorizado, SQL `gva_owner`, separado da aplicação |
 | Backups | `NT SERVICE\GVABackup`, diretório privado, credenciais do owner |
-| Publicador opcional | `NT SERVICE\GVAPublisher`, sem acesso à base/segredos de Django |
+| Publicador opcional | `NT SERVICE\GVAPublisher`, instalado desativado; sem acesso à base/segredos de Django |
 | Chaves Android | `signing`, fora do programa e conservadas nas atualizações |
 | Certificados/CRL | `tls`, fora do programa; acesso do publicador e backup |
 

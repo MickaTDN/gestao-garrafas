@@ -99,8 +99,6 @@ def configure(root, release, *, create=False, only=None):
     for kind, name in SERVICES.items():
         if only and kind != only:
             continue
-        if kind == "publisher" and not (Path(root) / "publisher.json").exists():
-            continue
         binary = f'"{Path(release) / "service/GVA.Native.exe"}" --service {kind}'
         command = [
             "sc.exe",
