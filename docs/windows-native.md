@@ -278,16 +278,22 @@ supervisionado de recuperação, não desativar verificações.
 
 ## Testes e limites de homologação
 
-A CI compila instaladores **sintéticos não assinados**, com autoridade temporária,
-nomes que indicam teste, SHA-256 e retenção14dias. Só carrega `artifacts/*.exe` e
-hashes, nunca o diretório de trabalho ou chave temporária. O script de inputs de
-CI não constitui uma aprovação de versões/fornecedores para produção.
+A CI compila instaladores **sintéticos não assinados**, com autoridade temporária.
+PR e push não carregam instaladores para download. Depois de o workflow existir
+na main, apenas uma execução manual nessa branch do repositório original pode
+reter `artifacts/*.exe` e hashes por três dias, com o prefixo
+`UNAPPROVED-SYNTHETIC-UNSIGNED-NOT-FOR-DISTRIBUTION-`. Nunca carrega o diretório
+de trabalho ou chave temporária. O script de inputs de CI não aprova versões ou
+fornecedores para produção; não existe publicação oficial automática.
 
-A execução hospedada é Windows Server2025. Testa executáveis reais, serviços,
+A execução hospedada está configurada para Windows Server2025 e para testar executáveis, serviços,
 PG17, arranque/paragem, dados fictícios, atualização1.0→1.1, restauro e recusa de
 versões antigas. Os testes unitários interrompem cada fase da atualização. A
 regressão inclui Django/PostgreSQL, Chromium e PowerShell das etapas anteriores.
 O [relatório](windows-native-validation.md) distingue resultados de pendências.
+As correções coordenadas da Etapa C.1 e os limites da preparação pública estão em
+[public-readiness.md](security/public-readiness.md). Os seus 24 testes unitários
+nativos não equivalem a uma aprovação dos jobs de instalação Windows.
 
 Ainda exige VM **Windows11 Pro limpa** e validação empresarial: reboot real
 (incluindo interrupção de migração), sessão Windows sem privilégios, políticas
