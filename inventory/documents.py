@@ -36,7 +36,7 @@ def validate_signature(value):
             raise ValueError
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(raw)) as image:
+            with Image.open(io.BytesIO(raw), formats=["PNG"]) as image:
                 if (
                     image.format != "PNG"
                     or getattr(image, "n_frames", 1) != 1
@@ -44,7 +44,7 @@ def validate_signature(value):
                 ):
                     raise ValueError
                 image.verify()
-            with Image.open(io.BytesIO(raw)) as image:
+            with Image.open(io.BytesIO(raw), formats=["PNG"]) as image:
                 rgba = image.convert("RGBA")
                 white = Image.new("RGBA", rgba.size, "white")
                 white.alpha_composite(rgba)
