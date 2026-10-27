@@ -28,7 +28,9 @@ static class Program
             if (args.Length == 3 && args[0] == "--ci-wizard")
             {
                 if (Channel != "synthetic" || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true") throw new UserError("Apenas validação sintética na CI.");
-                return Run(Path.Combine(args[1], "payload"), File.Exists(Path.Combine(Root, "installation.json")) ? "update" : "install", args[2], args[1]);
+                var requestData = JsonDocument.Parse(File.ReadAllText(args[2])).RootElement;
+                string action = requestData.TryGetProperty("archive", out _) ? "recover" : File.Exists(Path.Combine(Root, "installation.json")) ? "update" : "install";
+                return Run(Path.Combine(args[1], "payload"), action, args[2], args[1]);
             }
             if (args.Length == 3 && args[0] == "--preflight") { Preflight(args[1], args[2]); return 0; }
             if (args.Length == 1 && args[0] == "--maintenance") { Maintenance(); return 0; }
@@ -42,9 +44,10 @@ static class Program
 
     static void Preflight(string manifestPath, string installer)
     {
-        if (Channel == "release") Authenticode.Verify(installer, Trust.GetProperty("authenticode_sha256").GetString()!);
+        var anchor = File.Exists(Path.Combine(Root, "package-policy.json")) ? JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "package-policy.json"))).RootElement : Trust;
+        if (Channel == "release") Authenticode.Verify(installer, anchor.GetProperty("authenticode_sha256").GetString()!);
         byte[] raw = File.ReadAllBytes(manifestPath);
-        using var key = ECDsa.Create(); key.ImportFromPem(Trust.GetProperty("public_key").GetString()!);
+        using var key = ECDsa.Create(); key.ImportFromPem(anchor.GetProperty("public_key").GetString()!);
         byte[] context = System.Text.Encoding.UTF8.GetBytes("gva-windows-package-v1\0");
         byte[] signed = context.Concat(raw).ToArray();
         byte[] sig = Convert.FromBase64String(File.ReadAllText(Path.ChangeExtension(manifestPath, ".sig")));
@@ -72,6 +75,9 @@ static class Program
         Button("Preparar publicador HTTPS (configuração aprovada)", () => {
             // File dialog must run on the STA UI thread.
             form.Invoke(() => { using var d = new OpenFileDialog { Filter = "Configuração aprovada|*.json" }; if (d.ShowDialog() == DialogResult.OK) Run(Release, "publisher", PrivateRequest(new { configuration = d.FileName })); });
+        });
+        Button("Aprovar recuperação após conferência (informática)", () => {
+            form.Invoke(() => { if (MessageBox.Show("Confirmou a integridade, a sequência Android e TODAS as entradas exportadas após o backup? A origem anterior está isolada e parada? Esta ação autoriza o arranque local da cópia recuperada.", "Conferência obrigatória", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) Run(Release, "approve-recovery", PrivateRequest(new { confirmed_identity_history = true })); });
         });
         Button("Abrir instruções de recuperação e configuração", () => Process.Start(new ProcessStartInfo(Path.Combine(Release, "app", "docs", "windows-native.html")) { UseShellExecute = true }));
         form.ShowDialog();
@@ -109,12 +115,16 @@ static class Program
         void Label(string text) => flow.Controls.Add(new Label { Text = text, Width = 535, Height = 40 });
         TextBox Field(string label, bool secret = false) { Label(label); var field = new TextBox { Width = 530, UseSystemPasswordChar = secret }; flow.Controls.Add(field); return field; }
         Label(updating ? "Será criado e restaurado um backup de ensaio antes das migrações. Se falhar, o arranque fica bloqueado para recuperação." : "Instala serviços privados PostgreSQL 17, aplicação e backups. Só a informática necessita de privilégios de administrador. Não abre portas da firewall.");
+        var recovering = new CheckBox { Text = "Recuperar um backup numa instalação isolada NOVA", Width = 530 };
+        if (!updating) flow.Controls.Add(recovering);
+        var archive = updating ? null : Field("Ficheiro .gvabackup (apenas para recuperação)");
+        if (!updating) { var chooseArchive = new Button { Text = "Escolher backup…", Width = 180 }; chooseArchive.Click += (_, _) => { using var d = new OpenFileDialog { Filter = "Backup cifrado|*.gvabackup" }; if (d.ShowDialog() == DialogResult.OK) archive!.Text = d.FileName; }; flow.Controls.Add(chooseArchive); }
         var user = updating ? null : Field("Nome da conta de administrador da aplicação");
         var password = updating ? null : Field("Palavra-passe da conta (mínimo 12 caracteres)", true);
         var confirm = updating ? null : Field("Confirmar palavra-passe", true);
         var key = Field(updating ? "Chave privada de recuperação (ficheiro guardado separadamente)" : "Novo ficheiro para a chave de recuperação num suporte empresarial autorizado");
         var browse = new Button { Text = "Escolher ficheiro…", Width = 180 };
-        browse.Click += (_, _) => { if (updating) { using var d = new OpenFileDialog { Filter = "Chave de recuperação|*.pem" }; if (d.ShowDialog() == DialogResult.OK) key.Text = d.FileName; } else { using var d = new SaveFileDialog { Filter = "Chave de recuperação|*.pem", FileName = "GVA-recuperacao.pem", OverwritePrompt = true }; if (d.ShowDialog() == DialogResult.OK) key.Text = d.FileName; } };
+        browse.Click += (_, _) => { if (updating || recovering.Checked) { using var d = new OpenFileDialog { Filter = "Chave de recuperação|*.pem" }; if (d.ShowDialog() == DialogResult.OK) key.Text = d.FileName; } else { using var d = new SaveFileDialog { Filter = "Chave de recuperação|*.pem", FileName = "GVA-recuperacao.pem", OverwritePrompt = true }; if (d.ShowDialog() == DialogResult.OK) key.Text = d.FileName; } };
         flow.Controls.Add(browse);
         var phrase = Field(updating ? "Frase da chave de recuperação" : "Nova frase de recuperação (mínimo 16 caracteres); guarde-a separadamente", true);
         var phraseConfirm = updating ? null : Field("Confirmar frase de recuperação", true);
@@ -122,14 +132,15 @@ static class Program
         var button = new Button { Text = updating ? "Verificar backup e atualizar" : "Preparar instalação", Width = 260, Height = 40 };
         flow.Controls.Add(button);
         button.Click += async (_, _) => {
-            if (!updating && (password!.Text != confirm!.Text || phrase.Text != phraseConfirm!.Text)) { MessageBox.Show("As palavras-passe não coincidem."); return; }
+            if (!updating && !recovering.Checked && (password!.Text != confirm!.Text || phrase.Text != phraseConfirm!.Text)) { MessageBox.Show("As palavras-passe não coincidem."); return; }
             button.Enabled = false; form.ControlBox = false;
             try
             {
                 var request = new Dictionary<string, object?> { ["username"] = user?.Text, ["password"] = password?.Text, ["synthetic"] = demo.Checked, ["recovery_key"] = key.Text, ["recovery_password"] = phrase.Text };
+                if (recovering.Checked) request["archive"] = archive!.Text;
                 string file = PrivateRequest(request);
-                await Task.Run(() => Run(release, updating ? "update" : "install", file, package));
-                MessageBox.Show("Operação concluída. Dados e chaves conservados. Abra a aplicação pelo atalho.");
+                await Task.Run(() => Run(release, recovering.Checked ? "recover" : updating ? "update" : "install", file, package));
+                MessageBox.Show(recovering.Checked ? "Backup restaurado e verificado. Serviços bloqueados até à conferência da informática, incluindo identidade e histórico Android. Não há publicação automática." : "Operação concluída. Dados e chaves conservados. Abra a aplicação pelo atalho.");
                 form.DialogResult = DialogResult.OK; form.Close();
             }
             catch (Exception error) { MessageBox.Show(error is UserError ? error.Message : "A operação falhou. Contacte a informática. Categoria: " + error.GetType().Name); button.Enabled = true; form.ControlBox = true; }

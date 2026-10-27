@@ -27,13 +27,20 @@ class BackupTests(TestCase):
         encrypt(self.source, self.encrypted, self.public, {"version": "1.0.0"})
         self.assertNotIn(b"synthetic-database-and-keys", self.encrypted.read_bytes())
         destination = self.root / "restored"
-        self.assertEqual(decrypt(self.encrypted, destination, self.private, "synthetic long recovery phrase"), {"version": "1.0.0"})
+        self.assertEqual(
+            decrypt(self.encrypted, destination, self.private, "synthetic long recovery phrase"),
+            {"version": "1.0.0"},
+        )
         self.assertEqual(destination.read_bytes(), self.source.read_bytes())
 
     def test_wrong_password_tampering_truncation_never_publish_partial(self):
         encrypt(self.source, self.encrypted, self.public, {})
         original = self.encrypted.read_bytes()
-        for data, password in ((original, "wrong password"), (original[:-1], "synthetic long recovery phrase"), (original[:-20] + b"tampered" + original[-12:], "synthetic long recovery phrase")):
+        for data, password in (
+            (original, "wrong password"),
+            (original[:-1], "synthetic long recovery phrase"),
+            (original[:-20] + b"tampered" + original[-12:], "synthetic long recovery phrase"),
+        ):
             self.encrypted.write_bytes(data)
             target = self.root / "output"
             with self.assertRaises(UnsafeOperation):
@@ -63,7 +70,9 @@ class BackupTests(TestCase):
         data.mkdir()
         (data / "database.dump").write_bytes(b"synthetic-dump")
         manifest = {"schema": 1, "files": regular_tree(data)}
-        path = self.archive([("database.dump", b"synthetic-dump"), ("manifest.json", json.dumps(manifest).encode())])
+        path = self.archive(
+            [("database.dump", b"synthetic-dump"), ("manifest.json", json.dumps(manifest).encode())]
+        )
         self.assertEqual(verify_archive(path), manifest)
         target = self.root / "new"
         extract_verified(path, target)
@@ -73,9 +82,29 @@ class BackupTests(TestCase):
 
     def test_rejects_archive_paths_duplicates_and_corruption(self):
         import hashlib
-        for name in ("../secret", "secrets/../../evil", "C:/evil", "/evil", "secrets\\bad", "unexpected.bin"):
+
+        for name in (
+            "../secret",
+            "secrets/../../evil",
+            "C:/evil",
+            "/evil",
+            "secrets\\bad",
+            "unexpected.bin",
+        ):
             raw = b"x"
-            manifest = {"schema": 1, "files": {"database.dump": {"size": 1, "sha256": hashlib.sha256(raw).hexdigest()}, name: {"size": 1, "sha256": hashlib.sha256(raw).hexdigest()}}}
-            path = self.archive([("database.dump", raw), (name, raw), ("manifest.json", json.dumps(manifest).encode())])
+            manifest = {
+                "schema": 1,
+                "files": {
+                    "database.dump": {"size": 1, "sha256": hashlib.sha256(raw).hexdigest()},
+                    name: {"size": 1, "sha256": hashlib.sha256(raw).hexdigest()},
+                },
+            }
+            path = self.archive(
+                [
+                    ("database.dump", raw),
+                    (name, raw),
+                    ("manifest.json", json.dumps(manifest).encode()),
+                ]
+            )
             with self.subTest(name=name), self.assertRaises(UnsafeOperation):
                 verify_archive(path)

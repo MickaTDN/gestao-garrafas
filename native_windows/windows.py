@@ -9,21 +9,42 @@ from pathlib import Path
 
 from .package import UnsafeOperation
 
-SERVICES = {"postgres": "GVAPostgres17", "web": "GVAWeb", "backup": "GVABackup", "publisher": "GVAPublisher"}
+SERVICES = {
+    "postgres": "GVAPostgres17",
+    "web": "GVAWeb",
+    "backup": "GVABackup",
+    "publisher": "GVAPublisher",
+}
 
 
 def native(args, **kwargs):
-    return subprocess.run(list(map(str, args)), check=True, timeout=120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+    return subprocess.run(
+        list(map(str, args)),
+        check=True,
+        timeout=120,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        **kwargs,
+    )
 
 
 def administrator():
     if os.name != "nt" or not ctypes.windll.shell32.IsUserAnAdmin():
-        raise UnsafeOperation("A instalação/manutenção exige autorização de administrador da informática.")
+        raise UnsafeOperation(
+            "A instalação/manutenção exige autorização de administrador da informática."
+        )
 
 
 def protect(path, grants=()):
     """Explicit DACL; names use SIDs except Windows virtual service accounts."""
-    command = ["icacls.exe", str(path), "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F"]
+    command = [
+        "icacls.exe",
+        str(path),
+        "/inheritance:r",
+        "/grant:r",
+        "*S-1-5-18:(OI)(CI)F",
+        "*S-1-5-32-544:(OI)(CI)F",
+    ]
     for account, access in grants:
         command.append(f"NT SERVICE\\{SERVICES[account]}:(OI)(CI){access}")
     native(command)
@@ -37,13 +58,19 @@ def free_port(port):
 
 
 def exists(name):
-    return subprocess.run(["sc.exe", "query", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    return (
+        subprocess.run(
+            ["sc.exe", "query", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        ).returncode
+        == 0
+    )
 
 
 def stopped(name):
     # Query numeric service state through the .NET host, never localized sc text.
     result = subprocess.run(["sc.exe", "query", name], capture_output=True, text=True)
     import re
+
     return result.returncode == 0 and bool(re.search(r"STATE\s*:\s*1\s", result.stdout))
 
 
@@ -65,12 +92,29 @@ def configure(root, release, *, create=False, only=None):
         if kind == "publisher" and not (Path(root) / "publisher.json").exists():
             continue
         binary = f'"{Path(release) / "host/GVA.Native.exe"}" --service {kind}'
-        command = ["sc.exe", "create" if create else "config", name, "binPath=", binary, "start=", "disabled", "obj=", f"NT SERVICE\\{name}"]
+        command = [
+            "sc.exe",
+            "create" if create else "config",
+            name,
+            "binPath=",
+            binary,
+            "start=",
+            "disabled",
+            "obj=",
+            f"NT SERVICE\\{name}",
+        ]
         if kind != "postgres":
             command += ["depend=", SERVICES["postgres"]] if kind != "publisher" else []
         native(command)
         native(["sc.exe", "sidtype", name, "unrestricted"])
-        native(["sc.exe", "description", name, f"Gestão Vertente Aveludada — {kind}; dados locais preservados na desinstalação."])
+        native(
+            [
+                "sc.exe",
+                "description",
+                name,
+                f"Gestão Vertente Aveludada — {kind}; dados locais preservados na desinstalação.",
+            ]
+        )
         # No automatic restart loop after maintenance or a failed migration.
 
 
@@ -89,7 +133,15 @@ def activate():
     for kind in ("postgres", "web", "backup", "publisher"):
         name = SERVICES[kind]
         if exists(name):
-            native(["sc.exe", "config", name, "start=", "delayed-auto" if kind != "postgres" else "auto"])
+            native(
+                [
+                    "sc.exe",
+                    "config",
+                    name,
+                    "start=",
+                    "delayed-auto" if kind != "postgres" else "auto",
+                ]
+            )
             native(["sc.exe", "start", name])
 
 

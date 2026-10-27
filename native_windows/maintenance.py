@@ -24,32 +24,73 @@ from .windows import SERVICES, activate, configure, disable_all, native, stop_al
 def connection(root, database=None):
     state = read_state(root)
     credentials = json.loads((Path(root) / "secrets/owner.json").read_text())
-    return psycopg.connect(host="127.0.0.1", port=state["db_port"], dbname=database or state["database"], user=credentials["username"], password=credentials["password"], autocommit=True)
+    return psycopg.connect(
+        host="127.0.0.1",
+        port=state["db_port"],
+        dbname=database or state["database"],
+        user=credentials["username"],
+        password=credentials["password"],
+        autocommit=True,
+    )
 
 
-def pg_tool(root, name, database, *, stdout=None, stdin=None):
+def pg_tool(root, name, database, *, stdout=None, stdin=None, snapshot=None):
     state = read_state(root)
     credentials = json.loads((Path(root) / "secrets/owner.json").read_text())
     env = environment(root, owner=True)
     env["PGPASSWORD"] = credentials["password"]
-    args = [str(Path(state["release"]) / f"postgres/bin/{name}.exe"), "--host", "127.0.0.1", "--port", str(state["db_port"]), "--username", credentials["username"], "--no-owner", "--no-acl"]
-    args += ["--format=custom", database] if name == "pg_dump" else ["--exit-on-error", "--single-transaction", "--dbname", database]
-    subprocess.run(args, env=env, stdout=stdout, stdin=stdin, stderr=subprocess.DEVNULL, check=True, timeout=1800)
+    args = [
+        str(Path(state["release"]) / f"postgres/bin/{name}.exe"),
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(state["db_port"]),
+        "--username",
+        credentials["username"],
+        "--no-owner",
+        "--no-acl",
+    ]
+    args += (
+        ["--format=custom", database]
+        if name == "pg_dump"
+        else ["--exit-on-error", "--single-transaction", "--dbname", database]
+    )
+    if snapshot is not None:
+        args += ["--snapshot", snapshot]
+    subprocess.run(
+        args,
+        env=env,
+        stdout=stdout,
+        stdin=stdin,
+        stderr=subprocess.DEVNULL,
+        check=True,
+        timeout=1800,
+    )
 
 
 def evidence(conn):
     """Logical rows, not schema version: detects lost history, sequences and PDF bytes."""
     values = {}
-    for (table,) in conn.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+    for (table,) in conn.execute(
+        "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
+    ):
         # Stable per-row hash and ordering also checks binary payloads, identities and credentials.
-        rows = conn.execute(sql.SQL("SELECT md5(row_to_json(t)::text) FROM {} t ORDER BY 1").format(sql.Identifier(table)))
+        rows = conn.execute(
+            sql.SQL("SELECT md5(row_to_json(t)::text) FROM {} t ORDER BY 1").format(
+                sql.Identifier(table)
+            )
+        )
         h = hashlib.sha256()
         count = 0
         for (value,) in rows:
             h.update(value.encode())
             count += 1
         values[table] = {"rows": count, "sha256": h.hexdigest()}
-    values["__sequences__"] = list(conn.execute("SELECT schemaname,sequencename,last_value FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename"))
+    values["__sequences__"] = list(
+        conn.execute(
+            "SELECT schemaname,sequencename,last_value FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename"
+        )
+    )
     return values
 
 
@@ -62,24 +103,46 @@ def backup(root):
     keep = config["retain"]
     if type(keep) is not int or not 2 <= keep <= 1000:
         raise UnsafeOperation("A retenção deve conservar entre 2 e 1000 backups.")
-    with exclusive(target_root), tempfile.TemporaryDirectory(prefix=".building-", dir=target_root) as temporary:
+    with (
+        exclusive(target_root),
+        tempfile.TemporaryDirectory(prefix=".building-", dir=target_root) as temporary,
+    ):
         staging = Path(temporary)
         with connection(root) as conn:
             conn.execute("SELECT pg_advisory_lock(73194622)")
             conn.execute("SELECT pg_advisory_lock(73194621)")
             try:
+                conn.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                snapshot = conn.execute("SELECT pg_export_snapshot()").fetchone()[0]
                 before = evidence(conn)
                 with (staging / "database.dump").open("xb") as output:
-                    pg_tool(root, "pg_dump", state["database"], stdout=output)
+                    pg_tool(root, "pg_dump", state["database"], stdout=output, snapshot=snapshot)
                 # Config, signing keys and certificates are inside the ENCRYPTED archive only.
-                for name in ("installation.json", "backup-policy.json", "recovery-public.pem", "secrets", "signing", "tls", "publisher.json"):
+                for name in (
+                    "installation.json",
+                    "backup-policy.json",
+                    "recovery-public.pem",
+                    "package-policy.json",
+                    "secrets",
+                    "signing",
+                    "tls",
+                    "publisher.json",
+                ):
                     source = root / name
                     if source.is_dir():
                         shutil.copytree(source, staging / name)
                     elif source.is_file():
                         shutil.copy2(source, staging / name)
-                manifest = {"schema": 1, "instance": state["instance"], "version": state["version"], "channel": state["channel"], "evidence": before, "files": regular_tree(staging)}
+                manifest = {
+                    "schema": 1,
+                    "instance": state["instance"],
+                    "version": state["version"],
+                    "channel": state["channel"],
+                    "evidence": before,
+                    "files": regular_tree(staging),
+                }
             finally:
+                conn.execute("ROLLBACK")
                 conn.execute("SELECT pg_advisory_unlock(73194621)")
                 conn.execute("SELECT pg_advisory_unlock(73194622)")
         write_json(staging / "manifest.json", manifest)
@@ -88,25 +151,49 @@ def backup(root):
             for name in [*manifest["files"], "manifest.json"]:
                 handle.add(staging / name, arcname=name, recursive=False)
         verify_archive(archive)
-        target = target_root / ("gva-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex + ".gvabackup")
-        encrypt(archive, target, (root / "recovery-public.pem").read_bytes(), {"instance": state["instance"], "version": state["version"], "channel": state["channel"]})
+        target = target_root / (
+            "gva-"
+            + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            + "-"
+            + uuid.uuid4().hex
+            + ".gvabackup"
+        )
+        encrypt(
+            archive,
+            target,
+            (root / "recovery-public.pem").read_bytes(),
+            {
+                "instance": state["instance"],
+                "version": state["version"],
+                "channel": state["channel"],
+            },
+        )
         # Record transport integrity. GCM authentication is checked during recovery/update.
-        write_json(target.with_suffix(".sha256.json"), {"sha256": digest(target), "size": target.stat().st_size})
+        write_json(
+            target.with_suffix(".sha256.json"),
+            {"sha256": digest(target), "size": target.stat().st_size},
+        )
         destination = config.get("copy_to")
         if destination:
             directory = Path(destination)
             if not directory.is_absolute() or not directory.is_dir():
-                raise UnsafeOperation("Destino empresarial de backup indisponível; cópia local conservada.")
+                raise UnsafeOperation(
+                    "Destino empresarial de backup indisponível; cópia local conservada."
+                )
             partial = directory / (target.name + ".partial")
             final = directory / target.name
             if final.exists() or partial.exists():
                 raise UnsafeOperation("Destino de backup já existe.")
             shutil.copyfile(target, partial)
             if digest(partial) != digest(target):
-                raise UnsafeOperation("A cópia empresarial falhou a integridade; cópia local conservada.")
+                raise UnsafeOperation(
+                    "A cópia empresarial falhou a integridade; cópia local conservada."
+                )
             os.replace(partial, final)
         # Only completed files owned by this installation's backup directory; remote copies untouched.
-        for old in sorted(target_root.glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime, reverse=True)[keep:]:
+        for old in sorted(
+            target_root.glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime, reverse=True
+        )[keep:]:
             old.unlink()
             old.with_suffix(".sha256.json").unlink(missing_ok=True)
         return target
@@ -115,22 +202,44 @@ def backup(root):
 def verify_archive(path):
     with tarfile.open(path, "r:") as archive:
         members = archive.getmembers()
-        if len(members) > 50000 or any(not item.isfile() or item.size > 100 * 1024**3 for item in members):
+        if len(members) > 50000 or any(
+            not item.isfile() or item.size > 100 * 1024**3 for item in members
+        ):
             raise UnsafeOperation("Backup com membros inválidos.")
         names = [item.name for item in members]
-        if len(names) != len(set(names)) or "manifest.json" not in names or archive.getmember("manifest.json").size > 16 * 1024 * 1024:
+        if (
+            len(names) != len(set(names))
+            or "manifest.json" not in names
+            or archive.getmember("manifest.json").size > 16 * 1024 * 1024
+        ):
             raise UnsafeOperation("Manifesto inválido.")
         manifest = json.load(archive.extractfile("manifest.json"))
-        if manifest["schema"] != 1 or set(names) != set(manifest["files"]) | {"manifest.json"} or "database.dump" not in names:
+        if (
+            manifest["schema"] != 1
+            or set(names) != set(manifest["files"]) | {"manifest.json"}
+            or "database.dump" not in names
+        ):
             raise UnsafeOperation("Backup incompleto.")
         total = 0
         for item in members:
             if item.name == "manifest.json":
                 continue
             name = item.name
-            if "\\" in name or ":" in name or name.startswith("/") or any(part in ("", ".", "..") for part in name.split("/")):
+            if (
+                "\\" in name
+                or ":" in name
+                or name.startswith("/")
+                or any(part in ("", ".", "..") for part in name.split("/"))
+            ):
                 raise UnsafeOperation("Caminho inválido no backup.")
-            if name not in {"database.dump", "installation.json", "backup-policy.json", "recovery-public.pem", "publisher.json"} and name.split("/")[0] not in {"secrets", "signing", "tls"}:
+            if name not in {
+                "database.dump",
+                "installation.json",
+                "backup-policy.json",
+                "recovery-public.pem",
+                "package-policy.json",
+                "publisher.json",
+            } and name.split("/")[0] not in {"secrets", "signing", "tls"}:
                 raise UnsafeOperation("Ficheiro inesperado no backup.")
             total += item.size
             if total > 100 * 1024**3:
@@ -165,18 +274,32 @@ def extract_verified(path, target):
 def restore_check(root, archive):
     manifest = verify_archive(archive)
     state = read_state(root)
-    if manifest["instance"] != state["instance"] or manifest["version"] != state["version"] or manifest["channel"] != state["channel"]:
+    if (
+        manifest["instance"] != state["instance"]
+        or manifest["version"] != state["version"]
+        or manifest["channel"] != state["channel"]
+    ):
         raise UnsafeOperation("O backup não corresponde a esta instalação/versão.")
     database = "gva_restore_" + uuid.uuid4().hex
     # The rehearsal database is NEW and never substituted for the operational DB.
     with connection(root, "postgres") as conn:
-        conn.execute(sql.SQL("CREATE DATABASE {} TEMPLATE template0").format(sql.Identifier(database)))
-    with tarfile.open(archive) as handle, handle.extractfile("database.dump") as dump:
+        conn.execute(
+            sql.SQL("CREATE DATABASE {} TEMPLATE template0").format(sql.Identifier(database))
+        )
+    with (
+        tarfile.open(archive) as handle,
+        handle.extractfile("database.dump") as source,
+        tempfile.TemporaryFile() as dump,
+    ):
+        shutil.copyfileobj(source, dump)
+        dump.seek(0)
         pg_tool(root, "pg_restore", database, stdin=dump)
     with connection(root, database) as conn:
         actual = evidence(conn)
         if json.loads(json.dumps(actual)) != manifest["evidence"]:
-            raise UnsafeOperation("O restauro de ensaio difere do original; preservado para diagnóstico.")
+            raise UnsafeOperation(
+                "O restauro de ensaio difere do original; preservado para diagnóstico."
+            )
     # Only drop the generated rehearsal after exact verification; never accept an input DB name.
     with connection(root, "postgres") as conn:
         conn.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(database)))
@@ -197,7 +320,11 @@ class UpdateActions:
 
     def database_start(self):
         # Launch only the existing PG17 service, still DISABLED for the next boot.
+        native(["sc.exe", "config", SERVICES["postgres"], "start=", "demand"])
         native(["sc.exe", "start", SERVICES["postgres"]])
+        from .install import wait_database
+
+        wait_database(self.root)
 
     def backup_and_restore_check(self):
         self.database_start()
@@ -237,6 +364,7 @@ class UpdateActions:
         try:
             activate()
             from .install import health_http
+
             health_http(self.root)
         finally:
             (self.root / "activation-permit").unlink(missing_ok=True)
@@ -244,6 +372,11 @@ class UpdateActions:
 
 def grants(root):
     state = read_state(root)
-    text = (Path(state["release"]) / "app/deploy/app-role.sql").read_text().replace(':"app_role"', '"gva_web"').replace(':"DBNAME"', '"' + state["database"] + '"')
+    text = (
+        (Path(state["release"]) / "app/deploy/app-role.sql")
+        .read_text()
+        .replace(':"app_role"', '"gva_web"')
+        .replace(':"DBNAME"', '"' + state["database"] + '"')
+    )
     with connection(root) as conn:
         conn.execute(text)

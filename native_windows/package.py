@@ -17,7 +17,9 @@ class UnsafeOperation(RuntimeError):
 
 
 def version(value):
-    if not isinstance(value, str) or not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", value):
+    if not isinstance(value, str) or not re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", value
+    ):
         raise UnsafeOperation("Versão inválida; use major.minor.patch.")
     return tuple(map(int, value.split(".")))
 
@@ -52,25 +54,56 @@ def verify(root, trust_path, installed=None):
     trust = json.loads(Path(trust_path).read_text())
     try:
         key = serialization.load_pem_public_key(trust["public_key"].encode())
-        if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(key.curve, ec.SECP256R1):
+        if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(
+            key.curve, ec.SECP256R1
+        ):
             raise ValueError
-        key.verify(base64.b64decode((root / "package.sig").read_bytes(), validate=True), CONTEXT + raw, ec.ECDSA(hashes.SHA256()))
+        key.verify(
+            base64.b64decode((root / "package.sig").read_bytes(), validate=True),
+            CONTEXT + raw,
+            ec.ECDSA(hashes.SHA256()),
+        )
         manifest = json.loads(raw)
-        if set(manifest) != {"schema", "version", "minimum_version", "postgres_major", "channel", "files"}:
+        if set(manifest) != {
+            "schema",
+            "version",
+            "minimum_version",
+            "postgres_major",
+            "channel",
+            "files",
+        }:
             raise ValueError
-        if manifest["schema"] != 1 or manifest["postgres_major"] != 17 or manifest["channel"] != trust["channel"]:
+        if (
+            manifest["schema"] != 1
+            or manifest["postgres_major"] != 17
+            or manifest["channel"] != trust["channel"]
+        ):
             raise ValueError
         current = version(manifest["version"])
         minimum = version(manifest["minimum_version"])
         if minimum > current:
             raise ValueError
         if installed:
-            if installed["channel"] != manifest["channel"] or version(installed["version"]) >= current or version(installed["version"]) < minimum:
-                raise UnsafeOperation("Atualização antiga, repetida ou incompatível. Os dados não foram alterados.")
+            if (
+                installed["channel"] != manifest["channel"]
+                or version(installed["version"]) >= current
+                or version(installed["version"]) < minimum
+            ):
+                raise UnsafeOperation(
+                    "Atualização antiga, repetida ou incompatível. Os dados não foram alterados."
+                )
         actual = regular_tree(root / "payload")
         if not actual or actual != manifest["files"]:
             raise ValueError
-        required = {"python/python.exe", "postgres/bin/postgres.exe", "postgres/bin/pg_dump.exe", "postgres/bin/pg_restore.exe", "app/manage.py", "host/GVA.Native.exe", "nginx/nginx.exe"}
+        required = {
+            "python/python.exe",
+            "postgres/bin/postgres.exe",
+            "postgres/bin/pg_dump.exe",
+            "postgres/bin/pg_restore.exe",
+            "app/manage.py",
+            "host/GVA.Native.exe",
+            "nginx/nginx.exe",
+        }
         if not required.issubset(actual):
             raise ValueError
     except UnsafeOperation:

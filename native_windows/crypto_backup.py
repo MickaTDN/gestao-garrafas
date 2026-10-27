@@ -25,8 +25,14 @@ def create_recovery_key(password):
         raise UnsafeOperation("A frase de recuperação deve ter pelo menos 16 caracteres.")
     key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
     return (
-        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.BestAvailableEncryption(password.encode())),
-        key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo),
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.BestAvailableEncryption(password.encode()),
+        ),
+        key.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        ),
     )
 
 
@@ -36,7 +42,24 @@ def encrypt(source, destination, public_pem, metadata):
         raise UnsafeOperation("Chave pública de recuperação inválida.")
     content_key = os.urandom(32)
     nonce = os.urandom(12)
-    header = json.dumps({"schema": 1, "metadata": metadata, "sha256": digest(source), "size": Path(source).stat().st_size, "nonce": base64.b64encode(nonce).decode(), "key": base64.b64encode(key.encrypt(content_key, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=MAGIC))).decode()}, sort_keys=True).encode()
+    header = json.dumps(
+        {
+            "schema": 1,
+            "metadata": metadata,
+            "sha256": digest(source),
+            "size": Path(source).stat().st_size,
+            "nonce": base64.b64encode(nonce).decode(),
+            "key": base64.b64encode(
+                key.encrypt(
+                    content_key,
+                    padding.OAEP(
+                        mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=MAGIC
+                    ),
+                )
+            ).decode(),
+        },
+        sort_keys=True,
+    ).encode()
     cipher = Cipher(algorithms.AES(content_key), modes.GCM(nonce)).encryptor()
     cipher.authenticate_additional_data(MAGIC + header)
     destination = Path(destination)
@@ -74,14 +97,21 @@ def decrypt(source, destination, private_pem, password):
             data = json.loads(header)
             if data["schema"] != 1 or not 0 <= data["size"] <= LIMIT:
                 raise ValueError
-            key = private.decrypt(base64.b64decode(data["key"], validate=True), padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=MAGIC))
+            key = private.decrypt(
+                base64.b64decode(data["key"], validate=True),
+                padding.OAEP(
+                    mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=MAGIC
+                ),
+            )
             end = inp.seek(0, 2)
             if end != len(MAGIC) + 4 + length + data["size"] + 16:
                 raise ValueError
             inp.seek(end - 16)
             tag = inp.read(16)
             inp.seek(len(MAGIC) + 4 + length)
-            cipher = Cipher(algorithms.AES(key), modes.GCM(base64.b64decode(data["nonce"], validate=True), tag)).decryptor()
+            cipher = Cipher(
+                algorithms.AES(key), modes.GCM(base64.b64decode(data["nonce"], validate=True), tag)
+            ).decryptor()
             cipher.authenticate_additional_data(MAGIC + header)
             remaining = data["size"]
             with temporary.open("xb") as out:
@@ -99,6 +129,8 @@ def decrypt(source, destination, private_pem, password):
             os.replace(temporary, destination)
             return data["metadata"]
     except Exception as error:
-        raise UnsafeOperation("Backup inválido, alterado ou chave/frase de recuperação incorreta.") from error
+        raise UnsafeOperation(
+            "Backup inválido, alterado ou chave/frase de recuperação incorreta."
+        ) from error
     finally:
         temporary.unlink(missing_ok=True)

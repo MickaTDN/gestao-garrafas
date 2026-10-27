@@ -9,18 +9,32 @@ from native_windows.state import exclusive, update, write_json
 
 class Actions:
     release = "new-version"
+
     def __init__(self, failure=None):
         self.failure, self.calls = failure, []
+
     def do(self, name):
         self.calls.append(name)
         if name == self.failure:
             raise RuntimeError("synthetic interruption")
-    def disable(self): self.do("disable")
-    def stop(self): self.do("stop")
-    def backup_and_restore_check(self): self.do("backup")
-    def migrate(self): self.do("migrate")
-    def health(self): self.do("health")
-    def activate(self): self.do("activate")
+
+    def disable(self):
+        self.do("disable")
+
+    def stop(self):
+        self.do("stop")
+
+    def backup_and_restore_check(self):
+        self.do("backup")
+
+    def migrate(self):
+        self.do("migrate")
+
+    def health(self):
+        self.do("health")
+
+    def activate(self):
+        self.do("activate")
 
 
 class UpdateTests(TestCase):
@@ -28,13 +42,21 @@ class UpdateTests(TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.state = {"version": "1.0.0", "channel": "synthetic", "instance": "stable-identity", "release": "old", "database": "synthetic-database"}
+        self.state = {
+            "version": "1.0.0",
+            "channel": "synthetic",
+            "instance": "stable-identity",
+            "release": "old",
+            "database": "synthetic-database",
+        }
         write_json(self.root / "installation.json", self.state)
 
     def test_order_verified_restore_precedes_migration_and_identity_preserved(self):
         actions = Actions()
         update(self.root, {"version": "1.1.0"}, actions)
-        self.assertEqual(actions.calls, ["disable", "stop", "backup", "migrate", "health", "activate"])
+        self.assertEqual(
+            actions.calls, ["disable", "stop", "backup", "migrate", "health", "activate"]
+        )
         final = json.loads((self.root / "installation.json").read_text())
         self.assertEqual(final, {**self.state, "version": "1.1.0", "release": "new-version"})
         self.assertFalse((self.root / "maintenance.json").exists())

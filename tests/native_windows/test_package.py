@@ -17,23 +17,56 @@ class PackageTests(TestCase):
         self.root = Path(self.tmp.name)
         self.bundle = self.root / "package"
         self.bundle.mkdir()
-        for name in ("python/python.exe", "postgres/bin/postgres.exe", "postgres/bin/pg_dump.exe", "postgres/bin/pg_restore.exe", "app/manage.py", "host/GVA.Native.exe", "nginx/nginx.exe"):
+        for name in (
+            "python/python.exe",
+            "postgres/bin/postgres.exe",
+            "postgres/bin/pg_dump.exe",
+            "postgres/bin/pg_restore.exe",
+            "app/manage.py",
+            "host/GVA.Native.exe",
+            "nginx/nginx.exe",
+        ):
             path = self.bundle / "payload" / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"synthetic-fixture-not-an-executable")
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.trust = self.root / "trust.json"
-        self.trust.write_text(json.dumps({"channel": "synthetic", "public_key": self.key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()}))
-        self.manifest = {"schema": 1, "version": "1.1.0", "minimum_version": "1.0.0", "postgres_major": 17, "channel": "synthetic", "files": regular_tree(self.bundle / "payload")}
+        self.trust.write_text(
+            json.dumps(
+                {
+                    "channel": "synthetic",
+                    "public_key": self.key.public_key()
+                    .public_bytes(
+                        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+                    )
+                    .decode(),
+                }
+            )
+        )
+        self.manifest = {
+            "schema": 1,
+            "version": "1.1.0",
+            "minimum_version": "1.0.0",
+            "postgres_major": 17,
+            "channel": "synthetic",
+            "files": regular_tree(self.bundle / "payload"),
+        }
         self.sign()
 
     def sign(self, key=None):
         raw = json.dumps(self.manifest).encode()
         (self.bundle / "package.json").write_bytes(raw)
-        (self.bundle / "package.sig").write_bytes(base64.b64encode((key or self.key).sign(CONTEXT + raw, ec.ECDSA(hashes.SHA256()))))
+        (self.bundle / "package.sig").write_bytes(
+            base64.b64encode((key or self.key).sign(CONTEXT + raw, ec.ECDSA(hashes.SHA256())))
+        )
 
     def test_valid_authenticated_update_10_to_11(self):
-        self.assertEqual(verify(self.bundle, self.trust, {"version": "1.0.0", "channel": "synthetic"})["version"], "1.1.0")
+        self.assertEqual(
+            verify(self.bundle, self.trust, {"version": "1.0.0", "channel": "synthetic"})[
+                "version"
+            ],
+            "1.1.0",
+        )
 
     def test_rejects_tampering_missing_extra_and_replaced_payload(self):
         path = self.bundle / "payload/app/manage.py"
@@ -53,12 +86,19 @@ class PackageTests(TestCase):
         with self.assertRaises(UnsafeOperation):
             verify(self.bundle, self.trust)
         self.sign()
-        (self.bundle / "package.json").write_bytes((self.bundle / "package.json").read_bytes() + b" ")
+        (self.bundle / "package.json").write_bytes(
+            (self.bundle / "package.json").read_bytes() + b" "
+        )
         with self.assertRaises(UnsafeOperation):
             verify(self.bundle, self.trust)
 
     def test_rejects_old_repeat_incompatible_channel_and_postgres(self):
-        for installed in ({"version": "1.1.0", "channel": "synthetic"}, {"version": "2.0.0", "channel": "synthetic"}, {"version": "0.9.0", "channel": "synthetic"}, {"version": "1.0.0", "channel": "release"}):
+        for installed in (
+            {"version": "1.1.0", "channel": "synthetic"},
+            {"version": "2.0.0", "channel": "synthetic"},
+            {"version": "0.9.0", "channel": "synthetic"},
+            {"version": "1.0.0", "channel": "release"},
+        ):
             with self.subTest(installed=installed), self.assertRaises(UnsafeOperation):
                 verify(self.bundle, self.trust, installed)
         self.manifest["postgres_major"] = 18
