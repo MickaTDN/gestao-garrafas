@@ -13,6 +13,12 @@ from pathlib import Path
 
 
 def run(args, *, expected=0, **kwargs):
+    if Path(str(args[0])).name.lower() == "powershell.exe" and "env" not in kwargs:
+        # Windows PowerShell 5.1 must not import PowerShell7 modules inherited
+        # from the hosted runner shell. This changes only the child process env.
+        kwargs["env"] = {
+            key: value for key, value in os.environ.items() if key.lower() != "psmodulepath"
+        }
     result = subprocess.run(list(map(str, args)), timeout=480, **kwargs)
     if result.returncode != expected:
         raise RuntimeError(

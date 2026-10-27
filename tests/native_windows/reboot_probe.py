@@ -27,6 +27,7 @@ def main(phase):
                 "$c=Get-CimInstance Win32_ComputerSystem;$o=Get-CimInstance Win32_OperatingSystem;@{model=$c.Model;manufacturer=$c.Manufacturer;type=$o.ProductType;build=$o.BuildNumber}|ConvertTo-Json -Compress",
             ],
             text=True,
+            env={key: value for key, value in os.environ.items() if key.lower() != "psmodulepath"},
         )
     )
     if (
