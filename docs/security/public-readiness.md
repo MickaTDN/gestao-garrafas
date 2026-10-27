@@ -109,6 +109,11 @@ Um hash, o sucesso dos testes ou um nome de artefacto não aprovam um instalador
 Um PR pode alterar o seu workflow: nenhum dos seus artefactos deve ser tratado
 como uma versão oficial, mesmo que o nome tenha sido manipulado.
 
+Quando Dependabot propuser uma nova Action, verificar a release e o SHA no
+repositório oficial e atualizar também `.github/security/approved-actions.json`
+no mesmo PR. O verificador rejeita SHAs não revistos; uma proposta de atualização
+não é autorização para alargar a lista ou fazer merge automaticamente.
+
 **Não existe workflow de publicação oficial.** Não se concedeu `contents: write`,
 `packages: write` ou OIDC de publicação. A autorização de uma distribuição oficial
 continua a ser uma decisão humana sobre uma revisão aprovada, seguida de assinatura
@@ -258,6 +263,30 @@ PostgreSQL sintéticos; isso não homologa os caminhos de recuperação Windows.
    checks obrigatórios; só depois considerar a homologação automatizada Windows.
    Validações em Windows/Android físicos e instalação na empresa continuam fases
    distintas, não realizadas aqui.
+
+## Coordenação da futura integração com o PR #13
+
+As duas linhas contêm as correções, e os seus lockfiles foram validados
+separadamente. Uma simulação `git merge-tree` da futura junção detetou **dois
+conflitos de conteúdo**, em `pyproject.toml` e `uv.lock`, devido à dependência
+Waitress da instalação nativa. A simulação não alterou branches, ficheiros ou a
+main. Não foi criado qualquer merge para esconder o problema.
+
+Recomendação: rever primeiro o PR de segurança baseado em main. Se o proprietário
+o integrar, atualizar depois a branch do PR #13 por um merge normal de main,
+durante revisão, sem rebase destrutivo, squash ou force-push. Na resolução:
+
+1. Manter `pillow>=13.0.0,<14`, `cryptography>=50.0.2,<51` e o grupo `security`.
+2. **Conservar `waitress>=3.0.2,<4`** no projeto nativo; não escolher cegamente
+   a versão completa de um dos dois ficheiros e perder essa dependência.
+3. Regenerar/validar o lockfile com `uv lock`, verificar que mantém Pillow 13.0.0,
+   cryptography 50.0.2 e Waitress 3.0.2, sem atualizações alheias à resolução.
+4. Rever o diff e repetir os testes de segurança, aplicação e Windows sobre o
+   SHA resultante. Não integrar #13 enquanto existirem conflitos ou checks
+   obrigatórios pendentes. Não usar a CI de um SHA anterior como aprovação.
+
+Esta é uma instrução concreta de resolução para o momento da integração, não uma
+fusão autorizada ou executada nesta tarefa. O PR #13 continua a apontar para main.
 
 ## Fontes oficiais verificadas
 
