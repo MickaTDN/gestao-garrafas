@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from .package import UnsafeOperation
+from .package import UnsafeOperation, digest
 
 
 def read_state(root):
@@ -66,6 +66,11 @@ def service(root, kind, stop_file):
         raise UnsafeOperation(
             "Serviço de uma versão antiga recusado. Use apenas a versão instalada."
         )
+    installed = json.loads((release.parent / "package.json").read_text())
+    if installed["version"] != state["version"] or installed["channel"] != state["channel"]:
+        raise UnsafeOperation("Versão/pacote inconsistentes; arranque recusado.")
+    if state.get("package_sha256") != digest(release.parent / "package.json"):
+        raise UnsafeOperation("O código não corresponde ao pacote instalado; arranque recusado.")
     permit = root / "activation-permit"
     permitted = permit.is_file() and permit.read_text() == state["release"]
     if kind != "postgres" and (root / "maintenance.json").exists() and not permitted:
@@ -88,7 +93,8 @@ def service(root, kind, stop_file):
                         str(root / "cluster"),
                         "--username=gva_cluster",
                         "--encoding=UTF8",
-                        "--locale=C",
+                        "--locale-provider=builtin",
+                        "--builtin-locale=C.UTF-8",
                         "--auth=scram-sha-256",
                         "--pwfile",
                         str(bootstrap),
@@ -99,7 +105,7 @@ def service(root, kind, stop_file):
                     stderr=subprocess.DEVNULL,
                 )
                 (root / "cluster/postgresql.conf").write_text(
-                    f"listen_addresses = '127.0.0.1'\nport = {state['db_port']}\nfsync = on\nsynchronous_commit = on\nfull_page_writes = on\npassword_encryption = 'scram-sha-256'\n",
+                    f"listen_addresses = '127.0.0.1'\nport = {state['db_port']}\nfsync = on\nsynchronous_commit = on\nfull_page_writes = on\npassword_encryption = 'scram-sha-256'\ntimezone = 'UTC'\n",
                     encoding="ascii",
                 )
                 (root / "cluster/pg_hba.conf").write_text(

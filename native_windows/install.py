@@ -11,7 +11,7 @@ from psycopg import sql
 
 from .crypto_backup import create_recovery_key
 from .maintenance import connection, grants
-from .package import UnsafeOperation, refuse_reparse
+from .package import UnsafeOperation, digest, refuse_reparse
 from .runtime import manage, read_state
 from .state import write_json
 from .windows import SERVICES, activate, administrator, configure, free_port, native, protect
@@ -145,6 +145,7 @@ def initial(root, release, manifest, request, trust_path):
         "schema": 1,
         "instance": str(uuid.uuid4()),
         "version": manifest["version"],
+        "package_sha256": digest(release.parent / "package.json"),
         "release": str(release),
         "channel": manifest["channel"],
         "postgres_major": 17,

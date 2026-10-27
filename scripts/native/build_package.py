@@ -21,7 +21,15 @@ sys.path.insert(0, str(ROOT))
 from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
 
-from native_windows.package import CONTEXT, UnsafeOperation, digest, regular_tree, version  # noqa: E402
+from native_windows.package import (  # noqa: E402
+    CONTEXT,
+    UnsafeOperation,
+    copy_reviewed_source,
+    digest,
+    regular_tree,
+    reject_private_material,
+    version,
+)
 
 
 def unpack(archive, target):
@@ -44,6 +52,17 @@ def unpack(archive, target):
 
 def build(args):
     version(args.version)
+    # A payload must correspond to the reviewed commit, not ignored private files
+    # or uncommitted working-copy changes on a developer machine.
+    for command in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
+        if subprocess.run(command, cwd=ROOT).returncode:
+            raise UnsafeOperation(
+                "Compile apenas um commit limpo revisto; não se empacotam alterações locais."
+            )
+    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
+    key_path = Path(args.key).resolve()
+    if key_path.is_relative_to(ROOT):
+        raise UnsafeOperation("A chave privada de pacotes deve ficar fora do repositório.")
     version(args.minimum_version)
     output = Path(args.output).resolve()
     if output.exists() or output.is_relative_to(ROOT):
@@ -110,25 +129,50 @@ def build(args):
             )
     if args.synthetic_migration_probe and policy["channel"] != "synthetic":
         raise UnsafeOperation("A migração de ensaio nunca pode entrar num pacote de distribuição.")
+    python_version = json.loads(
+        subprocess.check_output(
+            [
+                str(payload / "python/python.exe"),
+                "-s",
+                "-c",
+                "import json,sys;print(json.dumps(list(sys.version_info[:2])))",
+            ],
+            text=True,
+        )
+    )
+    pg_version = subprocess.check_output(
+        [str(payload / "postgres/bin/postgres.exe"), "--version"], text=True
+    )
+    if python_version != [3, 12] or not pg_version.startswith("postgres (PostgreSQL) 17."):
+        raise UnsafeOperation("Os fornecedores devem conter Python3.12 e PostgreSQL17 reais.")
     app = payload / "app"
     app.mkdir()
-    for folder in (
-        "accounts",
-        "inventory",
-        "imports",
-        "web",
-        "consultation",
-        "config",
-        "templates",
-        "static",
-        "vertente",
-        "native_windows",
-    ):
-        shutil.copytree(
-            ROOT / folder,
-            app / folder,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "tests"),
-        )
+    copy_reviewed_source(
+        ROOT,
+        app,
+        tracked,
+        prefixes=(
+            "accounts",
+            "inventory",
+            "imports",
+            "web",
+            "consultation",
+            "config",
+            "templates",
+            "static",
+            "vertente",
+            "native_windows",
+        ),
+        explicit=(
+            "manage.py",
+            "pyproject.toml",
+            "uv.lock",
+            "deploy/app-role.sql",
+            "deploy/vertente/nginx.conf.template",
+            "docs/windows-native.md",
+            "docs/windows-native.html",
+        ),
+    )
     if args.synthetic_migration_probe:
         (app / "consultation/migrations/0003_native_synthetic_probe.py").write_text(
             "from django.db import migrations\n"
@@ -136,17 +180,6 @@ def build(args):
             "    dependencies = [('consultation', '0002_authorizeddevice')]\n"
             "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
         )
-    for file in ("manage.py", "pyproject.toml", "uv.lock"):
-        shutil.copy2(ROOT / file, app / file)
-    (app / "docs").mkdir()
-    for name in ("windows-native.md", "windows-native.html"):
-        if (ROOT / "docs" / name).is_file():
-            shutil.copy2(ROOT / "docs" / name, app / "docs" / name)
-    (app / "deploy/vertente").mkdir(parents=True)
-    shutil.copy2(ROOT / "deploy/app-role.sql", app / "deploy/app-role.sql")
-    shutil.copy2(
-        ROOT / "deploy/vertente/nginx.conf.template", app / "deploy/vertente/nginx.conf.template"
-    )
 
     def write(path, value):
         Path(path).write_text(json.dumps(value, sort_keys=True, indent=2), encoding="utf-8")
@@ -197,12 +230,21 @@ def build(args):
     # Caches do not belong to the executable inventory; installed code is read-only.
     for path in payload.rglob("__pycache__"):
         shutil.rmtree(path)
+    host_source = output / "host-source"
+    copy_reviewed_source(
+        ROOT,
+        host_source,
+        tracked,
+        prefixes=("deploy/native/Host",),
+        explicit=("static/branding/copo-com-vida.ico",),
+    )
+    host_project = host_source / "deploy/native/Host/Host.csproj"
     host = payload / "host"
     result = subprocess.run(
         [
             "dotnet",
             "publish",
-            str(ROOT / "deploy/native/Host/Host.csproj"),
+            str(host_project),
             "-c",
             "Release",
             "-o",
@@ -227,7 +269,7 @@ def build(args):
         [
             "dotnet",
             "publish",
-            str(ROOT / "deploy/native/Host/Host.csproj"),
+            str(host_project),
             "-c",
             "Release",
             "-o",
@@ -262,6 +304,10 @@ def build(args):
             )
         for executable in (host / "GVA.Native.exe", service_host / "GVA.Native.exe"):
             subprocess.run([*command, str(executable)], check=True)
+            subprocess.run(
+                [str(host / "GVA.Native.exe"), "--verify-signer", str(executable)], check=True
+            )
+    reject_private_material(payload)
     manifest = {
         "schema": 1,
         "version": args.version,
@@ -277,6 +323,7 @@ def build(args):
     (output / "package.sig").write_bytes(base64.b64encode(signature))
     write(output / "release-trust.json", policy)
     requirements.unlink()
+    shutil.rmtree(host_source)
 
 
 if __name__ == "__main__":

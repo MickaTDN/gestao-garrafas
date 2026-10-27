@@ -20,6 +20,11 @@ static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--verify-signer")
+        {
+            try { Authenticode.Verify(args[1], Trust.GetProperty("authenticode_sha256").GetString()!); return 0; }
+            catch { return 1; }
+        }
         if (args.Length == 2 && args[0] == "--service")
         { ServiceBase.Run(new NativeService(args[1])); return 0; }
         ApplicationConfiguration.Initialize();
@@ -45,6 +50,7 @@ static class Program
 
     [StructLayout(LayoutKind.Sequential)] sealed class MemoryStatus { public uint length = (uint)Marshal.SizeOf<MemoryStatus>(); public uint load; public ulong totalPhysical, availablePhysical, totalPage, availablePage, totalVirtual, availableVirtual, availableExtended; }
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatus status);
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] static extern bool GetPhysicallyInstalledSystemMemory(out ulong kilobytes);
 
     static void Preflight(string manifestPath, string installer)
     {
@@ -53,7 +59,7 @@ static class Program
         if (Channel == "release")
         {
             var memory = new MemoryStatus();
-            if (!GlobalMemoryStatusEx(memory) || memory.totalPhysical < 15UL * 1024 * 1024 * 1024) throw new UserError("É necessário um computador com pelo menos 16 GB de RAM.");
+            if (!(GetPhysicallyInstalledSystemMemory(out ulong installedKB) ? installedKB >= 16UL * 1024 * 1024 : GlobalMemoryStatusEx(memory) && memory.totalPhysical >= 14UL * 1024 * 1024 * 1024)) throw new UserError("É necessário um computador com pelo menos 16 GB de RAM.");
             if (new DriveInfo(Path.GetPathRoot(Root)!).AvailableFreeSpace < 8L * 1024 * 1024 * 1024) throw new UserError("Espaço livre insuficiente. A informática deve reservar espaço para dados, cópias e restauro.");
         }
         byte[] raw = File.ReadAllBytes(manifestPath);
@@ -70,6 +76,7 @@ static class Program
             var incoming = Version.Parse(next.GetProperty("version").GetString()!);
             bool uninstalled = State.TryGetProperty("uninstalled", out var removed) && removed.GetBoolean();
             bool repair = uninstalled && old == incoming;
+            if (repair && !State.GetProperty("package_sha256").GetString()!.Equals(Convert.ToHexString(SHA256.HashData(raw)), StringComparison.OrdinalIgnoreCase)) throw new UserError("Reponha o instalador exato da versão anterior.");
             if ((old >= incoming && !repair) || (uninstalled && !repair) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Após desinstalar, reponha primeiro a versão exata.");
             if (File.Exists(Path.Combine(Root, "maintenance.json"))) throw new UserError("Manutenção interrompida. É necessária recuperação pela informática.");
         }
@@ -145,6 +152,16 @@ static class Program
         var phrase = Field(updating ? "Frase da chave de recuperação" : "Nova frase de recuperação (mínimo 16 caracteres); guarde-a separadamente", true);
         var phraseConfirm = updating ? null : Field("Confirmar frase de recuperação", true);
         var demo = new CheckBox { Text = "Instalação com dados fictícios para validação", Checked = true, Enabled = Channel != "synthetic", Width = 530 }; if (!updating) flow.Controls.Add(demo);
+        var ports = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, Width = 530, Height = 120, Visible = false };
+        var httpPort = new NumericUpDown { Minimum = 1024, Maximum = 65535, Value = 8765, Width = 150 };
+        var dbPort = new NumericUpDown { Minimum = 1024, Maximum = 65535, Value = 55432, Width = 150 };
+        if (!updating) {
+            var advanced = new CheckBox { Text = "Portas locais alternativas (informática)", Width = 530 };
+            advanced.CheckedChanged += (_, _) => ports.Visible = advanced.Checked;
+            ports.Controls.Add(new Label { Text = "Aplicação — sempre apenas neste computador", Width = 500 }); ports.Controls.Add(httpPort);
+            ports.Controls.Add(new Label { Text = "PostgreSQL — sempre apenas neste computador", Width = 500 }); ports.Controls.Add(dbPort);
+            flow.Controls.Add(advanced); flow.Controls.Add(ports);
+        }
         var button = new Button { Text = updating ? "Verificar backup e atualizar" : "Preparar instalação", Width = 260, Height = 40 };
         flow.Controls.Add(button);
         button.Click += async (_, _) => {
@@ -153,6 +170,7 @@ static class Program
             try
             {
                 var request = new Dictionary<string, object?> { ["username"] = user?.Text, ["password"] = password?.Text, ["synthetic"] = demo.Checked, ["recovery_key"] = key.Text, ["recovery_password"] = phrase.Text };
+                if (!updating) { request["http_port"] = (int)httpPort.Value; request["db_port"] = (int)dbPort.Value; }
                 if (recovering.Checked) request["archive"] = archive!.Text;
                 string file = PrivateRequest(request);
                 await Task.Run(() => Run(release, recovering.Checked ? "recover" : updating ? "update" : "install", file, package));
@@ -187,7 +205,8 @@ sealed class Dashboard : Form
     {
         Text = "Gestão Vertente Aveludada"; Width = 560; Height = 340; StartPosition = FormStartPosition.CenterScreen;
         using var iconStream = new FileStream(Path.Combine(Program.Release, "app/static/branding/copo-com-vida.ico"), FileMode.Open);
-        Icon = new Icon(iconStream);
+        using var originalIcon = new Icon(iconStream);
+        Icon = (Icon)originalIcon.Clone();
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20) }; Controls.Add(layout);
         layout.Controls.Add(new Label { Text = "Gestão Vertente Aveludada — versão " + Program.State.GetProperty("version").GetString(), Width = 500, Height = 40 });
         string backup = Path.Combine(Program.Root, "runtime/backup/last-success.txt");
@@ -217,10 +236,13 @@ sealed class NativeService : ServiceBase
     {
         RequestAdditionalTime(120000);
         stopFile = Path.Combine(Program.Root, "runtime", kind, "stop-" + Guid.NewGuid().ToString("N"));
-        var info = new ProcessStartInfo(Path.Combine(Program.Release, "python/python.exe")) { WorkingDirectory = Path.Combine(Program.Release, "app"), UseShellExecute = false, CreateNoWindow = true };
+        var info = new ProcessStartInfo(Path.Combine(Program.Release, "python/python.exe")) { WorkingDirectory = Path.Combine(Program.Release, "app"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         foreach (var arg in new[] { "-s", "-B", "-m", "native_windows.cli", "service", "--kind", kind, "--stop-file", stopFile }) info.ArgumentList.Add(arg);
         info.Environment["GVA_NATIVE_CHANNEL"] = Program.Channel;
         child = Process.Start(info)!;
+        string errorFile = Path.Combine(Program.Root, "runtime", kind, "last-error.txt");
+        child.ErrorDataReceived += (_, e) => { if (e.Data != null) try { if (!File.Exists(errorFile) || new System.IO.FileInfo(errorFile).Length < 131072) File.AppendAllText(errorFile, e.Data + Environment.NewLine); } catch (IOException) { } };
+        child.BeginErrorReadLine();
         child.EnableRaisingEvents = true;
         child.Exited += (_, _) => { if (!stopping) { ExitCode = 1; Stop(); } };
         var deadline = DateTime.UtcNow.AddSeconds(100);

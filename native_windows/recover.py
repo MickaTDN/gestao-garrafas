@@ -7,7 +7,7 @@ from pathlib import Path
 from .crypto_backup import decrypt
 from .install import create_cluster, prepare_acl
 from .maintenance import evidence, extract_verified, grants, matching_evidence, pg_tool
-from .package import UnsafeOperation, refuse_reparse
+from .package import UnsafeOperation, digest, refuse_reparse
 from .runtime import read_state
 from .state import write_json
 from .windows import administrator, configure, protect
@@ -33,6 +33,10 @@ def recover(root, release, manifest, request):
             Path(request["recovery_key"]).read_bytes(),
             request["recovery_password"],
         )
+        if metadata.get("package_sha256") != digest(Path(release).parent / "package.json"):
+            raise UnsafeOperation(
+                "Recuperação exige o instalador exato do backup, não apenas o mesmo número de versão."
+            )
         if metadata["version"] != manifest["version"] or metadata["channel"] != manifest["channel"]:
             raise UnsafeOperation(
                 "Recupere primeiro com a versão exata do backup; atualize apenas depois da validação."
@@ -148,6 +152,7 @@ def repair_program(root, release, manifest, request):
         if (
             not state.get("uninstalled")
             or manifest["version"] != state["version"]
+            or digest(Path(release).parent / "package.json") != state.get("package_sha256")
             or (root / "maintenance.json").exists()
         ):
             raise UnsafeOperation(

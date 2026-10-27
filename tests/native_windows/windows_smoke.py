@@ -111,6 +111,7 @@ def main(directory):
             "SELECT count(*),sum(current_stock) FROM inventory_reference"
         ).fetchone() == (3, 33)
         assert conn.execute("SELECT count(*) FROM inventory_importbatch").fetchone()[0] == 0
+        assert conn.execute("SELECT upper('água'),lower('ÁGUA')").fetchone() == ("ÁGUA", "água")
         assert (
             conn.execute("SELECT to_regclass('public.gva_native_ci_probe')").fetchone()[0] is None
         )
@@ -305,7 +306,11 @@ def main(directory):
     assert encrypted.is_file()
     # Recover an actual encrypted backup in a NEW root after retaining the original
     # synthetic installation. No existing directory or database is overwritten.
-    preserved = directory / "preserved-original-synthetic-data"
+    # ProgramData is on C:, while RUNNER_TEMP may be on D:. Rename only on
+    # the same volume; preserve the original test cluster without copying/deleting.
+    import uuid
+
+    preserved = root.with_name(root.name + "-preserved-" + uuid.uuid4().hex)
     root.rename(preserved)
     recovery_request = directory / "recovery-request.json"
     recovery_request.write_text(
@@ -354,7 +359,9 @@ if __name__ == "__main__":
         main(parser.parse_args().directory)
     except Exception as error:
         host = Path(os.environ["RUNNER_TEMP"]) / "gva-native/host-error.txt"
-        detail = host.read_text() if host.is_file() else str(error)
+        detail = str(error)
+        if host.is_file():
+            detail += "; host=" + host.read_text()
         root = Path(os.environ["PROGRAMDATA"]) / "GestaoVertenteAveludada-Teste"
         marker = root / "maintenance.json"
         if marker.is_file():

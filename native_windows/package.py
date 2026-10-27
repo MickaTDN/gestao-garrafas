@@ -86,6 +86,10 @@ def verify(root, trust_path, installed=None):
         if installed:
             old = version(installed["version"])
             repair = installed.get("uninstalled") is True and old == current
+            if repair and installed.get("package_sha256") != hashlib.sha256(raw).hexdigest():
+                raise UnsafeOperation(
+                    "Repor o programa exige o instalador exato anteriormente instalado."
+                )
             if (
                 installed["channel"] != manifest["channel"]
                 or (old >= current and not repair)
@@ -124,3 +128,84 @@ def refuse_reparse(path):
             raise UnsafeOperation(
                 "Não são permitidos links/junções nas pastas de programa ou dados."
             )
+
+
+def copy_reviewed_source(source_root, destination, tracked, *, prefixes=(), explicit=()):
+    """Ignored local workbooks/secrets can never become installer contents."""
+    import shutil
+
+    source_root, destination = Path(source_root), Path(destination)
+    private_suffixes = {
+        ".pem",
+        ".key",
+        ".p12",
+        ".pfx",
+        ".xlsx",
+        ".xls",
+        ".csv",
+        ".dump",
+        ".backup",
+        ".gvabackup",
+        ".pdf",
+    }
+    for name in tracked:
+        path = Path(name)
+        if not (name in explicit or any(name.startswith(prefix + "/") for prefix in prefixes)):
+            continue
+        if "tests" in path.parts or "__pycache__" in path.parts:
+            continue
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or ":" in name
+            or path.suffix.lower() in private_suffixes
+            or name.endswith(
+                (
+                    ".vastock.json",
+                    ".vaprefs.json",
+                    ".vagrant.json",
+                    ".vareceipts.json",
+                    ".vatrust.json",
+                    ".varequest.json",
+                )
+            )
+            or any(part in {"private", "secrets", "media", "backups"} for part in path.parts)
+        ):
+            raise UnsafeOperation(
+                "Ficheiro privado ou caminho inválido entre os fontes do instalador."
+            )
+        source = source_root / path
+        if source.is_symlink() or source.is_junction() or not source.is_file():
+            raise UnsafeOperation("Os fontes revistos devem ser ficheiros regulares.")
+        target = destination / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
+
+def reject_private_material(payload):
+    """Public CA bundles are allowed; private keys and datasets are not."""
+    pattern = re.compile(
+        rb"-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----\r?\n[A-Za-z0-9+/=]{32,}"
+    )
+    for path in Path(payload).rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(payload)
+        if path.suffix.lower() in {
+            ".key",
+            ".pfx",
+            ".p12",
+            ".xlsx",
+            ".xls",
+            ".csv",
+            ".dump",
+            ".backup",
+            ".gvabackup",
+        } or (relative.parts[0] == "postgres" and "data" in relative.parts[1:]):
+            raise UnsafeOperation("Material privado/dados de utilizador recusados no instalador.")
+        with path.open("rb") as stream:
+            overlap = b""
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                if pattern.search(overlap + block):
+                    raise UnsafeOperation("Chave privada recusada no instalador.")
+                overlap = block[-4096:]

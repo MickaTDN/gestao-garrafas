@@ -86,6 +86,7 @@ def update(root, manifest, actions):
                 "version": manifest["version"],
                 "release": str(actions.release),
             }
+            next_state["package_sha256"] = actions.package_sha256
             write_json(root / "installation.json", next_state)
             actions.activate()
             record["phase"] = "completed"

@@ -84,7 +84,7 @@ Os canais usam os mesmos nomes de serviço: não são instalados simultaneamente
 mesmo Windows; usar VMs separadas para homologação e produção.
 
 Após uma desinstalação normal, pode repor o programa com **o instalador exato da
-mesma versão**, confirmado pela política instalada e pelo marcador de desinstalação.
+mesma versão e mesmo payload**, confirmado pela política instalada e pelo marcador de desinstalação.
 O assistente exige chave/frase, ensaia o restauro e verifica o esquema, sem executar
 migrações nem voltar a criar dados fictícios. Só depois autoriza atualizações para
 versões superiores. Uma desinstalação com manutenção interrompida exige recuperação
@@ -126,7 +126,9 @@ pelo assistente. O utilizador normal não executa comandos.
 5. Liga apenas o PostgreSQL necessário à manutenção, em modo de arranque manual.
 6. Cria backup cifrado de base+configurações+chaves+certificados, decifra-o com a chave
    fornecida e restaura numa base de ensaio nova. Compara todas as linhas, documentos
-   binários, identidades e sequências antes de autorizar migrações.
+   binários e identidades; sequências não podem retroceder. Valores reservados
+   mais altos são legítimos porque sequências PostgreSQL não usam MVCC. Só depois
+   autoriza migrações.
 7. Executa migrações com o novo código e a conta owner, reaplica os grants revistos,
    valida Django e ausência de migrações pendentes.
 8. Só então aponta a instalação à nova versão, reconfigura serviços e verifica HTTP.
@@ -179,7 +181,7 @@ promete apagamento seguro de um SSD nem se altera BitLocker automaticamente.
 ## Recuperação consistente
 
 1. Parar/isolar a instalação com falha. Não apagar nem substituir a base original.
-2. Preparar uma **VM/Windows novo isolado**, mesma versão do instalador do backup.
+2. Preparar uma **VM/Windows novo isolado**, instalador exato do backup (o hash do payload também é verificado).
 3. No assistente inicial escolher recuperação, selecionar arquivo, chave privada e
    frase. O destino deve ser novo e sem os serviços da aplicação.
 4. A rotina autentica/valida todos os membros antes de extrair. Restaura apenas
@@ -295,3 +297,23 @@ migrações históricas representativas, falha de disco/espaço, destino empresa
 recuperação após avaria e Android físico com mTLS/CRL/Wi-Fi real. Não declarar
 instalação empresarial pronta até esses testes serem aprovados. Não foi instalado
 nada em computadores pessoais/da empresa ou em bases existentes.
+
+
+As verificações automáticas de reinício real estão preparadas em
+`tests/native_windows/reboot_probe.py before|after`, para um orquestrador autorizado
+de VM Hyper-V Windows11 com dados fictícios. O script recusa máquinas físicas e
+WindowsServer e nunca reinicia o computador por iniciativa própria. Não foi
+executado num Windows11 nesta entrega.
+
+
+O empacotamento usa apenas ficheiros seguidos por Git de um commit limpo,
+recusando alterações locais e cópia de ficheiros ignorados, datasets ou chaves
+privadas. Os fontes do anfitrião também são isolados antes da compilação. O
+payload é verificado contra material privado e inclui proveniência. Verificam-se
+os binários reais Python3.12/PostgreSQL17. O cluster novo usa collation Unicode
+builtin C.UTF-8 e UTC, mantendo a apresentação Europe/Lisbon de Django. As portas
+alternativas podem ser escolhidas nas opções da informática, sempre em loopback.
+
+Backups registam o SHA-256 do manifesto do programa; recuperar/repor exige esse
+payload exato, além do número de versão. Arquivar os instaladores originais: uma
+recompilação com a mesma versão não substitui o instalador guardado.

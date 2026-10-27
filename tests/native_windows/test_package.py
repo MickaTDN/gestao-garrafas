@@ -10,8 +10,10 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from native_windows.package import (
     CONTEXT,
     UnsafeOperation,
+    copy_reviewed_source,
     refuse_reparse,
     regular_tree,
+    reject_private_material,
     verify,
     version,
 )
@@ -137,7 +139,14 @@ class PackageTests(TestCase):
             verify(
                 self.bundle,
                 self.trust,
-                {"version": "1.1.0", "channel": "synthetic", "uninstalled": True},
+                {
+                    "version": "1.1.0",
+                    "channel": "synthetic",
+                    "uninstalled": True,
+                    "package_sha256": __import__("hashlib")
+                    .sha256((self.bundle / "package.json").read_bytes())
+                    .hexdigest(),
+                },
             )["version"],
             "1.1.0",
         )
@@ -145,5 +154,40 @@ class PackageTests(TestCase):
             verify(
                 self.bundle,
                 self.trust,
-                {"version": "1.0.0", "channel": "synthetic", "uninstalled": True},
+                {
+                    "version": "1.0.0",
+                    "channel": "synthetic",
+                    "uninstalled": True,
+                    "package_sha256": __import__("hashlib")
+                    .sha256((self.bundle / "package.json").read_bytes())
+                    .hexdigest(),
+                },
             )
+
+    def test_only_tracked_reviewed_code_is_copied_not_ignored_private_data(self):
+        source = self.root / "source"
+        (source / "app").mkdir(parents=True)
+        (source / "app/view.py").write_text("# reviewed public code")
+        (source / "app/private.xlsx").write_bytes(b"not-a-real-workbook")
+        (source / "app/private.pem").write_text("not-a-real-key")
+        dest = self.root / "safe-payload"
+        copy_reviewed_source(source, dest, ["app/view.py"], prefixes=("app",))
+        self.assertEqual([p.name for p in (dest / "app").iterdir()], ["view.py"])
+        with self.assertRaises(UnsafeOperation):
+            copy_reviewed_source(source, dest, ["app/private.pem"], prefixes=("app",))
+
+    def test_installer_rejects_private_keys_and_datasets_but_allows_public_certificates(self):
+        payload = self.root / "no-private-material"
+        payload.mkdir()
+        certificate = payload / "public.pem"
+        certificate.write_bytes(
+            b"-----BEGIN CERTIFICATE-----\npublic-test-fixture\n-----END CERTIFICATE-----"
+        )
+        reject_private_material(payload)
+        certificate.write_bytes(b"-----BEGIN PRIVATE KEY-----\n" + b"A" * 64)
+        with self.assertRaises(UnsafeOperation):
+            reject_private_material(payload)
+        certificate.unlink()
+        (payload / "private.pfx").write_bytes(b"synthetic-not-a-real-certificate")
+        with self.assertRaises(UnsafeOperation):
+            reject_private_material(payload)

@@ -24,7 +24,7 @@ from .windows import SERVICES, activate, configure, disable_all, native, stop_al
 def connection(root, database=None):
     state = read_state(root)
     credentials = json.loads((Path(root) / "secrets/owner.json").read_text())
-    return psycopg.connect(
+    conn = psycopg.connect(
         host="127.0.0.1",
         port=state["db_port"],
         dbname=database or state["database"],
@@ -32,6 +32,11 @@ def connection(root, database=None):
         password=credentials["password"],
         autocommit=True,
     )
+
+    if not 170000 <= conn.info.server_version < 180000:
+        conn.close()
+        raise UnsafeOperation("A instalação exige PostgreSQL17.")
+    return conn
 
 
 def pg_tool(root, name, database, *, stdout=None, stdin=None, snapshot=None):
@@ -122,6 +127,12 @@ def validate_material(root):
     from cryptography.hazmat.primitives.asymmetric import ec
 
     root = Path(root)
+    state = read_state(root)
+    installed = json.loads((Path(state["release"]).parent / "package.json").read_text())
+    if installed["version"] != state["version"] or installed["channel"] != state["channel"]:
+        raise UnsafeOperation("Identidade/versão do programa inconsistente.")
+    if state.get("package_sha256") != digest(Path(state["release"]).parent / "package.json"):
+        raise UnsafeOperation("Pacote instalado inconsistente. Backup/atualização recusados.")
     required = (
         "secrets/owner.json",
         "secrets/app.json",
@@ -206,6 +217,7 @@ def backup(root):
                     "schema": 1,
                     "instance": state["instance"],
                     "version": state["version"],
+                    "package_sha256": state["package_sha256"],
                     "channel": state["channel"],
                     "evidence": before,
                     "files": regular_tree(staging),
@@ -234,6 +246,7 @@ def backup(root):
             {
                 "instance": state["instance"],
                 "version": state["version"],
+                "package_sha256": state["package_sha256"],
                 "channel": state["channel"],
             },
         )
@@ -347,6 +360,7 @@ def restore_check(root, archive):
         manifest["instance"] != state["instance"]
         or manifest["version"] != state["version"]
         or manifest["channel"] != state["channel"]
+        or manifest.get("package_sha256") != state.get("package_sha256")
     ):
         raise UnsafeOperation("O backup não corresponde a esta instalação/versão.")
     database = "gva_restore_" + uuid.uuid4().hex
@@ -380,6 +394,7 @@ class UpdateActions:
         self.root, self.release = Path(root), Path(release)
         self.recovery_key, self.password = Path(recovery_key), password
         self.old = read_state(root)
+        self.package_sha256 = digest(self.release.parent / "package.json")
 
     def disable(self):
         disable_all()

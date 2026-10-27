@@ -9,6 +9,7 @@ from native_windows.state import exclusive, update, write_json
 
 class Actions:
     release = "new-version"
+    package_sha256 = "synthetic-new-package-hash"
 
     def __init__(self, failure=None):
         self.failure, self.calls = failure, []
@@ -58,7 +59,15 @@ class UpdateTests(TestCase):
             actions.calls, ["disable", "stop", "backup", "migrate", "health", "activate"]
         )
         final = json.loads((self.root / "installation.json").read_text())
-        self.assertEqual(final, {**self.state, "version": "1.1.0", "release": "new-version"})
+        self.assertEqual(
+            final,
+            {
+                **self.state,
+                "version": "1.1.0",
+                "release": "new-version",
+                "package_sha256": actions.package_sha256,
+            },
+        )
         self.assertFalse((self.root / "maintenance.json").exists())
         self.assertEqual(len(list(self.root.glob("update-*.json"))), 1)
 
