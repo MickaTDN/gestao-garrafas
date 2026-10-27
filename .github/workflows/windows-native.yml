@@ -12,6 +12,9 @@ permissions:
 jobs:
   windows-native-synthetic:
     name: windows-native-synthetic
+    # Forks run the non-privileged regression workflows, never service/ACL setup.
+    if: >-
+      github.repository == 'MickaTDN/gestao-garrafas' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
