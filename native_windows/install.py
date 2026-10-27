@@ -54,7 +54,6 @@ def wait_database(root):
 def create_cluster(root):
     root = Path(root)
     state = read_state(root)
-    release = Path(state["release"])
     owner = json.loads((root / "secrets/owner.json").read_text())
     app = json.loads((root / "secrets/app.json").read_text())
     cluster_password = secrets.token_urlsafe(48)

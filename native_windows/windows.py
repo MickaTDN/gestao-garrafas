@@ -85,9 +85,10 @@ def stop(name):
     if not exists(name):
         return
     subprocess.run(["sc.exe", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(90):
+    for _ in range(150):
         if stopped(name):
             return
+        subprocess.run(["sc.exe", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
     raise UnsafeOperation("O serviço não terminou de forma controlada. Atualização interrompida.")
 
