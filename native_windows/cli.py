@@ -32,6 +32,7 @@ def main():
             "publisher",
             "recover",
             "approve-recovery",
+            "enable-publisher",
         ),
     )
     parser.add_argument("--package")
@@ -101,6 +102,10 @@ def main():
         from .recover import approve_recovery
 
         approve_recovery(root, request)
+    elif args.action == "enable-publisher":
+        from .publisher import enable
+
+        enable(root, request)
     elif args.action == "publisher":
         from .publisher import configure_publisher
 

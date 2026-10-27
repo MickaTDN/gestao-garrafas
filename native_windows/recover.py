@@ -64,6 +64,10 @@ def recover(root, release, manifest, request):
         ):
             if (data / name).exists():
                 shutil.copyfile(data / name, root / name)
+        publisher = root / "publisher.json"
+        if publisher.is_file():
+            config = json.loads(publisher.read_text())
+            write_json(publisher, {**config, "enabled": False})
         state["release"] = str(release)
         write_json(root / "installation.json", state)
         configure(root, release, create=True)
@@ -114,7 +118,7 @@ def approve_recovery(root, request):
             manage(root, "migrate", "--check")
             stop_all()
             (root / "activation-permit").write_text(str(read_state(root)["release"]))
-            activate()
+            activate(root)
             health_http(root)
             write_json(root / "recovery-approved.json", {"identity_and_history_reviewed": True})
             (root / "maintenance.json").unlink()

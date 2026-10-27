@@ -58,6 +58,7 @@ def service(root, kind, stop_file):
     permitted = permit.is_file() and permit.read_text() == state["release"]
     if kind != "postgres" and (root / "maintenance.json").exists() and not permitted:
         raise UnsafeOperation("Arranque bloqueado por manutenção incompleta.")
+    ready_file = Path(str(stop_file) + ".ready")
     if kind == "postgres":
         # PostgreSQL owns WAL and crash recovery. Never use fsync=off or immediate shutdown.
         pg = release / "postgres/bin/pg_ctl.exe"
@@ -74,6 +75,7 @@ def service(root, kind, stop_file):
             check=True,
             timeout=90,
         )
+        ready_file.write_text("ready")
         try:
             while not Path(stop_file).exists():
                 probe = subprocess.run(
@@ -111,11 +113,18 @@ def service(root, kind, stop_file):
             while not Path(stop_file).exists():
                 time.sleep(0.25)
             server.close()
+            server.task_dispatcher.shutdown(cancel_pending=False, timeout=60)
+            from waitress import wasyncore
 
+            wasyncore.close_all(map=server._map)
+
+        ready_file.write_text("ready")
         threading.Thread(target=stop, daemon=True).start()
         server.run()
     elif kind == "backup":
         from .maintenance import backup
+
+        ready_file.write_text("ready")
 
         while not Path(stop_file).exists():
             # Start-of-day backup covers computers powered off each night.

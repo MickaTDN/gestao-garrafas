@@ -186,3 +186,8 @@ Consulta Android offline separada, perfis de dispositivo assinados, encomendas c
 exportação Stock v2 com Entradas e receções FIFO. Reutiliza seletivamente as Etapas 6/7
 sobre main A4, sem alterar os PR anteriores. Ver [decisões, instalação e limites](docs/etapa-b.md).
 Validação apenas sintética; sem publicação, instalação pessoal ou merge automático.
+
+A Etapa C prepara a [instalação nativa Windows11](docs/windows-native.md), sem
+Docker/WSL2, com instalador e atualizações verificadas. Os artefactos sintéticos
+da CI destinam-se à homologação; consultar o [relatório](docs/windows-native-validation.md)
+antes de considerar qualquer instalação empresarial.

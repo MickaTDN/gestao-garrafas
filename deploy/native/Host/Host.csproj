@@ -9,6 +9,7 @@
     <AssemblyName>GVA.Native</AssemblyName>
     <ApplicationIcon>../../../static/branding/copo-com-vida.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>

@@ -39,7 +39,8 @@ static class Program
             Application.Run(new Dashboard()); return 0;
         }
         catch (Exception error)
-        { MessageBox.Show("Não foi possível concluir a operação. Preserve os dados e contacte a informática.\n" + (error is UserError ? error.Message : error.GetType().Name), "Gestão Vertente Aveludada", MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
+        { if (Channel == "synthetic" && Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") { File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("RUNNER_TEMP")!, "gva-native", "host-error.txt"), error is UserError ? error.Message : error.GetType().Name); return 1; }
+          MessageBox.Show("Não foi possível concluir a operação. Preserve os dados e contacte a informática.\n" + (error is UserError ? error.Message : error.GetType().Name), "Gestão Vertente Aveludada", MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
     }
 
     static void Preflight(string manifestPath, string installer)
@@ -75,6 +76,9 @@ static class Program
         Button("Preparar publicador HTTPS (configuração aprovada)", () => {
             // File dialog must run on the STA UI thread.
             form.Invoke(() => { using var d = new OpenFileDialog { Filter = "Configuração aprovada|*.json" }; if (d.ShowDialog() == DialogResult.OK) Run(Release, "publisher", PrivateRequest(new { configuration = d.FileName })); });
+        });
+        Button("Ativar publicador após aprovação de rede", () => {
+            form.Invoke(() => { if (MessageBox.Show("A informática confirmou DNS, HTTPS confiável, certificados por dispositivo, CRL e firewall restrita? Não criar encaminhamento de portas na Internet.", "Aprovação de rede", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) Run(Release, "enable-publisher", PrivateRequest(new { it_network_ready = true })); });
         });
         Button("Aprovar recuperação após conferência (informática)", () => {
             form.Invoke(() => { if (MessageBox.Show("Confirmou a integridade, a sequência Android e TODAS as entradas exportadas após o backup? A origem anterior está isolada e parada? Esta ação autoriza o arranque local da cópia recuperada.", "Conferência obrigatória", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) Run(Release, "approve-recovery", PrivateRequest(new { confirmed_identity_history = true })); });
@@ -193,6 +197,7 @@ sealed class NativeService : ServiceBase
 {
     readonly string kind;
     Process? child;
+    volatile bool stopping;
     string stopFile = "";
     public NativeService(string kind)
     { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
@@ -205,16 +210,24 @@ sealed class NativeService : ServiceBase
         info.Environment["GVA_NATIVE_CHANNEL"] = Program.Channel;
         child = Process.Start(info)!;
         child.EnableRaisingEvents = true;
-        child.Exited += (_, _) => { if (!File.Exists(stopFile)) { ExitCode = 1; Stop(); } };
+        child.Exited += (_, _) => { if (!stopping) { ExitCode = 1; Stop(); } };
+        var deadline = DateTime.UtcNow.AddSeconds(100);
+        while (!File.Exists(stopFile + ".ready"))
+        {
+            if (child.HasExited || DateTime.UtcNow > deadline) throw new UserError("O serviço não ficou disponível. Preserve os dados.");
+            Thread.Sleep(200);
+        }
     }
     protected override void OnStop()
     {
-        RequestAdditionalTime(100000);
+        stopping = true;
+        try { RequestAdditionalTime(100000); } catch (InvalidOperationException) { /* Windows shutdown; WAL remains durable. */ }
         File.WriteAllText(stopFile, "stop");
         // Never forcibly kill the database. PostgreSQL fast shutdown rolls back only
         // uncommitted work and flushes confirmed WAL before its process exits.
         if (child != null && !child.WaitForExit(90000)) { ExitCode = 1; throw new UserError("Encerramento excedeu o tempo; preserve os dados."); }
         File.Delete(stopFile);
+        File.Delete(stopFile + ".ready");
     }
     protected override void OnShutdown() => OnStop();
 }

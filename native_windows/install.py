@@ -222,7 +222,7 @@ def initial(root, release, manifest, request, trust_path):
     manage(root, "vertente_setup", "--directory", str(root / "signing"))
     manage(root, "check", "--fail-level", "WARNING")
     (root / "maintenance.json").unlink()
-    activate()
+    activate(root)
 
 
 def health_http(root):

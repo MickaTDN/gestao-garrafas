@@ -91,6 +91,9 @@ def build(args):
                 for path in dest.rglob(Path(executable).name)
                 if path.as_posix().endswith("/" + executable)
             ]
+            if candidates:
+                depth = min(len(path.parts) for path in candidates)
+                candidates = [path for path in candidates if len(path.parts) == depth]
             if len(candidates) != 1:
                 raise UnsafeOperation("Estrutura do fornecedor ambígua: " + component)
             source = candidates[0]

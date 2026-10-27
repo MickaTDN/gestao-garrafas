@@ -362,7 +362,7 @@ class UpdateActions:
         # until a separate activation permit is created, bound to the new release.
         (self.root / "activation-permit").write_text(str(self.release))
         try:
-            activate()
+            activate(self.root)
             from .install import health_http
 
             health_http(self.root)

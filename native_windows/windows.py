@@ -129,9 +129,15 @@ def stop_all():
         stop(SERVICES[kind])
 
 
-def activate():
+def activate(root):
     for kind in ("postgres", "web", "backup", "publisher"):
         name = SERVICES[kind]
+        if kind == "publisher":
+            import json
+
+            config = Path(root) / "publisher.json"
+            if not config.is_file() or json.loads(config.read_text()).get("enabled") is not True:
+                continue
         if exists(name):
             native(
                 [
@@ -142,7 +148,11 @@ def activate():
                     "delayed-auto" if kind != "postgres" else "auto",
                 ]
             )
-            native(["sc.exe", "start", name])
+            result = subprocess.run(["sc.exe", "query", name], capture_output=True, text=True)
+            import re
+
+            if not re.search(r"STATE\s*:\s*4\s", result.stdout):
+                native(["sc.exe", "start", name])
 
 
 def uninstall():

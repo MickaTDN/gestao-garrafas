@@ -75,7 +75,7 @@ def main(directory):
     key_before = (root / "signing/signing.pem").read_bytes()
     # Real stop/start preserves confirmed opening balances and identity.
     stop_all()
-    activate()
+    activate(root)
     health_http(root)
     with connection(root) as conn:
         assert (
@@ -92,7 +92,7 @@ def main(directory):
     decrypt(encrypted, plain, key.read_bytes(), phrase)
     restore_check(root, plain)
     plain.unlink()
-    activate()
+    activate(root)
     install("1.1.0")
     health_http(root)
     assert json.loads((root / "installation.json").read_text())["version"] == "1.1.0"
@@ -158,4 +158,16 @@ def main(directory):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("directory")
-    main(parser.parse_args().directory)
+    try:
+        main(parser.parse_args().directory)
+    except Exception as error:
+        host = Path(os.environ["RUNNER_TEMP"]) / "gva-native/host-error.txt"
+        detail = host.read_text() if host.is_file() else str(error)
+        print(
+            "::error::Native Windows smoke: "
+            + type(error).__name__
+            + ": "
+            + detail.replace("\n", " "),
+            file=sys.stderr,
+        )
+        raise

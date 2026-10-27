@@ -103,6 +103,7 @@ def configure_publisher(root, config_file):
             root / "runtime/publisher/nginx.conf",
         ]
     )
+    config["enabled"] = False
     write_json(root / "publisher.json", config)
     from .windows import exists
 
@@ -126,6 +127,7 @@ def start(root, stop_file):
     ]
     subprocess.run([*args, "-t"], check=True, timeout=20)
     process = subprocess.Popen([*args, "-g", "daemon off;"])
+    Path(str(stop_file) + ".ready").write_text("ready")
     try:
         while not Path(stop_file).exists():
             if process.poll() is not None:
@@ -134,3 +136,22 @@ def start(root, stop_file):
     finally:
         subprocess.run([*args, "-s", "quit"], check=True, timeout=15)
         process.wait(timeout=60)
+
+
+def enable(root, request):
+    from .state import exclusive
+
+    root = Path(root)
+    if request.get("it_network_ready") is not True:
+        raise UnsafeOperation(
+            "É necessária conferência explícita de certificados, DNS, dispositivos e firewall pela informática."
+        )
+    with exclusive(root):
+        if (root / "maintenance.json").exists():
+            raise UnsafeOperation("Há manutenção por concluir.")
+        config = json.loads((root / "publisher.json").read_text())
+        render(Path(read_state(root)["release"]), root, config)
+        native(["sc.exe", "config", SERVICES["publisher"], "start=", "delayed-auto"])
+        native(["sc.exe", "start", SERVICES["publisher"]])
+        config["enabled"] = True
+        write_json(root / "publisher.json", config)
