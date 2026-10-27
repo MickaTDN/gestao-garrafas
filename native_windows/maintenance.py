@@ -94,6 +94,26 @@ def evidence(conn):
     return values
 
 
+def matching_evidence(actual, expected):
+    # PostgreSQL sequence values are not MVCC: pg_dump can legitimately capture a
+    # higher reservation than the row snapshot (for example a simultaneous login).
+    # Rows must match exactly; restored counters must never move backwards.
+    actual = json.loads(json.dumps(actual))
+    expected = json.loads(json.dumps(expected))
+    actual_sequences = actual.pop("__sequences__")
+    expected_sequences = expected.pop("__sequences__")
+    if actual != expected:
+        return False
+    current = {(schema, name): value for schema, name, value in actual_sequences}
+    old = {(schema, name): value for schema, name, value in expected_sequences}
+    if current.keys() != old.keys():
+        return False
+    return all(
+        value is None or (current[key] is not None and current[key] >= value)
+        for key, value in old.items()
+    )
+
+
 def validate_material(root):
     """A restorable database without its matching signing identity is insufficient."""
     import base64
@@ -138,6 +158,9 @@ def backup(root):
     root = Path(root)
     state = read_state(root)
     validate_material(root)
+    manage(
+        root, "shell", "-c", "from native_windows.schema import assert_current; assert_current()"
+    )
     target_root = root / "backups"
     # Daily service sees only this admin-configured path; never accepts browser file paths.
     config = json.loads((root / "backup-policy.json").read_text())
@@ -342,7 +365,7 @@ def restore_check(root, archive):
         pg_tool(root, "pg_restore", database, stdin=dump)
     with connection(root, database) as conn:
         actual = evidence(conn)
-        if json.loads(json.dumps(actual)) != manifest["evidence"]:
+        if not matching_evidence(actual, manifest["evidence"]):
             raise UnsafeOperation(
                 "O restauro de ensaio difere do original; preservado para diagnóstico."
             )

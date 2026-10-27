@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .crypto_backup import decrypt
 from .install import create_cluster, prepare_acl
-from .maintenance import evidence, extract_verified, grants, pg_tool
+from .maintenance import evidence, extract_verified, grants, matching_evidence, pg_tool
 from .package import UnsafeOperation, refuse_reparse
 from .runtime import read_state
 from .state import write_json
@@ -81,7 +81,7 @@ def recover(root, release, manifest, request):
         from .maintenance import connection
 
         with connection(root) as conn:
-            if json.loads(json.dumps(evidence(conn))) != saved["evidence"]:
+            if not matching_evidence(evidence(conn), saved["evidence"]):
                 raise UnsafeOperation("O restauro difere do original; arranque continua bloqueado.")
         grants(root)
         write_json(

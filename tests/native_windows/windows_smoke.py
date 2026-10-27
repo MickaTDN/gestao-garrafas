@@ -175,6 +175,42 @@ def main(directory):
         assert (
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
+    # Simulate stale filesystem version metadata after an interrupted upgrade.
+    # Old 1.0 code must refuse a DB containing the NEW irreversible migration.
+    from native_windows.runtime import environment
+    from native_windows.state import write_json
+
+    old_release = (
+        Path(os.environ["ProgramFiles"])
+        / "GestaoVertenteAveludada-synthetic/releases/1.0.0/payload"
+    )
+    current_state = json.loads((root / "installation.json").read_text())
+    stop_all()
+    run(["sc.exe", "start", SERVICES["postgres"]])
+    wait_database(root)
+    write_json(root / "installation.json", {**current_state, "release": str(old_release)})
+    try:
+        result = subprocess.run(
+            [
+                str(old_release / "python/python.exe"),
+                "-s",
+                "-B",
+                str(old_release / "app/manage.py"),
+                "shell",
+                "-c",
+                "from native_windows.schema import assert_current;assert_current()",
+            ],
+            cwd=old_release / "app",
+            env=environment(root, owner=True),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+        assert result.returncode != 0
+    finally:
+        write_json(root / "installation.json", current_state)
+    activate(root)
+    health_http(root)
     # Old package is refused before overwriting files or changing service configuration.
     request = directory / "old.json"
     request.write_text("{}")

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import TestCase
 
 from native_windows.crypto_backup import create_recovery_key, decrypt, encrypt
-from native_windows.maintenance import extract_verified, verify_archive
+from native_windows.maintenance import extract_verified, matching_evidence, verify_archive
 from native_windows.package import UnsafeOperation, regular_tree
 
 
@@ -108,3 +108,29 @@ class BackupTests(TestCase):
             )
             with self.subTest(name=name), self.assertRaises(UnsafeOperation):
                 verify_archive(path)
+
+    def test_sequence_reservations_can_advance_without_changing_snapshot_rows(self):
+        expected = {
+            "rows": {"sha256": "stable", "rows": 3},
+            "__sequences__": [["public", "example_seq", 5]],
+        }
+        self.assertTrue(
+            matching_evidence(
+                {**expected, "__sequences__": [["public", "example_seq", 7]]}, expected
+            )
+        )
+        self.assertTrue(matching_evidence(expected, expected))
+
+    def test_restore_evidence_rejects_changed_rows_missing_or_backwards_sequences(self):
+        expected = {
+            "rows": {"sha256": "stable", "rows": 3},
+            "__sequences__": [["public", "example_seq", 5]],
+        }
+        for actual in (
+            {**expected, "rows": {"sha256": "altered", "rows": 3}},
+            {**expected, "__sequences__": []},
+            {**expected, "__sequences__": [["public", "example_seq", 4]]},
+            {**expected, "__sequences__": [["public", "example_seq", None]]},
+        ):
+            with self.subTest(actual=actual):
+                self.assertFalse(matching_evidence(actual, expected))

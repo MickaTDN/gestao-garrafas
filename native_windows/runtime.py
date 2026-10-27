@@ -143,6 +143,9 @@ def service(root, kind, stop_file):
         from waitress import create_server
 
         django.setup()
+        from .schema import assert_current
+
+        assert_current()
         from config.wsgi import application
 
         server = create_server(
