@@ -34,7 +34,7 @@ jobs:
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput
-          uv run python manage.py test accounts inventory imports web consultation tests.browser tests.windows.test_profile tests.vertente.browser tests.vertente.branding --noinput
+          uv run python manage.py test accounts inventory imports web consultation tests.browser tests.windows.test_profile tests.vertente.browser tests.vertente.branding tests.native_windows --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
       - name: Validate prepared server image (no deployment)
