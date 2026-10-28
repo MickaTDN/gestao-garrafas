@@ -27,8 +27,9 @@ o teste já tinha exigido o marcador de verificação, a chave original, 33 garr
 fictícias, dois movimentos confirmados e a origem/sequência de exportação intactas.
 Uma falha nessas verificações teria interrompido o teste antes daquela linha.
 
-A correção limita-se ao teste, diagnósticos e CI; não altera o mecanismo de
-atualização/recuperação nem as regras de stock:
+A correção preserva as regras de stock e as validações de atualização/recuperação.
+Os diagnósticos e a CI foram ajustados da seguinte forma; a correção de acesso ao
+byte de bloqueio, identificada pela nova CI, está descrita a seguir:
 
 - Mensagem final ASCII (`1.0->1.1`); mensagens com caracteres não suportados pela
   consola usam escapes reversíveis, sem mascarar a exceção original.
