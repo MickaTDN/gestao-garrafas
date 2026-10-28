@@ -11,7 +11,7 @@ from django.db import connections
 from django.test import SimpleTestCase, override_settings
 from django.test.testcases import LiveServerThread
 from django.urls import reverse
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from accounts.models import User
 from inventory.models import Location, Reference
@@ -118,6 +118,40 @@ class BrowserSmokeTests(StaticLiveServerTestCase):
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 390)
         page.close()
 
+    def test_stock_search_recovers_input_entered_before_script_loads(self):
+        self.database_call(
+            lambda: Reference.objects.create(
+                code="SYN-EARLY-OTHER",
+                name="Outra referência fictícia",
+                location=Location.objects.create(name="Outro local fictício de pesquisa"),
+                current_stock=1,
+            )
+        )
+        for width in (1366, 390):
+            with self.subTest(width=width):
+                page = self.browser.new_page(
+                    viewport={"width": width, "height": 900}, service_workers="block"
+                )
+                self.addCleanup(page.close)
+                page.goto(self.live_server_url + reverse("web:stock"))
+                page.get_by_label("Utilizador", exact=True).fill(self.viewer.username)
+                page.get_by_label("Palavra-passe", exact=True).fill(self.password)
+                page.get_by_role("button", name="Entrar", exact=True).click()
+                page.wait_for_load_state("load")
+                held = []
+                page.route("**/static/js/search.js", lambda route: held.append(route), times=1)
+                page.goto(self.live_server_url + reverse("web:stock"), wait_until="commit")
+                page.locator('input[name="q"]').fill("Referência fictícia azul")
+                self.assertEqual(len(held), 1)
+                held.pop().continue_()
+                page.wait_for_load_state("load")
+                expect(page.locator("tbody tr")).to_have_count(1)
+                self.assertIn("Referência fictícia azul", page.locator("tbody").inner_text())
+                self.assertEqual(
+                    page.locator('input[name="q"]').input_value(),
+                    "Referência fictícia azul",
+                )
+
 
 class OperationalBrowserTests(StaticLiveServerTestCase):
     """Exercise actual forms and JS on both viewport sizes with synthetic fixtures."""
@@ -153,9 +187,10 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         self.addCleanup(self.playwright.stop)
         self.addCleanup(self.browser.close)
 
-    def page(self, kind, width):
+    def page(self, kind, width, *, service_workers="allow"):
         page = self.browser.new_page(
-            viewport={"width": width, "height": 900 if width > 760 else 844}
+            viewport={"width": width, "height": 900 if width > 760 else 844},
+            service_workers=service_workers,
         )
         self.addCleanup(page.close)
         page.set_default_timeout(6000)
@@ -300,6 +335,92 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
 
     def test_exit_mobile(self):
         self.entry_exit("exit", 390)
+
+    def test_reference_search_recovers_early_input_without_losing_draft_fields(self):
+        for kind in ("entry", "exit"):
+            for width in (1366, 390):
+                with self.subTest(kind=kind, width=width):
+                    page = self.page(kind, width, service_workers="block")
+                    page.wait_for_load_state("load")
+                    self.add_reference(page, self.first.name)
+                    page.wait_for_load_state("load")
+                    path = page.url.split("?", 1)[0]
+                    held = []
+                    page.route("**/static/js/search.js", lambda route: held.append(route), times=1)
+                    page.goto(page.url, wait_until="commit")
+                    page.get_by_label("Pesquisar referência", exact=True).fill(self.second.name)
+                    label = "Pessoa que entregou" if kind == "entry" else "Pessoa que levantou"
+                    page.get_by_label(label, exact=True).fill("Pessoa fictícia antes do script")
+                    page.get_by_label("Garrafas soltas", exact=True).fill("3")
+                    self.assertEqual(len(held), 1)
+                    held.pop().continue_()
+                    page.wait_for_load_state("load")
+                    choice = page.get_by_role("button", name=self.second.name, exact=True)
+                    expect(choice).to_be_visible()
+                    self.assertEqual(
+                        page.get_by_label(label).input_value(), "Pessoa fictícia antes do script"
+                    )
+                    self.assertEqual(
+                        page.get_by_label("Garrafas soltas", exact=True).input_value(), "3"
+                    )
+                    choice.click()
+                    expect(page.locator(".operation-line")).to_have_count(2)
+                    self.assertEqual(page.url.split("?", 1)[0], path)
+                    self.assertEqual(
+                        page.get_by_label(label).input_value(), "Pessoa fictícia antes do script"
+                    )
+                    self.assertEqual(
+                        page.locator(".operation-line")
+                        .filter(has_text=self.first.name)
+                        .get_by_label("Garrafas soltas", exact=True)
+                        .input_value(),
+                        "3",
+                    )
+                    self.assertEqual(self.stocks(), [15, 5])
+
+    def test_inventory_search_recovers_filter_selected_before_script_loads(self):
+        from inventory.models import Sector
+
+        def prepare():
+            source = Sector.objects.create(location=self.location, name="1")
+            target = Sector.objects.create(location=self.destination, name="2")
+            Reference.objects.filter(pk__in=[self.first.pk, self.second.pk]).update(sector=source)
+            Reference.objects.create(
+                code="SYN-OP-3",
+                name="Referência fictícia de outro local",
+                location=self.destination,
+                sector=target,
+                current_stock=99,
+            )
+            return source.pk
+
+        source_id = self.database_call(prepare)
+        for width, preselected in ((1366, False), (390, False), (1366, True), (390, True)):
+            with self.subTest(width=width, preselected=preselected):
+                page = self.page("inventory", width, service_workers="block")
+                page.wait_for_load_state("load")
+                held = []
+                page.route("**/static/js/search.js", lambda route: held.append(route), times=1)
+                url = page.url
+                if preselected:
+                    url += f"?location={self.location.pk}&sector={source_id}"
+                page.goto(url, wait_until="commit")
+                page.locator("#reference-search").get_by_label(
+                    "Localização", exact=True
+                ).select_option(str(self.destination.pk if preselected else self.location.pk))
+                self.assertEqual(len(held), 1)
+                held.pop().continue_()
+                page.wait_for_load_state("load")
+                expect(page.locator("#reference-results .reference-choice")).to_have_count(
+                    1 if preselected else 2
+                )
+                names = (
+                    ["Referência fictícia de outro local"]
+                    if preselected else [self.first.name, self.second.name]
+                )
+                for name in names:
+                    expect(page.get_by_role("button", name=name, exact=True)).to_be_visible()
+                self.assertEqual(self.stocks(), [15, 5, 99])
 
     def a2_edit_history_and_pdf(self, width):
         from inventory.documents import verified_bytes
@@ -733,14 +854,23 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
     add_reference = OperationalBrowserTests.add_reference
     assert_responsive = OperationalBrowserTests.assert_responsive
 
-    def signed_exit(self, width, *, touch=False):
+    def signed_exit(self, width, *, touch=False, smooth_scroll=False):
         import io
 
         from pypdf import PdfReader
 
         from inventory.models import Movement
 
-        page = self.page("exit", width)
+        page = self.page("exit", width, service_workers="block" if smooth_scroll else "allow")
+        if smooth_scroll:
+            def animated_styles(route):
+                response = route.fetch()
+                route.fulfill(
+                    response=response,
+                    body=response.text() + "\nhtml { scroll-behavior: smooth !important; }",
+                )
+
+            page.route("**/static/css/app.css", animated_styles)
         self.add_reference(page, "Azul sintética operacional")
         page.get_by_label("Pessoa que levantou", exact=True).fill("Pessoa assinatura sintética")
         page.get_by_label("Garrafas soltas", exact=True).fill("2")
@@ -749,10 +879,12 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
         canvas = page.locator("#signature-canvas")
 
         def draw():
-            canvas.evaluate("element => element.scrollIntoView({block: 'center'})")
-            page.evaluate(
-                "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
-            )
+            # Two animation frames do not imply that navigation/scrolling settled.
+            # Use real pointer actionability before taking viewport coordinates.
+            canvas.scroll_into_view_if_needed()
+            size = canvas.bounding_box()
+            self.assertIsNotNone(size)
+            canvas.hover(position={"x": size["width"] * 0.1, "y": size["height"] * 0.7})
             bounds = canvas.bounding_box()
             self.assertIsNotNone(bounds)
             points = [
@@ -817,6 +949,9 @@ class Stage4BrowserTests(StaticLiveServerTestCase):
 
     def test_signed_exit_mobile_touch(self):
         self.signed_exit(390, touch=True)
+
+    def test_signed_exit_desktop_during_animated_scroll(self):
+        self.signed_exit(1366, smooth_scroll=True)
 
     def test_pwa_manifest_installability_and_private_offline_policy(self):
         import tempfile

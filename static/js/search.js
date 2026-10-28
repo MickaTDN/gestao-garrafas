@@ -58,4 +58,18 @@
   if (operation) operation.addEventListener('submit', () => {
     document.getElementById('search-query').value = input.value;
   });
+  // The form can be used while a deferred script is still downloading. Events
+  // from that interval cannot be replayed: reconcile the current controls with
+  // their server-rendered defaults after all deferred initializers (including
+  // location/sector filtering) have run, so no stale sector is sent with a new location.
+  document.addEventListener('DOMContentLoaded', () => {
+    const editedSelect = Array.from(form.querySelectorAll('select')).some(select => {
+      const initial = Array.from(select.options).find(option => option.defaultSelected) || select.options[0];
+      return select.value !== (initial?.value || '');
+    });
+    if (input.value !== input.defaultValue || editedSelect) {
+      clearTimeout(timer);
+      submit();
+    }
+  }, {once: true});
 })();

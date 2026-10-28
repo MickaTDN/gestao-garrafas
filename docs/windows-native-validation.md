@@ -3,6 +3,48 @@
 Só se usam dados fictícios novos. A base reservada ao Excel, bases existentes,
 instalações Windows, volumes e backups do utilizador não são acedidos/alterados.
 
+## Atualização após integração do PR14 — 28 de outubro de 2026
+
+A main `8bdbb1f` foi integrada na branch do PR13 pelo merge `d57e5cd`, sem
+conflitos nem alterações de conteúdo relativamente à revisão anterior do
+instalador. As dependências e as correções de segurança já coincidiam. A CI
+mantém os testes nativos e as proteções de fork, permissões e distribuição.
+
+A execução paralela [40737212642](https://github.com/MickaTDN/gestao-garrafas/actions/runs/40737212642)
+identificou falhas Chromium em pesquisa de stock, seleção da segunda referência
+e posicionamento do ponteiro na assinatura. A execução equivalente do PR passou;
+isso não invalida as falhas. Os detalhes do log foram fornecidos pelo proprietário,
+pois a API continua bloqueada no ambiente de desenvolvimento.
+
+O PR14 não alterou os nomes acessíveis, permissões, formulários, templates ou
+JavaScript destas páginas. A alteração funcional nessa etapa restringe o decoder
+de assinaturas a PNG. Essa proteção é mantida integralmente.
+
+Foram reproduzidos dois problemas, com fixtures novas em PostgreSQL17 isolado:
+
+- **Pesquisa usada antes de carregar o JavaScript deferido.** O texto já estava
+  no campo, mas o evento `input` tinha ocorrido antes de instalar os listeners.
+  Esperar mais não iniciava qualquer pedido. A pesquisa passa a comparar os
+  valores atuais com os defaults renderizados pelo servidor e a executar o GET
+  pendente depois de inicializar os seletores dependentes de localização/setor.
+  Preserva os campos não guardados da operação e não escreve
+  movimentos nem quantidades. Mantém o cancelamento de pedidos obsoletos.
+- **Coordenadas da assinatura recolhidas durante scroll.** Esperar dois frames
+  não garante geometria estável. O teste passa a aguardar a estabilidade e a
+  receção real do ponteiro no canvas antes de recolher as coordenadas. Mantém a
+  verificação de hit testing, os gestos reais de rato/toque, a validação PNG e a
+  presença da assinatura no PDF. Não altera a captura da aplicação nem a CSP.
+
+Quatro regressões automáticas forçam o atraso do script em stock, referências
+de entradas/saídas e filtros de inventário, e o scroll animado na assinatura.
+Cobrem computador/telemóvel e preservação de pessoa, quantidades e stock. Os casos
+de texto precoce e scroll reproduziram os erros antes das correções. Não se aumentam timeouts,
+não se ignoram testes nem se introduzem repetições para aceitar falhas.
+
+O runner de CI passa também a identificar erros em `subTest`, incluindo o teste
+de stock móvel antes omitido das anotações. Publica apenas o identificador do
+teste pai, sem parâmetros de fixtures, mensagens privadas ou credenciais.
+
 ## Correção dos diagnósticos Windows — 28 de outubro de 2026
 
 A [tentativa 2 da execução 40581409569](https://github.com/MickaTDN/gestao-garrafas/actions/runs/40581409569/attempts/2),
