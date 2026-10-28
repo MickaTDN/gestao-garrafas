@@ -11,18 +11,42 @@ import sys
 import time
 from pathlib import Path
 
+SMOKE_SUCCESS = (
+    "Native installer: fresh EXE, services stop/start, 1.0->1.1, verified encrypted restore, "
+    "downgrade refusal, stable Android identity, non-destructive uninstall: PASS"
+)
 
-def run(args, *, expected=0, **kwargs):
+
+def log(message, *, error=False):
+    """Diagnostics must work with redirected Windows cp1252 as well as UTF-8."""
+    stream = sys.stderr if error else sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    printable = str(message).encode(encoding, errors="backslashreplace").decode(encoding)
+    print(printable, file=stream, flush=True)
+
+
+def run(args, *, expected=0, expect_failure=False, error_log=None, **kwargs):
+    # The synthetic host keeps the last preflight error across successful runs.
+    # Scope that evidence to THIS invocation, including expected downgrade refusal.
+    if error_log is not None:
+        error_log = Path(error_log)
+        error_log.unlink(missing_ok=True)
     if Path(str(args[0])).name.lower() == "powershell.exe" and "env" not in kwargs:
         # Windows PowerShell 5.1 must not import PowerShell7 modules inherited
         # from the hosted runner shell. This changes only the child process env.
         kwargs["env"] = {
             key: value for key, value in os.environ.items() if key.lower() != "psmodulepath"
         }
-    result = subprocess.run(list(map(str, args)), timeout=480, **kwargs)
-    if result.returncode != expected:
+    kwargs.setdefault("timeout", 480)
+    result = subprocess.run(list(map(str, args)), **kwargs)
+    failed = result.returncode == 0 if expect_failure else result.returncode != expected
+    if failed:
+        detail = ""
+        if error_log is not None and error_log.is_file():
+            detail = "; current host error=" + error_log.read_text(encoding="utf-8-sig")
         raise RuntimeError(
             f"Synthetic command failed: {Path(str(args[0])).name}, exit={result.returncode}"
+            + detail
         )
     return result
 
@@ -36,9 +60,10 @@ def main(directory):
         raise RuntimeError("Synthetic root already exists; never adopted")
     key = directory / "recovery.pem"
     phrase = "synthetic-recovery-only-never-use-in-production"
+    host_error = directory / "host-error.txt"
 
     def install(version):
-        print("::notice::Native smoke: installing " + version, flush=True)
+        log("::notice::Native smoke: installing " + version)
         request = directory / f"request-{version}.json"
         request.write_text(
             json.dumps(
@@ -57,11 +82,12 @@ def main(directory):
                 "/S",
                 "/CITestRequest=" + str(request),
             ],
+            error_log=host_error,
             env={**os.environ, "GVA_CI_REQUEST": str(request)},
         )
 
     install("1.0.0")
-    print("::notice::Native smoke: initial installation complete", flush=True)
+    log("::notice::Native smoke: initial installation complete")
     state = json.loads((root / "installation.json").read_text())
     release = Path(state["release"])
     sys.path.insert(0, str(release / "app"))
@@ -182,6 +208,7 @@ def main(directory):
         assert (
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
+    log("::notice::Native smoke: update 1.0->1.1 and signed export identity verified")
     # Simulate stale filesystem version metadata after an interrupted upgrade.
     # Old 1.0 code must refuse a DB containing the NEW irreversible migration.
     from native_windows.runtime import environment
@@ -221,15 +248,17 @@ def main(directory):
     # Old package is refused before overwriting files or changing service configuration.
     request = directory / "old.json"
     request.write_text("{}")
-    result = subprocess.run(
+    run(
         [
             str(directory / "artifacts/GVA-synthetic-1.0.0-win-x64.exe"),
             "/S",
         ],
+        error_log=host_error,
+        expect_failure=True,
         timeout=120,
     )
-    assert result.returncode != 0
     assert json.loads((root / "installation.json").read_text())["version"] == "1.1.0"
+    log("::notice::Native smoke: expected downgrade refusal verified (not a recovery failure)")
     # SQL roles are isolated; web cannot alter users' installation roles or enroll devices.
     app = json.loads((root / "secrets/app.json").read_text())
     import psycopg
@@ -249,7 +278,7 @@ def main(directory):
     uninstaller = (
         Path(os.environ["ProgramFiles"]) / "GestaoVertenteAveludada-synthetic/Uninstall.exe"
     )
-    run([uninstaller, "/S"])
+    run([uninstaller, "/S"], error_log=host_error)
     for _ in range(60):
         if not uninstaller.exists():
             break
@@ -267,6 +296,7 @@ def main(directory):
         assert (
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
+    log("::notice::Native smoke: exact-version repair preserved data and signing identity")
     # Actual service/DB failure after migration: all services remain disabled,
     # a durable journal blocks restart, and only NEW-root recovery may resume.
     from native_windows.maintenance import UpdateActions
@@ -289,6 +319,7 @@ def main(directory):
             continue
         result = subprocess.run(["sc.exe", "start", name], capture_output=True)
         assert result.returncode != 0  # disabled persists across OS restarts
+    log("::notice::Native smoke: expected post-migration interruption blocked service restart")
     encrypted = max((root / "backups").glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime)
     # Uninstaller removes only code/services; private state, keys and encrypted backups survive.
     uninstall = next(
@@ -296,7 +327,7 @@ def main(directory):
         .joinpath("GestaoVertenteAveludada-synthetic")
         .glob("Uninstall.exe")
     )
-    run([uninstall, "/S"])
+    run([uninstall, "/S"], error_log=host_error)
     for _ in range(30):
         if not uninstall.exists():
             break
@@ -328,10 +359,21 @@ def main(directory):
             "/S",
             "/CITestRequest=" + str(recovery_request),
         ],
+        error_log=host_error,
         env={**os.environ, "GVA_CI_REQUEST": str(recovery_request)},
     )
-    assert (root / "recovery-verified.json").is_file()
-    assert (root / "maintenance.json").is_file()
+    verified = json.loads((root / "recovery-verified.json").read_text(encoding="utf-8"))
+    assert verified == {
+        "instance": current_state["instance"],
+        "version": "1.1.0",
+        "status": "verified-awaiting-IT-cutover",
+    }
+    # This journal intentionally survives SUCCESS: no automatic recovery cutover.
+    assert json.loads((root / "maintenance.json").read_text()) == {"phase": "recovery-started"}
+    assert not (root / "activation-permit").exists()
+    for kind in ("web", "backup", "publisher"):
+        result = subprocess.run(["sc.exe", "start", SERVICES[kind]], capture_output=True)
+        assert result.returncode != 0
     assert (root / "signing/signing.pem").read_bytes() == key_before
     with connection(root) as conn:
         assert (
@@ -347,8 +389,23 @@ def main(directory):
             "SELECT source_id::text,sequence FROM consultation_exportsource"
         ).fetchone() == (source[0], source[1] + 1)
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
-    print(
-        "Native installer: fresh EXE, services stop/start, 1.0→1.1, verified encrypted restore, downgrade refusal, stable Android identity, non-destructive uninstall: PASS"
+    log(
+        "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
+        "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
+    )
+    log(SMOKE_SUCCESS)
+
+
+def report_failure(error, root):
+    # Host errors are attached by run() only when that child actually fails.
+    # A prior, deliberately rejected downgrade is not evidence of recovery failure.
+    detail = str(error)
+    marker = Path(root) / "maintenance.json"
+    if marker.is_file():
+        detail += "; maintenance journal=" + marker.read_text(encoding="utf-8")
+    log(
+        "::error::Native Windows smoke: " + type(error).__name__ + ": " + detail.replace("\n", " "),
+        error=True,
     )
 
 
@@ -358,19 +415,6 @@ if __name__ == "__main__":
     try:
         main(parser.parse_args().directory)
     except Exception as error:
-        host = Path(os.environ["RUNNER_TEMP"]) / "gva-native/host-error.txt"
-        detail = str(error)
-        if host.is_file():
-            detail += "; host=" + host.read_text()
         root = Path(os.environ["PROGRAMDATA"]) / "GestaoVertenteAveludada-Teste"
-        marker = root / "maintenance.json"
-        if marker.is_file():
-            detail += "; journal=" + marker.read_text()
-        print(
-            "::error::Native Windows smoke: "
-            + type(error).__name__
-            + ": "
-            + detail.replace("\n", " "),
-            file=sys.stderr,
-        )
+        report_failure(error, root)
         raise

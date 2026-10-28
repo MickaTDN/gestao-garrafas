@@ -3,6 +3,51 @@
 Só se usam dados fictícios novos. A base reservada ao Excel, bases existentes,
 instalações Windows, volumes e backups do utilizador não são acedidos/alterados.
 
+## Correção dos diagnósticos Windows — 28 de outubro de 2026
+
+A [tentativa 2 da execução 40581409569](https://github.com/MickaTDN/gestao-garrafas/actions/runs/40581409569/attempts/2),
+na revisão `1396083044f76ac2e96d5891a6854d8fcc301ae1`, publicou uma anotação
+`UnicodeEncodeError` para o carácter `\u2192` da mensagem final de sucesso
+(`windows_smoke.py`, antiga linha 350). A consola redirecionada usava cp1252.
+A API de logs permanece bloqueada neste ambiente; a anotação pública e o código
+da revisão exata foram consultados. Não se afirma ter descarregado o log integral.
+
+A mensagem de versão incompatível anexada à exceção não identifica uma falha
+anterior de recuperação: o teste executa deliberadamente o instalador 1.0.0
+contra a instalação 1.1.0 e exige que seja recusado. O anfitrião sintético escreve
+essa recusa em `host-error.txt`, mas não apaga o ficheiro após comandos posteriores
+bem-sucedidos. O antigo tratamento de exceções anexava esse último erro a qualquer
+falha posterior, incluindo uma falha ao imprimir o resultado final.
+
+O journal `{"phase":"recovery-started"}` também não basta para concluir que o
+restauro falhou. `recover()` conserva-o intencionalmente mesmo após escrever
+`recovery-verified.json`, para impedir ativação/publicação automática antes da
+conferência explícita da informática. Antes de imprimir a mensagem que falhou,
+o teste já tinha exigido o marcador de verificação, a chave original, 33 garrafas
+fictícias, dois movimentos confirmados e a origem/sequência de exportação intactas.
+Uma falha nessas verificações teria interrompido o teste antes daquela linha.
+
+A correção limita-se ao teste, diagnósticos e CI; não altera o mecanismo de
+atualização/recuperação nem as regras de stock:
+
+- Mensagem final ASCII (`1.0->1.1`); mensagens com caracteres não suportados pela
+  consola usam escapes reversíveis, sem mascarar a exceção original.
+- O erro do anfitrião é limpo antes de cada invocação e só é anexado à falha
+  desse comando. Uma recusa esperada tem de devolver código diferente de zero.
+- Marcos distintos para atualização, recusa de downgrade, reposição, interrupção
+  simulada e recuperação verificada, ainda bloqueada até aprovação da informática.
+- Verificação adicional do conteúdo do marcador de recuperação, da ausência de
+  autorização de ativação e da recusa de arranque dos serviços web/backup/publicador.
+- Dez testes de regressão novos, incluindo subprocesso real com
+  `PYTHONIOENCODING=cp1252:strict`, diagnóstico Unicode, erro antigo, erro atual,
+  timeout e recusa inesperadamente aceite. Os **34 testes unitários nativos**
+  passaram localmente em Linux. O workflow executa-os também em Windows antes
+  de compilar/instalar os executáveis sintéticos.
+
+A aprovação do ciclo Windows completo depende da nova execução de CI, não deste
+resultado unitário nem da inferência sobre a execução anterior. Continuam válidos
+os requisitos de homologação Windows11 e empresarial indicados abaixo.
+
 ## Resultados locais
 
 **482 testes aprovados** em PostgreSQL17 isolado (241,140s):458 existentes e24

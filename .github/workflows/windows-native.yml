@@ -32,6 +32,8 @@ jobs:
           python -m pip install uv==0.12.23
           uv sync --frozen
           choco install nsis --version=3.11 --yes --no-progress
+      - name: Native updater and Windows encoding regression tests (no installation)
+        run: uv run python -m unittest discover -s tests/native_windows -p 'test_*.py' -v
       - name: Real NTFS and virtual-service ACL safeguards (fresh synthetic files)
         run: uv run python tests/native_windows/acl_probe.py
       - name: Fetch synthetic vendor inputs (never release trust)
