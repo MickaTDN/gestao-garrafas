@@ -38,11 +38,24 @@ atualização/recuperação nem as regras de stock:
   simulada e recuperação verificada, ainda bloqueada até aprovação da informática.
 - Verificação adicional do conteúdo do marcador de recuperação, da ausência de
   autorização de ativação e da recusa de arranque dos serviços web/backup/publicador.
-- Dez testes de regressão novos, incluindo subprocesso real com
+- Dez testes de regressão de diagnósticos, incluindo subprocesso real com
   `PYTHONIOENCODING=cp1252:strict`, diagnóstico Unicode, erro antigo, erro atual,
-  timeout e recusa inesperadamente aceite. Os **34 testes unitários nativos**
-  passaram localmente em Linux. O workflow executa-os também em Windows antes
+  timeout e recusa inesperadamente aceite. O workflow executa os testes também em Windows antes
   de compilar/instalar os executáveis sintéticos.
+
+Ao acrescentar a execução unitária em Windows, a
+[CI 40721858410](https://github.com/MickaTDN/gestao-garrafas/actions/runs/40721858410)
+identificou outro problema, distinto da mensagem final de sucesso: o teste de
+exclusão mútua recebia `PermissionError`, em vez da recusa controlada esperada.
+`exclusive()` lia o byte de controlo antes de adquirir o bloqueio; no Windows,
+os bloqueios de bytes impedem também essa leitura por outro handle. A correção
+adquire o bloqueio antes de inicializar o ficheiro, sem o truncar. Conserva o
+bloqueio não bloqueante do sistema operativo e o journal durável. Dois testes
+adicionais usam processos reais separados para verificar recusa concorrente,
+aquisição após libertação, libertação após terminação abrupta e preservação do
+journal que impede retomar uma atualização interrompida. Os **36 testes nativos**
+passaram localmente em Linux. Os comandos de instalação de ferramentas foram
+separados para falhar no comando exato; falhas unitárias têm anotações próprias.
 
 A aprovação do ciclo Windows completo depende da nova execução de CI, não deste
 resultado unitário nem da inferência sobre a execução anterior. Continuam válidos

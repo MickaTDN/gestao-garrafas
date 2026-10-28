@@ -25,10 +25,6 @@ def exclusive(root):
     path = Path(root) / "maintenance.lock"
     with path.open("a+b") as stream:
         stream.seek(0)
-        if not stream.read(1):
-            stream.write(b"0")
-            stream.flush()
-        stream.seek(0)
         try:
             if os.name == "nt":
                 import msvcrt
@@ -41,6 +37,13 @@ def exclusive(root):
         except OSError as error:
             raise UnsafeOperation("Já existe uma instalação ou manutenção em curso.") from error
         try:
+            # Windows byte locks are mandatory, including reads by another handle.
+            # Acquire byte 0 BEFORE touching it; _locking permits a region past EOF.
+            # Initialization is inside the lock, so competing processes never read
+            # or append to somebody else's locked region. Never truncate this file.
+            if os.fstat(stream.fileno()).st_size == 0:
+                stream.write(b"0")
+                stream.flush()
             yield
         finally:
             if os.name == "nt":

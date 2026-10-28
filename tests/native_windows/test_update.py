@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -93,3 +95,55 @@ class UpdateTests(TestCase):
                     self.fail("lock must fail")
         with exclusive(self.root):
             pass
+
+    def test_independent_process_is_refused_until_the_lock_is_released(self):
+        script = (
+            "import sys;from native_windows.state import exclusive;"
+            "from native_windows.package import UnsafeOperation\n"
+            "try:\n"
+            " with exclusive(sys.argv[1]): print('ACQUIRED')\n"
+            "except UnsafeOperation:\n"
+            " print('BUSY');sys.exit(23)\n"
+        )
+
+        def child():
+            return subprocess.run(
+                [sys.executable, "-c", script, str(self.root)],
+                cwd=Path(__file__).resolve().parents[2],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+        with exclusive(self.root):
+            refused = child()
+            self.assertEqual(refused.returncode, 23, refused.stderr)
+            self.assertEqual(refused.stdout.strip(), "BUSY")
+        accepted = child()
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(accepted.stdout.strip(), "ACQUIRED")
+
+    def test_process_crash_releases_lock_but_never_erases_recovery_journal(self):
+        script = (
+            "import os,sys;from pathlib import Path;"
+            "from native_windows.state import exclusive,write_json\n"
+            "with exclusive(sys.argv[1]):\n"
+            " write_json(Path(sys.argv[1])/'maintenance.json',{'phase':'synthetic-interruption'})\n"
+            " os._exit(17)\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(self.root)],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 17, result.stderr)
+        with exclusive(self.root):
+            self.assertEqual(
+                json.loads((self.root / "maintenance.json").read_text()),
+                {"phase": "synthetic-interruption"},
+            )
+        actions = Actions()
+        with self.assertRaises(UnsafeOperation):
+            update(self.root, {"version": "1.1.0"}, actions)
+        self.assertEqual(actions.calls, [])
