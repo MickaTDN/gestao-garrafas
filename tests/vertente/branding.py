@@ -1,10 +1,11 @@
+import hashlib
 import json
 from pathlib import Path
 
 from django.test import SimpleTestCase
-from PIL import Image, ImageOps
+from PIL import Image
 
-from scripts.build_brand_icons import BRAND_ROOT, SYMBOL, original_ink
+from scripts.build_brand_icons import BRAND_ROOT, SYMBOL
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -19,17 +20,21 @@ class StockBrandingTests(SimpleTestCase):
         self.assertNotIn("Stock Vendas", (ROOT / "vertente/index.html").read_text())
 
     def test_stock_cup_uses_the_exact_original_ink_without_tracing(self):
-        ink = original_ink(BRAND_ROOT / SYMBOL)
-        for size in [192, 512]:
-            mask = ImageOps.contain(
-                ink, (round(size * 0.72), round(size * 0.72)), Image.Resampling.LANCZOS
-            )
-            expected = Image.new("RGB", (size, size), (246, 243, 238))
-            expected.paste(
-                (16, 46, 40), ((size - mask.width) // 2, (size - mask.height) // 2), mask
-            )
+        # Anchor the approved raster and every approved icon pixel. Re-rendering
+        # with a newer Pillow can change resampling; that must not force a change
+        # to already approved artwork merely to upgrade a security dependency.
+        self.assertEqual(
+            hashlib.sha256((BRAND_ROOT / SYMBOL).read_bytes()).hexdigest(),
+            "e78fb04f5d1e027aa7803c347292cb935e8e021e470299cea2cf0d2242edf567",
+        )
+        approved_pixels = {
+            192: "59680d1851434fa3582bbfa987530ce611cbfc64b07e0c03237f4589b6a51445",
+            512: "74d3800632de60c14e0c000c56283c4ba05b73a801ce571063951bc8c7b092ef",
+        }
+        for size, expected in approved_pixels.items():
             with Image.open(ROOT / f"vertente/assets/icon-{size}.png") as icon:
-                self.assertEqual(icon.convert("RGB").tobytes(), expected.tobytes())
+                self.assertEqual(icon.size, (size, size))
+                self.assertEqual(hashlib.sha256(icon.convert("RGB").tobytes()).hexdigest(), expected)
 
     def test_generated_shell_is_current_and_never_caches_private_data(self):
         from scripts.build_vertente import build

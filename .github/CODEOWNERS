@@ -1,0 +1,10 @@
+# Review routing only; the proposed solo-maintainer ruleset does not require
+# a second person's approval. Repository administrators retain rule management.
+/.github/ @MickaTDN
+/scripts/check_workflows.py @MickaTDN
+/tests/security/ @MickaTDN
+/pyproject.toml @MickaTDN
+/uv.lock @MickaTDN
+/native_windows/ @MickaTDN
+/scripts/native/ @MickaTDN
+/deploy/native/ @MickaTDN
