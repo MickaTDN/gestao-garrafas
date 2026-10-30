@@ -1,0 +1,168 @@
+# One-off, manually reviewed delivery of the exact PR #13 synthetic revision.
+# This workflow imports no installer/application code into main. No input can
+# select another source revision, signing authority or release channel.
+name: Manual synthetic installers - validated 5e34c6c
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manual-synthetic-installers-5e34c6c
+  cancel-in-progress: false
+jobs:
+  validated-synthetic-download:
+    name: Validate and retain the fixed synthetic installer pair
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'MickaTDN/gestao-garrafas'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Select and verify the sole authorized source commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path "$env:RUNNER_TEMP\gva-native") { throw 'Download staging must be new' }
+          $validation = Join-Path $env:RUNNER_TEMP 'gva-validation'
+          if (Test-Path $validation) { throw 'Validation directory must be new' }
+          "GVA_VALIDATION_TEMP=$validation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Public read, literal repository and full SHA; no caller-supplied ref.
+          git fetch --no-tags --depth=1 https://github.com/MickaTDN/gestao-garrafas.git 5e34c6cd3e57cb2ac4ca0d0c7cf4205925e583eb
+          if ($LASTEXITCODE -ne 0) { throw 'Validated source fetch failed' }
+          git checkout --detach 5e34c6cd3e57cb2ac4ca0d0c7cf4205925e583eb
+          if ($LASTEXITCODE -ne 0) { throw 'Validated source checkout failed' }
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $head -ne '5e34c6cd3e57cb2ac4ca0d0c7cf4205925e583eb') { throw 'Unexpected source revision' }
+          $changes = git status --porcelain
+          if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Source tree must be clean' }
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install pinned uv tool
+        run: python -m pip install uv==0.12.23
+      - name: Install locked Python dependencies
+        run: uv sync --frozen
+      - name: Install pinned NSIS compiler
+        run: choco install nsis --version=3.11 --yes --no-progress
+      - name: Native updater and Windows encoding regression tests (no installation)
+        run: uv run python tests/native_windows/run_unit_tests.py
+      - name: Real NTFS and virtual-service ACL safeguards (fresh synthetic files)
+        run: uv run python tests/native_windows/acl_probe.py
+      - name: Fetch synthetic vendor inputs (never release trust)
+        shell: powershell
+        run: .\scripts\native\Prepare-TestInputs.ps1 -Directory "$env:GVA_VALIDATION_TEMP\gva-native"
+      - name: Synthetic signing authority (private key never uploaded)
+        shell: pwsh
+        run: |
+          @'
+          import json, os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import ec
+          root=Path(os.environ['GVA_VALIDATION_TEMP'])/'gva-native'
+          key=ec.generate_private_key(ec.SECP256R1())
+          (root/'signing.pem').write_bytes(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+          (root/'policy.json').write_text(json.dumps({'channel':'synthetic','authenticode_sha256':None,'public_key':key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo).decode()}))
+          '@ | uv run python -
+      - name: Build initial and update packages; compile installer EXEs
+        shell: pwsh
+        run: |
+          $root="$env:GVA_VALIDATION_TEMP\gva-native"
+          foreach ($version in @('1.0.0','1.1.0')) {
+            $probe = @()
+            if ($version -eq '1.1.0') { $probe = @('--synthetic-migration-probe') }
+            uv run python scripts/native/build_package.py --version $version --minimum-version 1.0.0 --policy "$root\policy.json" --key "$root\signing.pem" --inputs "$root\inputs.json" --output "$root\package-$version" @probe
+            if ($LASTEXITCODE -ne 0) { throw 'Package build failed' }
+            New-Item -ItemType Directory -Path "$root\artifacts" -Force | Out-Null
+            $compilerOutput = & 'C:\Program Files (x86)\NSIS\makensis.exe' '/V2' '/INPUTCHARSET' 'UTF8' "/DVersion=$version" "/DBundle=$root\package-$version" '/DChannel=synthetic' deploy/native/installer.nsi 2>&1
+            $compilerExit = $LASTEXITCODE
+            $compilerOutput | ForEach-Object { Write-Host $_ }
+            if ($compilerExit -ne 0) { Write-Host ('::error::NSIS: '+($compilerOutput -join ' ')); throw 'Installer build failed' }
+          }
+          $hashes = @{}
+          foreach ($version in @('1.0.0', '1.1.0')) {
+            $name = "GVA-synthetic-$version-win-x64.exe"
+            $hashes[$name] = (Get-FileHash "$root\artifacts\$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $hashes | ConvertTo-Json | Set-Content -Encoding ascii "$root\tested-hashes.json"
+      - name: Actual synthetic EXE installation, services, update, recovery and uninstall
+        shell: pwsh
+        run: |
+          # The validated host writes diagnostics below RUNNER_TEMP/gva-native.
+          # Change only this child process environment, keeping the download
+          # directory under the original runner.temp absent throughout testing.
+          $env:RUNNER_TEMP = $env:GVA_VALIDATION_TEMP
+          uv run python tests/native_windows/windows_smoke.py "$env:RUNNER_TEMP\gva-native"
+          if ($LASTEXITCODE -ne 0) { throw 'Native installation/update/backup/recovery tests failed' }
+      - name: Stage only the tested installers and checksums after every test succeeds
+        if: success()
+        shell: pwsh
+        run: |
+          @'
+          import hashlib, json, os, shutil, subprocess
+          from pathlib import Path
+
+          commit = "5e34c6cd3e57cb2ac4ca0d0c7cf4205925e583eb"
+          if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != commit:
+              raise RuntimeError("Source revision changed")
+          private = Path(os.environ["GVA_VALIDATION_TEMP"]) / "gva-native"
+          names = [f"GVA-synthetic-{version}-win-x64.exe" for version in ("1.0.0", "1.1.0")]
+          expected = json.loads((private / "tested-hashes.json").read_text())
+          if set(expected) != set(names):
+              raise RuntimeError("The tested pair is incomplete")
+          def digest(path):
+              with path.open("rb") as stream:
+                  return hashlib.file_digest(stream, "sha256").hexdigest()
+          publish_root = Path(os.environ["RUNNER_TEMP"]) / "gva-native"
+          publish_root.mkdir()  # Never reuse an old run or partial publication.
+          staging = publish_root / "validated-staging"
+          staging.mkdir()
+          lines = [
+              "# SYNTHETIC / UNSIGNED / NOT APPROVED FOR PRODUCTION",
+              "# Keep both installers from this same run AND attempt.",
+              "# Source commit: " + commit,
+              "# Workflow commit: " + os.environ["GITHUB_SHA"],
+              "# Run: " + os.environ["GITHUB_SERVER_URL"] + "/" + os.environ["GITHUB_REPOSITORY"]
+                  + "/actions/runs/" + os.environ["GITHUB_RUN_ID"] + "/attempts/" + os.environ["GITHUB_RUN_ATTEMPT"],
+          ]
+          for name in names:
+              source = private / "artifacts" / name
+              if source.is_symlink() or not source.is_file() or digest(source) != expected[name]:
+                  raise RuntimeError("Installer missing or changed after testing: " + name)
+              shutil.copyfile(source, staging / name)
+              if digest(staging / name) != expected[name]:
+                  raise RuntimeError("Installer copy failed verification: " + name)
+              lines.append(expected[name] + "  " + name)
+          checksums = "\n".join(lines) + "\n"
+          (staging / "SHA256SUMS.txt").write_text(checksums, encoding="ascii")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Synthetic installers - successful hosted Windows validation\n\n")
+              summary.write("Not approved for production; no enterprise Authenticode signature.\n")
+              summary.write("Windows 11 Home physical validation remains pending.\n\n")
+              summary.write("Download the single artifact below within three days; keep both EXEs together.\n")
+              summary.write("Compare Get-FileHash -Algorithm SHA256 with these values before execution.\n")
+              summary.write("Stop if Windows or antivirus blocks the files; do not bypass protection.\n\n```text\n" + checksums + "```\n")
+          # Last operation: atomic publication. Any prior failure leaves no files
+          # in the upload allowlist, even though policy requires always() below.
+          staging.rename(publish_root / "artifacts")
+          '@ | uv run python -
+          if ($LASTEXITCODE -ne 0) { throw 'Validated artifact staging failed' }
+      # Preserve the existing main security policy. The allowlisted path is
+      # created atomically ONLY by the preceding success()-gated step. Failures
+      # or cancellations before staging completes cannot expose private outputs.
+      - name: Downloadable synthetic pair - no official release
+        if: >-
+          always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'MickaTDN/gestao-garrafas'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: UNAPPROVED-SYNTHETIC-UNSIGNED-5e34c6cd3e57cb2ac4ca0d0c7cf4205925e583eb-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/gva-native/artifacts/*.exe
+            ${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 3
