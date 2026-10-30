@@ -1,0 +1,145 @@
+; Native EXE wizard. NSIS has a zlib/libpng license, including commercial use.
+Unicode true
+!include "MUI2.nsh"
+!include "x64.nsh"
+!include "WinVer.nsh"
+!include "FileFunc.nsh"
+!ifndef Version
+  !error "Version required"
+!endif
+!ifndef Bundle
+  !error "Bundle required"
+!endif
+!ifndef Channel
+  !error "Channel required"
+!endif
+!if "${Channel}" == "release"
+!ifndef SignCommand
+  !error "Release requires an authorized Authenticode SignCommand (no secrets in command line)"
+!endif
+!finalize '${SignCommand} "%1"' = 0
+!uninstfinalize '${SignCommand} "%1"' = 0
+!endif
+Name "Gestão Vertente Aveludada (${Channel})"
+OutFile "${Bundle}\..\artifacts\GVA-${Channel}-${Version}-win-x64.exe"
+InstallDir "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}"
+RequestExecutionLevel admin
+!if "${Channel}" == "synthetic"
+SetCompressor zlib
+!else
+SetCompressor /SOLID lzma
+!endif
+Icon "..\..\static\branding\copo-com-vida.ico"
+UninstallIcon "..\..\static\branding\copo-com-vida.ico"
+VIProductVersion "${Version}.0"
+VIAddVersionKey "ProductName" "Gestão Vertente Aveludada"
+VIAddVersionKey "FileDescription" "Instalação e atualização nativa (${Channel})"
+VIAddVersionKey "FileVersion" "${Version}"
+VIAddVersionKey "LegalCopyright" "Copo com Vida"
+!define MUI_WELCOMEPAGE_TEXT "Instala Python privado, PostgreSQL 17, aplicação e backups. Guarda dados separados do programa. Requer informática para serviços e NTFS. Não altera DNS ou firewall. Canal ${Channel}; os pacotes synthetic servem apenas para dados fictícios."
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "Portuguese"
+Var Result
+Var Arguments
+Var CIRequest
+Function .onInit
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
+  Pop $1
+  ${If} $0 == 0
+    SetErrorLevel 1
+    Abort "Não foi possível obter o bloqueio de instalação. Contacte a informática."
+  ${EndIf}
+  ${If} $1 == 183
+    SetErrorLevel 1
+    Abort "Já existe uma instalação ou desinstalação em curso."
+  ${EndIf}
+  SetRegView 64
+  SetShellVarContext all
+  ${IfNot} ${RunningX64}
+    MessageBox MB_ICONSTOP "É necessário Windows x64." /SD IDOK
+    Abort
+  ${EndIf}
+  ${IfNot} ${AtLeastWin11}
+    MessageBox MB_ICONSTOP "É necessário Windows 11 (ou ambiente descartável compatível de CI)." /SD IDOK
+    Abort
+  ${EndIf}
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=GVA.Native.exe "${Bundle}\payload\host\GVA.Native.exe"
+  File /oname=package.json "${Bundle}\package.json"
+  File /oname=package.sig "${Bundle}\package.sig"
+  ExecWait '"$PLUGINSDIR\GVA.Native.exe" --preflight "$PLUGINSDIR\package.json" "$EXEPATH"' $Result
+  ${If} $Result != 0
+    SetErrorLevel 1
+    Abort "Pacote antigo, incompatível ou sem assinatura autorizada. Dados conservados."
+  ${EndIf}
+FunctionEnd
+Section "Instalar ou atualizar"
+  StrCmp $INSTDIR "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}" +3
+    SetErrorLevel 1
+    Abort "Use a pasta de programa protegida definida pelo instalador."
+  IfFileExists "$INSTDIR\releases\${Version}\package.json" 0 +3
+    SetErrorLevel 1
+    Abort "Não se substituem versões já instaladas."
+  SetOutPath "$INSTDIR\releases\${Version}"
+  File /r "${Bundle}\*"
+  SetOutPath "$INSTDIR"
+  File "${Bundle}\payload\host\GVA.Native.exe"
+  StrCpy $Arguments '--wizard "$INSTDIR\releases\${Version}"'
+!if "${Channel}" == "synthetic"
+  ReadEnvStr $Result "GITHUB_ACTIONS"
+  ReadEnvStr $CIRequest "GVA_CI_REQUEST"
+  ${GetParameters} $0
+  ${GetOptions} $0 "/CITestRequest=" $CIRequest
+  ${If} $CIRequest != ""
+    StrCpy $Arguments '--ci-wizard "$INSTDIR\releases\${Version}" "$CIRequest"'
+  ${EndIf}
+!endif
+  ExecWait '"$INSTDIR\releases\${Version}\payload\host\GVA.Native.exe" $Arguments' $Result
+  ${If} $Result != 0
+    SetErrorLevel 1
+    Abort "Operação incompleta. Dados conservados; contacte a informática. Não inicie código antigo após migrações."
+  ${EndIf}
+  CreateDirectory "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})"
+  CreateShortcut "$DESKTOP\Gestão Vertente Aveludada (${Channel}).lnk" "$INSTDIR\GVA.Native.exe"
+  CreateShortcut "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})\Gestão Vertente Aveludada.lnk" "$INSTDIR\GVA.Native.exe"
+  CreateShortcut "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})\Manutenção.lnk" "$INSTDIR\GVA.Native.exe" "--maintenance"
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayName" "Gestão Vertente Aveludada (${Channel})"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayVersion" "${Version}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayIcon" "$INSTDIR\GVA.Native.exe"
+SectionEnd
+Function un.onInit
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
+  Pop $1
+  ${If} $0 == 0
+    SetErrorLevel 1
+    Abort "Não foi possível obter o bloqueio de instalação. Contacte a informática."
+  ${EndIf}
+  ${If} $1 == 183
+    SetErrorLevel 1
+    Abort "Há instalação/manutenção em curso."
+  ${EndIf}
+FunctionEnd
+Section "Uninstall"
+  SetRegView 64
+  SetShellVarContext all
+  ExecWait '"$INSTDIR\GVA.Native.exe" --uninstall' $Result
+  ${If} $Result != 0
+    SetErrorLevel 1
+    Abort "Não foi possível parar os serviços; desinstalação interrompida."
+  ${EndIf}
+  ; Only immutable installed PROGRAM code; NEVER ProgramData, cluster or backups.
+  RMDir /r "$INSTDIR\releases"
+  Delete "$INSTDIR\GVA.Native.exe"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
+  Delete "$DESKTOP\Gestão Vertente Aveludada (${Channel}).lnk"
+  RMDir /r "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}"
+SectionEnd

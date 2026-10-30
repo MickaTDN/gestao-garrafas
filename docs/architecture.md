@@ -313,3 +313,15 @@ Consulta Android offline separada, perfis de dispositivo assinados, encomendas c
 exportação Stock v2 com Entradas e receções FIFO. Reutiliza seletivamente as Etapas 6/7
 sobre main A4, sem alterar os PR anteriores. Ver [decisões, instalação e limites](etapa-b.md).
 Validação apenas sintética; sem publicação, instalação pessoal ou merge automático.
+
+
+## Distribuição Windows nativa (Etapa C)
+
+A [ADR0006](decisions/0006-windows-native.md) e o [guia](windows-native.md)
+preparam distribuição NSIS/.NET, Python3.12 privado, Waitress e PostgreSQL17
+sem Docker/WSL2. O domínio e as migrações existentes mantêm-se. Novos serviços
+Windows usam contas virtuais separadas, dados fora do programa e loopback.
+O publicador Stock HTTPS/mTLS continua separado e desativado até aprovação.
+Atualizações exigem pacote autenticado e restauro de ensaio antes de migrar;
+recuperação exige destino novo e o payload exato do backup. Não é uma instalação
+operacional aprovada: consultar a [validação](windows-native-validation.md).

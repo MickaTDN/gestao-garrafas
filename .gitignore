@@ -44,3 +44,9 @@ playwright-report/
 **/*.varequest.json
 **/publisher.env
 **/publisher-installation.json
+
+# Native Windows build outputs (release inputs/keys are always outside checkout)
+deploy/native/Host/bin/
+deploy/native/Host/obj/
+*.gvabackup
+*.gvabackup.partial
