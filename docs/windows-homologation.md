@@ -164,7 +164,7 @@ Antes da aprovação de produção:
 2. Obter certificado Authenticode de editor confiável, com timestamp e verificação
    de cadeia/revogação; assinar os executáveis exigidos pelo build, instalador e
    desinstalador. Manter a chave ECDSA dos pacotes separada das de backup/Android.
-   Custódia privada aprovada, sem chaves no Git, Android ou pacote. Assinatura não
+   Custódia privada aprovada, sem chaves privadas no Git, Android ou pacote. Assinatura não
    garante por si só ausência de avisos SmartScreen; validar sem contornar avisos.
 3. Compilar canal release, sem dados ou migração de ensaio sintéticos. Não converter
    a instalação synthetic em produção nem reutilizar a sua autoridade temporária.
