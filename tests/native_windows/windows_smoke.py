@@ -102,7 +102,7 @@ def main(directory):
     health_http(root)
     run([
         "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
-        Path(__file__).parent / "Test-PrivateCRT.ps1", "-Release", release,
+        Path(__file__).parent / "Test-PrivateCRT.ps1", "-Root", root, "-Release", release,
     ])
     manage(root, "shell", "-c", (Path(__file__).parent / "operation_fixture.py").read_text())
     run(
