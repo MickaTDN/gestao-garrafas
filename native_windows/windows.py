@@ -19,7 +19,9 @@ SERVICES = {
 
 def native(args, **kwargs):
     result = subprocess.run(
-        list(map(str, args)), timeout=120, capture_output=True, text=True, **kwargs
+        # sc/icacls can emit the Windows OEM/ANSI code page even when our Python
+        # host uses UTF-8. Output is diagnostic only; exit status is authoritative.
+        list(map(str, args)), timeout=120, capture_output=True, text=True, errors="replace", **kwargs
     )
     if result.returncode:
         detail = ""

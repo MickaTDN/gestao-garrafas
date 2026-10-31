@@ -1,6 +1,7 @@
 """Service failure evidence stays useful without exposing raw exceptions or SQL."""
 
 import json
+import sys
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -9,7 +10,7 @@ from unittest.mock import patch
 from native_windows import cli
 from native_windows.package import UnsafeOperation
 from native_windows.postgres_process import startup_failure
-from native_windows.windows import SERVICES, activate, service_failure
+from native_windows.windows import SERVICES, activate, native, service_failure
 
 
 class ServiceDiagnosticTests(TestCase):
@@ -31,6 +32,13 @@ class ServiceDiagnosticTests(TestCase):
         self.assertEqual(json.loads(content), {"category": "PermissionError", "file": "installation.json", "errno": 13})
         self.assertNotIn("PRIVATE", content)
         self.assertNotIn("/private", content)
+
+    def test_non_utf8_windows_utility_output_never_changes_exit_status(self):
+        # Simulate localized sc/icacls bytes under the UTF-8 installer host.
+        script = "import sys;sys.stdout.buffer.write(bytes([0x80,0xe7]));sys.exit(0)"
+        self.assertEqual(native([sys.executable, "-c", script]).returncode, 0)
+        with self.assertRaisesRegex(UnsafeOperation, "código 7"):
+            native([sys.executable, "-c", script.replace("sys.exit(0)", "sys.exit(7)")])
 
     def test_diagnostic_reader_ignores_unknown_values_and_malformed_shape(self):
         path = self.root / "runtime/web/failure.json"
