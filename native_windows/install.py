@@ -77,6 +77,7 @@ def create_cluster(root):
                 user="gva_cluster",
                 password=cluster_password,
                 autocommit=True,
+                connect_timeout=2,
             )
             break
         except psycopg.OperationalError:

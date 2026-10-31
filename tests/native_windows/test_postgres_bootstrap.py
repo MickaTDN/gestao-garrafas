@@ -115,7 +115,7 @@ class PrivateCRTTests(TestCase):
             deploy(self.payload, self.source, {}, verifier=lambda *args: None)
 
     def test_signer_probe_uses_windows_powershell_without_pwsh_module_paths(self):
-        result = SimpleNamespace(returncode=0, stdout=json.dumps({"signer": "a" * 64}).encode())
+        result = SimpleNamespace(returncode=0, stdout=json.dumps({"signer": "a" * 64, "status": "Valid", "microsoft": True}).encode())
         with patch.dict(os.environ, {"PSModulePath": "incompatible-pwsh-modules"}), patch("scripts.native.private_crt.subprocess.run", return_value=result) as run:
             verify_microsoft(self.source / "vcruntime140.dll", ["a" * 64])
         self.assertFalse(any(k.lower() == "psmodulepath" for k in run.call_args.kwargs["env"]))

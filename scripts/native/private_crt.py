@@ -16,12 +16,14 @@ ALLOWED = re.compile(r"(?:vcruntime140(?:_1)?|msvcp140(?:_[a-z0-9_]+)?|concrt140
 
 def verify_microsoft(path, signers):
     script = """$ErrorActionPreference='Stop'
-[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $s=Get-AuthenticodeSignature -LiteralPath $env:GVA_CRT_CHECK
-if($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'Untrusted Microsoft CRT' }
-$h=[Security.Cryptography.SHA256]::Create()
-$f=([BitConverter]::ToString($h.ComputeHash($s.SignerCertificate.RawData))).Replace('-','').ToLowerInvariant()
-@{signer=$f}|ConvertTo-Json -Compress
+$f='';$microsoft=$false
+if($s.SignerCertificate) {
+ $h=[Security.Cryptography.SHA256]::Create()
+ $f=([BitConverter]::ToString($h.ComputeHash($s.SignerCertificate.RawData))).Replace('-','').ToLowerInvariant()
+ $microsoft=$s.SignerCertificate.Subject -match 'O=Microsoft Corporation'
+}
+@{signer=$f;status=$s.Status.ToString();microsoft=$microsoft}|ConvertTo-Json -Compress
 """
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
@@ -29,8 +31,13 @@ $f=([BitConverter]::ToString($h.ComputeHash($s.SignerCertificate.RawData))).Repl
         env={k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"} | {"GVA_CRT_CHECK": str(path)},
         capture_output=True, timeout=60,
     )
-    if result.returncode or json.loads(result.stdout.decode("utf-8-sig"))["signer"] not in signers:
-        raise UnsafeOperation("Runtime Microsoft sem assinatura aprovada: " + path.name)
+    try:
+        details = json.loads(result.stdout.decode("utf-8-sig")) if result.returncode == 0 else {}
+    except (ValueError, UnicodeError):
+        details = {}
+    if result.returncode or details.get("status") != "Valid" or details.get("microsoft") is not True or details.get("signer") not in signers:
+        status = details.get("status") if details.get("status") in {"Valid", "NotSigned", "HashMismatch", "NotTrusted", "UnknownError", "NotSupportedFileFormat", "Incompatible"} else "probe-failed"
+        raise UnsafeOperation(f"Runtime Microsoft sem assinatura aprovada: {path.name}; estado={status}; código={result.returncode}")
 
 
 def deploy(payload, source, metadata, *, verifier=verify_microsoft):
