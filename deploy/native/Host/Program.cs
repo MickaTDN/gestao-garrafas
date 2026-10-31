@@ -117,6 +117,8 @@ static class Program
             if (request != null) { info.ArgumentList.Add("--request"); info.ArgumentList.Add(request); }
             if (package != null) { info.ArgumentList.Add("--package"); info.ArgumentList.Add(package); }
             info.Environment["GVA_NATIVE_CHANNEL"] = Channel;
+            info.Environment["PYTHONUTF8"] = "1"; info.Environment["PYTHONIOENCODING"] = "utf-8";
+            info.StandardErrorEncoding = System.Text.Encoding.UTF8; info.StandardOutputEncoding = System.Text.Encoding.UTF8;
             using var process = Process.Start(info)!;
             var output = process.StandardOutput.ReadToEndAsync();
             var errors = process.StandardError.ReadToEndAsync();
@@ -248,6 +250,8 @@ sealed class NativeService : ServiceBase
         var info = new ProcessStartInfo(Path.Combine(Program.Release, "python/python.exe")) { WorkingDirectory = Path.Combine(Program.Release, "app"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         foreach (var arg in new[] { "-s", "-B", "-m", "native_windows.cli", "service", "--kind", kind, "--stop-file", stopFile }) info.ArgumentList.Add(arg);
         info.Environment["GVA_NATIVE_CHANNEL"] = Program.Channel;
+        info.Environment["PYTHONUTF8"] = "1"; info.Environment["PYTHONIOENCODING"] = "utf-8";
+        info.StandardErrorEncoding = System.Text.Encoding.UTF8;
         child = Process.Start(info)!;
         string errorFile = Path.Combine(Program.Root, "runtime", kind, "last-error.txt");
         child.ErrorDataReceived += (_, e) => { if (e.Data != null) try { if (!File.Exists(errorFile) || new System.IO.FileInfo(errorFile).Length < 131072) File.AppendAllText(errorFile, e.Data + Environment.NewLine); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } };
