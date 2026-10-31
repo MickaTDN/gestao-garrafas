@@ -45,6 +45,12 @@ playwright-report/
 **/publisher.env
 **/publisher-installation.json
 
+# Synthetic demo regression build products
+tests/native_windows/DemoTests/bin/
+tests/native_windows/DemoTests/obj/
+*.gvademo
+*.vault
+
 # Native Windows build outputs (release inputs/keys are always outside checkout)
 deploy/native/Host/bin/
 deploy/native/Host/obj/

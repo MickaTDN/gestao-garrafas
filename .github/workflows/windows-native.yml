@@ -37,6 +37,8 @@ jobs:
         run: uv run python tests/native_windows/run_unit_tests.py
       - name: Real NTFS and virtual-service ACL safeguards (fresh synthetic files)
         run: uv run python tests/native_windows/acl_probe.py
+      - name: Synthetic VM demo and encrypted recovery kit regressions (no installation)
+        run: dotnet run --project tests/native_windows/DemoTests/DemoTests.csproj --configuration Release
       - name: Fetch synthetic vendor inputs (never release trust)
         shell: powershell
         run: .\scripts\native\Prepare-TestInputs.ps1 -Directory "$env:RUNNER_TEMP\gva-native"
