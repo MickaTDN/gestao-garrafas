@@ -21,7 +21,29 @@ if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL binary archive failed' }
 $nginxUrl='https://nginx.org/download/nginx-1.30.0.zip'
 $nginxArchive=Join-Path $Directory 'nginx.zip'
 Invoke-WebRequest -Uri $nginxUrl -OutFile $nginxArchive
+# Only the licensed, release x64 CRT redistributable directory, not arbitrary
+# System32 files. Production inputs require independent IT review/hash approval.
+$vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$vs=& $vswhere -latest -products '*' -property installationPath
+if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Visual Studio redistributable source unavailable' }
+$redist=Join-Path $vs 'VC\Redist\MSVC'
+$crt=Get-ChildItem $redist -Directory | Sort-Object Name -Descending | ForEach-Object {
+ Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -ErrorAction SilentlyContinue
+} | Select-Object -First 1
+if (-not $crt) { throw 'Approved x64 release CRT directory unavailable' }
+$dlls=@(Get-ChildItem $crt.FullName -Filter '*.dll' -File)
+$signers=@()
+foreach ($dll in $dlls) {
+ $sig=Get-AuthenticodeSignature -LiteralPath $dll.FullName
+ if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'Untrusted Microsoft runtime' }
+ $h=[Security.Cryptography.SHA256]::Create()
+ $signers+=([BitConverter]::ToString($h.ComputeHash($sig.SignerCertificate.RawData))).Replace('-','').ToLowerInvariant()
+}
+$crtArchive=Join-Path $Directory 'msvc.zip'
+& tar.exe -a -cf $crtArchive -C $crt.FullName @($dlls.Name)
+if ($LASTEXITCODE -ne 0) { throw 'CRT archive failed' }
 @{
+ msvc=@{archive=$crtArchive;sha256=(Get-FileHash $crtArchive -Algorithm SHA256).Hash.ToLowerInvariant();version=$crt.Parent.Parent.Name;source='https://github.com/actions/runner-images';signers_sha256=@($signers|Select-Object -Unique)}
  python=@{archive=$pythonArchive;sha256=$pythonHash;version='3.12.16+20261026';source=$pythonUrl}
  postgres=@{archive=$pgArchive;sha256=(Get-FileHash $pgArchive -Algorithm SHA256).Hash.ToLowerInvariant();version='17 (GitHub runner image)';source='https://github.com/actions/runner-images'}
  nginx=@{archive=$nginxArchive;sha256=(Get-FileHash $nginxArchive -Algorithm SHA256).Hash.ToLowerInvariant();version='1.30.0';source=$nginxUrl}

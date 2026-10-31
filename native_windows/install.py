@@ -82,6 +82,11 @@ def create_cluster(root):
         except psycopg.OperationalError:
             if attempt == 59:
                 raise
+            from .postgres_process import startup_failure
+            from .windows import service_state
+
+            if service_state(SERVICES["postgres"]) == 1:
+                raise UnsafeOperation("O serviço PostgreSQL parou: " + startup_failure(root))
             time.sleep(1)
     with cluster:
         cluster.execute(
@@ -156,8 +161,21 @@ def initial(root, release, manifest, request, trust_path):
     write_json(root / "package-policy.json", json.loads(Path(trust_path).read_text()))
     write_json(root / "installation.json", state)
     write_json(root / "maintenance.json", {"phase": "initializing", "version": state["version"]})
-    phase = "register-services"
+    phase = "postgres-binaries"
+
+    def mark(name):
+        nonlocal phase
+        phase = name
+        write_json(root / "maintenance.json", {"phase": name, "version": state["version"]})
+
     try:
+        from .postgres_process import command
+
+        (root / "runtime/postgres").mkdir(parents=True)
+        mark("postgres-binaries")
+        for tool in ("initdb", "postgres", "pg_ctl"):
+            command(root, release, tool, ["--version"], timeout=15)
+        mark("register-services")
         configure(root, release, create=True)
         (root / "secrets").mkdir()
         django_key = secrets.token_urlsafe(64)
@@ -171,20 +189,20 @@ def initial(root, release, manifest, request, trust_path):
         with recovery.open("xb") as stream:
             stream.write(private)
         protect(recovery)
-        phase = "acl"
+        mark("acl")
         prepare_acl(root)
-        phase = "cluster-bootstrap"
+        mark("cluster-bootstrap")
         create_cluster(root)
-        phase = "django-migrations"
+        mark("django-migrations")
         manage(root, "migrate", "--noinput")
-        phase = "sql-grants"
+        mark("sql-grants")
         grants(root)
         # Dedicated GUI supplies input on stdin; credentials never appear in process arguments.
         import subprocess
 
         from .runtime import environment
 
-        phase = "account-provisioning"
+        mark("account-provisioning")
         subprocess.run(
             [str(release / "python/python.exe"), "-B", "-m", "native_windows.provision"],
             input=json.dumps(
@@ -201,9 +219,9 @@ def initial(root, release, manifest, request, trust_path):
             stderr=subprocess.DEVNULL,
             timeout=120,
         )
-        phase = "android-identity"
+        mark("android-identity")
         manage(root, "vertente_setup", "--directory", str(root / "signing"))
-        phase = "django-check"
+        mark("django-check")
         manage(root, "check", "--fail-level", "WARNING")
         (root / "maintenance.json").unlink()
         phase = "service-activation"
