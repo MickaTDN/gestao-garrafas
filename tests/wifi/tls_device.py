@@ -6,6 +6,7 @@ deployment proxy upstream using a device cert. No TLS verification is disabled.
 Native Android certificate selection/MDM remains a physical acceptance gate.
 """
 
+import select
 import socket
 import socketserver
 import ssl
@@ -24,6 +25,7 @@ def tls_device(tls, hostname, port):
     class Handler(socketserver.BaseRequestHandler):
         def handle(self):
             try:
+                self.request.settimeout(30)
                 with (
                     server_tls.wrap_socket(self.request, server_side=True) as browser,
                     socket.create_connection(("127.0.0.1", port), timeout=20) as raw,
@@ -32,27 +34,36 @@ def tls_device(tls, hostname, port):
                     browser.settimeout(30)
                     upstream.settimeout(30)
 
-                    def copy(source, target):
-                        try:
-                            while block := source.recv(65536):
+                    # SSL objects must have a single I/O owner. Concurrent recv
+                    # and sendall on the same OpenSSL object can stall/corrupt
+                    # the relay. Multiplex both directions in this handler;
+                    # each separate browser connection still has its own thread.
+                    peers = {browser: upstream, upstream: browser}
+                    readable = [browser, upstream]
+                    while readable:
+                        ready = [stream for stream in readable if stream.pending()]
+                        if not ready:
+                            ready, _, _ = select.select(readable, [], [], 30)
+                        if not ready:
+                            break
+                        for source in ready:
+                            target = peers[source]
+                            block = source.recv(65536)
+                            if block:
                                 target.sendall(block)
-                        except OSError:
-                            pass
-                        finally:
-                            try:
-                                target.shutdown(socket.SHUT_WR)
-                            except OSError:
-                                pass
-
-                    send = threading.Thread(target=copy, args=(browser, upstream), daemon=True)
-                    send.start()
-                    copy(upstream, browser)
-                    send.join(timeout=1)
+                            else:
+                                readable.remove(source)
+                                try:
+                                    target.shutdown(socket.SHUT_WR)
+                                except OSError:
+                                    pass
             except OSError:
                 pass  # Browser cancellation; never logs request bodies.
 
     class Server(socketserver.ThreadingTCPServer):
-        daemon_threads = True
+        # server_close waits for handler-owned TLS sockets, preventing SSL
+        # worker threads from outliving this test context.
+        daemon_threads = False
         allow_reuse_address = True
 
     with Server(("127.0.0.2", port), Handler) as server:
