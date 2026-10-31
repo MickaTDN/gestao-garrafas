@@ -23,10 +23,19 @@ são sintéticos e não substituem a revisão independente/licenciamento dos inp
 de produção. O inventário assinado do pacote inclui as DLLs. A conta virtual e
 as ACL privadas de serviços permanecem iguais.
 
+O ensaio nativo consulta também os módulos do PostgreSQL em execução e exige que
+o CRT carregado pertença ao pacote privado. Não remove nem renomeia DLLs do
+sistema para simular um Windows limpo.
+
 Há também verificação --version antes de registar serviços/arrancar o cluster.
 TEMP/TMP dos filhos PostgreSQL apontam a uma pasta privada da própria identidade.
 Erros registam apenas comando, código e categoria allowlisted em
 runtime/postgres/startup-diagnostic.json; stdout/stderr e passwords não são gravados.
+O launcher pg_ctl usa DEVNULL em vez de pipes capturados: no Windows o servidor
+persistente pode herdar os handles e impedir communicate de terminar apesar de
+pg_ctl já ter saído. O log privado do servidor PostgreSQL continua disponível.
+Uma regressão com processos reais verifica que o launcher regressa enquanto o
+filho continua em execução, e que falhas de arranque continuam a ser recusadas.
 O assistente mostra progresso indeterminado, fase e erro visível, restaura os
 controlos após falha e não consulta controlos WinForms a partir da thread worker.
 O limite SCM do PostgreSQL acompanha os limites dos comandos filhos; timeout pede

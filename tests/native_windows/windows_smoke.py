@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 SMOKE_SUCCESS = (
     "Native installer: fresh EXE, services stop/start, 1.0->1.1, verified encrypted restore, "
     "downgrade refusal, stable Android identity, non-destructive uninstall: PASS"
@@ -98,6 +100,10 @@ def main(directory):
     from native_windows.windows import SERVICES, activate, stop_all
 
     health_http(root)
+    run([
+        "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
+        Path(__file__).parent / "Test-PrivateCRT.ps1", "-Release", release,
+    ])
     manage(root, "shell", "-c", (Path(__file__).parent / "operation_fixture.py").read_text())
     run(
         [

@@ -2,7 +2,9 @@ import json
 import os
 import struct
 import subprocess
+import sys
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
@@ -61,6 +63,58 @@ class PostgresBootstrapTests(TestCase):
         with patch("native_windows.postgres_process.subprocess.run", return_value=result):
             self.assertIs(command(self.root, self.release, "initdb", [], timeout=1), result)
         self.assertFalse((self.root / "runtime/postgres/startup-diagnostic.json").exists())
+
+    def test_daemon_launcher_returns_without_waiting_for_inherited_pipe_eof(self):
+        # Real child/grandchild processes reproduce Windows pg_ctl's lifetime:
+        # launcher exits, daemon keeps inherited handles open until signalled.
+        stop = self.root / "daemon-stop"
+        done = self.root / "daemon-done"
+        daemon = (
+            "import pathlib,time; s=pathlib.Path(" + repr(str(stop)) + ");"
+            "deadline=time.monotonic()+10;"
+            "\nwhile not s.exists() and time.monotonic()<deadline: time.sleep(.01)"
+            "\npathlib.Path(" + repr(str(done)) + ").touch()"
+        )
+        parent = "import subprocess,sys;subprocess.Popen([sys.executable,'-c'," + repr(daemon) + "])"
+        original_run = subprocess.run
+        returned = threading.Event()
+        errors = []
+
+        def child(*args, **kwargs):
+            return original_run([sys.executable, "-c", parent], **kwargs)
+
+        def exercise():
+            try:
+                with patch("native_windows.postgres_process.subprocess.run", side_effect=child):
+                    command(self.root, self.release, "pg_ctl", ["start"], timeout=5)
+            except Exception as error:
+                errors.append(error)
+            finally:
+                returned.set()
+
+        worker = threading.Thread(target=exercise)
+        worker.start()
+        try:
+            self.assertTrue(returned.wait(3), "Launcher waited for daemon's inherited pipe EOF")
+            self.assertEqual(errors, [])
+        finally:
+            stop.touch()
+            worker.join(15)
+        # The daemon is cooperative and bounded; no process is forcibly killed.
+        import time
+        deadline = time.monotonic() + 3
+        while not done.exists() and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertTrue(done.exists())
+
+    def test_daemon_launcher_failure_remains_a_failure_without_output_capture(self):
+        result = SimpleNamespace(returncode=1, stdout=None, stderr=None)
+        with patch("native_windows.postgres_process.subprocess.run", return_value=result) as run:
+            with self.assertRaises(UnsafeOperation):
+                command(self.root, self.release, "pg_ctl", ["start"], timeout=90)
+        self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        self.assertNotIn("capture_output", run.call_args.kwargs)
 
 
 class PrivateCRTTests(TestCase):

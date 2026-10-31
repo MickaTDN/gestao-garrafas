@@ -209,6 +209,8 @@ def service_failure(root, kind):
 
     try:
         data = json.loads((Path(root) / "runtime" / kind / "failure.json").read_text())
+        if not isinstance(data, dict):
+            return "Consulte o diagnóstico privado do serviço; preserve os dados e o diário."
         category = data.get("category")
         filename = data.get("file")
         if isinstance(category, str) and re.fullmatch(r"[A-Za-z_]{1,80}", category):

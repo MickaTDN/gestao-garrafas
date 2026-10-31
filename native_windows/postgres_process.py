@@ -52,12 +52,20 @@ def command(root, release, tool, arguments, *, timeout, bootstrap=False):
     if tool not in ("initdb", "postgres", "pg_ctl"):
         raise UnsafeOperation("Comando PostgreSQL desconhecido.")
     stage = "initdb" if bootstrap else tool
+    # pg_ctl starts a long-lived server on Windows. Captured anonymous pipes can
+    # remain inherited by that server after pg_ctl exits: communicate() then
+    # waits for EOF, even after killing pg_ctl on timeout. No pipes for a daemon
+    # launcher; PostgreSQL already has its private -l server log.
+    output_options = (
+        {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if tool == "pg_ctl" else {"capture_output": True}
+    )
     try:
         result = subprocess.run(
             [str(Path(release) / f"postgres/bin/{tool}.exe"), *map(str, arguments)],
             cwd=Path(root) / "runtime/postgres",
             env=child_environment(root, release),
-            capture_output=True,
+            **output_options,
             timeout=timeout,
             check=False,
         )
@@ -71,7 +79,7 @@ def command(root, release, tool, arguments, *, timeout, bootstrap=False):
             return result
         code = result.returncode
         # The output is examined only in memory, never persisted or sent to UI.
-        output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+        output = ((result.stdout or b"") + (result.stderr or b"")).decode("utf-8", errors="replace")
         category = reason(code, output)
     record = {"command": stage, "exit_code": code, "reason": category}
     write_json(Path(root) / "runtime/postgres/startup-diagnostic.json", record)
@@ -85,6 +93,8 @@ def startup_failure(root):
     """Use only typed/allowlisted fields, even if a service wrote unexpected JSON."""
     try:
         data = json.loads((Path(root) / "runtime/postgres/startup-diagnostic.json").read_text())
+        if not isinstance(data, dict):
+            return "Consulte runtime/postgres/last-error.txt e o diagnóstico de arranque."
         category = data.get("reason")
         code = data.get("exit_code")
         if category in REASONS and (code is None or type(code) is int):
