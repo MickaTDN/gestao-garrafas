@@ -16,6 +16,16 @@ internal static class Tests
             Reject(() => SyntheticDemo.Guard("release", vm, true, false), "release guard");
             Reject(() => SyntheticDemo.Guard("synthetic", vm, false, false), "approval guard");
             Reject(() => SyntheticDemo.Guard("synthetic", vm, true, true), "existing installation guard");
+            string outside = Path.Combine(temporary, "untouched"), link = Path.Combine(temporary, "redirected");
+            Directory.CreateDirectory(outside);
+            var before = System.IO.FileSystemAclExtensions.GetAccessControl(new DirectoryInfo(outside)).GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.All);
+            Directory.CreateSymbolicLink(link, outside);
+            try {
+                Reject(() => SyntheticDemo.Generate("synthetic", vm, true, Path.Combine(temporary, "new-root"), link), "redirected vault parent");
+                Reject(() => SyntheticDemo.Generate("synthetic", vm, true, Path.Combine(temporary, "new-root"), Path.Combine(link, "child")), "redirected vault ancestor");
+                Check(!Directory.EnumerateFileSystemEntries(outside).Any(), "redirected target modified");
+                Check(System.IO.FileSystemAclExtensions.GetAccessControl(new DirectoryInfo(outside)).GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.All) == before, "redirected target ACL modified");
+            } finally { Directory.Delete(link); }
             string parent = Path.Combine(temporary, "vaults");
             var first = SyntheticDemo.Generate("synthetic", vm, true, Path.Combine(temporary, "new-root"), parent);
             var second = SyntheticDemo.Generate("synthetic", vm, true, Path.Combine(temporary, "new-root-2"), parent);

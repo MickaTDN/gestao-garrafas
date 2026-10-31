@@ -36,6 +36,16 @@ internal static class SyntheticDemo
 
     internal static string Token() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
+    internal static void RefuseReparse(string path)
+    {
+        // Check ancestors before creating files or applying elevated ACLs.
+        // Never follow a pre-existing junction to another directory.
+        for (var entry = new DirectoryInfo(Path.GetFullPath(path)); entry != null; entry = entry.Parent) {
+            if (entry.LinkTarget != null || (entry.Exists && (entry.Attributes & FileAttributes.ReparsePoint) != 0))
+                throw new InvalidOperationException("O cofre exige um caminho privado sem redirecionamentos.");
+        }
+    }
+
     internal static void Protect(string path, bool directory)
     {
         SecurityIdentifier[] identities = [WindowsIdentity.GetCurrent().User!, new("S-1-5-18"), new("S-1-5-32-544")];
@@ -53,6 +63,7 @@ internal static class SyntheticDemo
     internal static DemoCredentials Generate(string channel, DemoMachine machine, bool confirmed, string root, string privateParent)
     {
         Guard(channel, machine, confirmed, System.IO.Directory.Exists(root));
+        RefuseReparse(privateParent);
         System.IO.Directory.CreateDirectory(privateParent); Protect(privateParent, true);
         string directory = Path.Combine(privateParent, Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(directory); Protect(directory, true);
@@ -67,10 +78,13 @@ internal static class SyntheticDemo
     internal static DemoCredentials Read(string channel, string privateParent)
     {
         if (channel != "synthetic") throw new InvalidOperationException("Disponível apenas no canal sintético.");
+        RefuseReparse(privateParent);
+        RefuseReparse(Path.Combine(privateParent, "active.txt"));
         string directory = File.ReadAllText(Path.Combine(privateParent, "active.txt"));
         string expectedParent = Path.GetFullPath(privateParent).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!Path.GetFullPath(directory).StartsWith(expectedParent, StringComparison.OrdinalIgnoreCase) || Path.GetRelativePath(privateParent, directory).Contains(Path.DirectorySeparatorChar)) throw new InvalidOperationException("Cofre inválido.");
         if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Cofre inválido.");
+        RefuseReparse(Path.Combine(directory, "demo.vault"));
         byte[] plain = WindowsVault.Transform(File.ReadAllBytes(Path.Combine(directory, "demo.vault")), protect: false);
         try { return JsonSerializer.Deserialize<DemoCredentials>(plain) ?? throw new InvalidOperationException("Cofre inválido."); }
         finally { CryptographicOperations.ZeroMemory(plain); }
