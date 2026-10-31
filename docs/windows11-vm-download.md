@@ -125,7 +125,7 @@ qualquer computador. A matriz completa de homologação continua pendente.
 
 A regressão HTTPS/offline da CI revelou uma utilização do mesmo socket SSL por
 threads de leitura/escrita diferentes no adaptador sintético de dispositivo. O
-adaptador passou a multiplexar as duas direções numa única thread por ligação e
+adaptador passou a multiplexar as duas direções num único event loop, com I/O TLS não bloqueante, e
 a aguardar o fim dos handlers antes de abandonar o contexto de teste. Certificados,
 verificação TLS/mTLS, hostname e regras da aplicação não foram alterados.
 
@@ -133,4 +133,4 @@ Uma regressão com TLS real em loopback, certificado de cliente e payload fictí
 falhou antes da correção por acesso ao mesmo socket em threads diferentes e passou
 depois dela. A CI Linux ativa faulthandler para melhorar os diagnósticos de erros
 nativos. Esta correção não prova, por si só, a causa exata do anterior código 139,
-que não tinha traceback. Não foram aumentados timeouts nem ignoradas falhas.
+que não tinha traceback. O timeout da navegação não foi aumentado e não foram ignoradas falhas.
