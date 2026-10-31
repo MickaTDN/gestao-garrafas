@@ -92,6 +92,10 @@ static class Program
         layout.Controls.Add(new Label { Text = "Operações autorizadas de manutenção. A recuperação exige uma instalação isolada nova e a versão exata do backup.", Width = 510, Height = 60 });
         void Button(string label, Action action) { var b = new Button { Text = label, Width = 450, Height = 45 }; b.Click += async (_, _) => { b.Enabled = false; try { await Task.Run(action); MessageBox.Show("Operação concluída."); } catch (Exception e) { MessageBox.Show(e is UserError ? e.Message : "Falha; preserve os dados e contacte a informática."); } finally { b.Enabled = true; } }; layout.Controls.Add(b); }
         Button("Criar backup manual cifrado", () => Run(Release, "backup"));
+        if (Channel == "synthetic") {
+            Button("Dados privados da demonstração", () => form.Invoke(() => SyntheticDemoWizard.ShowCredentials(form, Channel, Root)));
+            Button("Abrir kit cifrado de demonstração", () => form.Invoke(() => SyntheticDemoWizard.OpenKit(Channel)));
+        }
         Button("Preparar publicador HTTPS (configuração aprovada)", () => {
             // File dialog must run on the STA UI thread.
             form.Invoke(() => { using var d = new OpenFileDialog { Filter = "Configuração aprovada|*.json" }; if (d.ShowDialog() == DialogResult.OK) Run(Release, "publisher", PrivateRequest(new { configuration = d.FileName })); });
@@ -132,6 +136,10 @@ static class Program
         string release = Path.Combine(package, "payload");
         Run(release, "verify", package: package); // No service/data changes before verification.
         bool updating = File.Exists(Path.Combine(Root, "installation.json"));
+        if (Channel == "synthetic" && !updating) {
+            int? demoResult = SyntheticDemoWizard.Show(Channel, Root, package, Run, PrivateRequest);
+            if (demoResult.HasValue) return demoResult.Value;
+        }
         using var form = new Form { Text = updating ? "Atualizar Gestão Vertente Aveludada" : "Preparar Gestão Vertente Aveludada", Width = 600, Height = 540, StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false };
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(18) };
         form.Controls.Add(flow);

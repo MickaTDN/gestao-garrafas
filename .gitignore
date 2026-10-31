@@ -50,3 +50,9 @@ deploy/native/Host/bin/
 deploy/native/Host/obj/
 *.gvabackup
 *.gvabackup.partial
+
+# Synthetic demo regression build products
+tests/native_windows/DemoTests/bin/
+tests/native_windows/DemoTests/obj/
+*.gvademo
+*.vault
