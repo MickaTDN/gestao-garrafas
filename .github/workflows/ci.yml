@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      PYTHONFAULTHANDLER: "1"
       PYTHONPATH: .
       PG_TOOL_PREFIX: '["docker", "compose", "exec", "-T", "-e", "PGPASSWORD", "db"]'
     steps:
