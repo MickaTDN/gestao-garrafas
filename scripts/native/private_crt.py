@@ -11,7 +11,7 @@ from pathlib import Path
 from native_windows.package import UnsafeOperation
 
 REQUIRED = {"vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"}
-ALLOWED = re.compile(r"(?:vcruntime140(?:_1)?|msvcp140(?:_[a-z0-9_]+)?|concrt140|vccorlib140|vcamp140)\.dll")
+ALLOWED = re.compile(r"(?:vcruntime140(?:_1|_threads)?|msvcp140(?:_[a-z0-9_]+)?|concrt140|vccorlib140|vcamp140)\.dll")
 
 
 def verify_microsoft(path, signers):
@@ -53,7 +53,7 @@ def deploy(payload, source, metadata, *, verifier=verify_microsoft):
         raise UnsafeOperation("Faltam fingerprints aprovados dos fornecedores CRT.")
     for path in files:
         if path.is_symlink() or not path.is_file() or not ALLOWED.fullmatch(path.name.lower()):
-            raise UnsafeOperation("Ficheiro não autorizado no arquivo CRT.")
+            raise UnsafeOperation("Ficheiro não autorizado no arquivo CRT: " + path.name)
         data = path.read_bytes()
         try:
             offset = struct.unpack_from("<I", data, 0x3C)[0]

@@ -32,6 +32,7 @@ $crt=Get-ChildItem $redist -Directory | Sort-Object Name -Descending | ForEach-O
 } | Select-Object -First 1
 if (-not $crt) { throw 'Approved x64 release CRT directory unavailable' }
 $dlls=@(Get-ChildItem $crt.FullName -Filter '*.dll' -File)
+Write-Host ('Reviewed release CRT files: '+($dlls.Name -join ', '))
 $signers=@()
 foreach ($dll in $dlls) {
  $sig=Get-AuthenticodeSignature -LiteralPath $dll.FullName

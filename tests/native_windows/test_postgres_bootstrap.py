@@ -120,3 +120,9 @@ class PrivateCRTTests(TestCase):
             verify_microsoft(self.source / "vcruntime140.dll", ["a" * 64])
         self.assertFalse(any(k.lower() == "psmodulepath" for k in run.call_args.kwargs["env"]))
         self.assertIn("Get-AuthenticodeSignature", run.call_args.args[0][-1])
+
+    def test_current_release_thread_runtime_is_supported_but_not_arbitrary_dlls(self):
+        template = (self.source / "vcruntime140.dll").read_bytes()
+        (self.source / "vcruntime140_threads.dll").write_bytes(template)
+        deploy(self.payload, self.source, self.metadata, verifier=lambda *args: None)
+        self.assertTrue((self.payload / "postgres/bin/vcruntime140_threads.dll").is_file())
