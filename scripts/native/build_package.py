@@ -127,6 +127,21 @@ def build(args):
                     "source": item["source"],
                 }
             )
+    # PostgreSQL on the CI image can load a global Visual C++ runtime that is
+    # absent on clean Windows 11. Bundle reviewed, signed app-local DLLs instead.
+    from scripts.native.private_crt import deploy
+
+    item = sources.get("msvc")
+    if not isinstance(item, dict):
+        raise UnsafeOperation("Falta o arquivo x64 Microsoft CRT revisto para distribuição privada.")
+    archive = Path(item["archive"])
+    if len(item["sha256"]) != 64 or digest(archive) != item["sha256"]:
+        raise UnsafeOperation("SHA-256 do fornecedor incorreto: msvc")
+    with tempfile.TemporaryDirectory() as crt_temp:
+        dest = Path(crt_temp) / "crt"
+        unpack(archive, dest)
+        deploy(payload, dest, item)
+    provenance.append({k: item[k] for k in ("version", "sha256", "source", "signers_sha256") } | {"component": "msvc"})
     if args.synthetic_migration_probe and policy["channel"] != "synthetic":
         raise UnsafeOperation("A migração de ensaio nunca pode entrar num pacote de distribuição.")
     python_version = json.loads(

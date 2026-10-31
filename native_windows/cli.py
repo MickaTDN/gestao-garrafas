@@ -74,7 +74,21 @@ def main():
     if args.action == "service":
         from .runtime import service
 
-        service(root, args.kind, args.stop_file)
+        try:
+            service(root, args.kind, args.stop_file)
+        except Exception as error:
+            from .state import write_json
+            # Only fixed service runtime, never raw exceptions/SQL/credentials.
+            if args.kind in {"postgres", "web", "backup", "publisher"}:
+                record = {"category": type(error).__name__}
+                if isinstance(error, OSError):
+                    record["file"] = Path(error.filename).name if error.filename else None
+                    record["errno"] = error.errno
+                try:
+                    write_json(root / "runtime" / args.kind / "failure.json", record)
+                except OSError:
+                    pass
+            raise
         return
     from .windows import administrator
 

@@ -117,6 +117,8 @@ static class Program
             if (request != null) { info.ArgumentList.Add("--request"); info.ArgumentList.Add(request); }
             if (package != null) { info.ArgumentList.Add("--package"); info.ArgumentList.Add(package); }
             info.Environment["GVA_NATIVE_CHANNEL"] = Channel;
+            info.Environment["PYTHONUTF8"] = "1"; info.Environment["PYTHONIOENCODING"] = "utf-8";
+            info.StandardErrorEncoding = System.Text.Encoding.UTF8; info.StandardOutputEncoding = System.Text.Encoding.UTF8;
             using var process = Process.Start(info)!;
             var output = process.StandardOutput.ReadToEndAsync();
             var errors = process.StandardError.ReadToEndAsync();
@@ -135,6 +137,12 @@ static class Program
         using var form = new Form { Text = updating ? "Atualizar Gestão Vertente Aveludada" : "Preparar Gestão Vertente Aveludada", Width = 600, Height = 540, StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false };
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(18) };
         form.Controls.Add(flow);
+        var status = new Label { Dock = DockStyle.Fill, Text = "Preencha os dados e prepare a instalação.", AutoEllipsis = true };
+        var progress = new ProgressBar { Dock = DockStyle.Bottom, Style = ProgressBarStyle.Marquee, Visible = false };
+        var feedback = new Panel { Dock = DockStyle.Top, Height = 78, Padding = new Padding(12) };
+        feedback.Controls.Add(status); feedback.Controls.Add(progress); form.Controls.Add(feedback); feedback.BringToFront();
+        using var phaseTimer = new System.Windows.Forms.Timer { Interval = 500 };
+        phaseTimer.Tick += (_, _) => status.Text = WizardOperation.Phase(Root);
         void Label(string text) => flow.Controls.Add(new Label { Text = text, Width = 535, Height = 40 });
         TextBox Field(string label, bool secret = false) { Label(label); var field = new TextBox { Width = 530, UseSystemPasswordChar = secret }; flow.Controls.Add(field); return field; }
         Label(updating ? "Será criado e restaurado um backup de ensaio antes das migrações. Se falhar, o arranque fica bloqueado para recuperação." : "Instala serviços privados PostgreSQL 17, aplicação e backups. Só a informática necessita de privilégios de administrador. Não abre portas da firewall.");
@@ -166,18 +174,21 @@ static class Program
         flow.Controls.Add(button);
         button.Click += async (_, _) => {
             if (!updating && !recovering.Checked && (password!.Text != confirm!.Text || phrase.Text != phraseConfirm!.Text)) { MessageBox.Show("As palavras-passe não coincidem."); return; }
-            button.Enabled = false; form.ControlBox = false;
-            try
-            {
-                var request = new Dictionary<string, object?> { ["username"] = user?.Text, ["password"] = password?.Text, ["synthetic"] = demo.Checked, ["recovery_key"] = key.Text, ["recovery_password"] = phrase.Text };
-                if (!updating) { request["http_port"] = (int)httpPort.Value; request["db_port"] = (int)dbPort.Value; }
-                if (recovering.Checked) request["archive"] = archive!.Text;
-                string file = PrivateRequest(request);
-                await Task.Run(() => Run(release, recovering.Checked ? "recover" : updating ? "update" : "install", file, package));
-                MessageBox.Show(recovering.Checked ? "Backup restaurado e verificado. Serviços bloqueados até à conferência da informática, incluindo identidade e histórico Android. Não há publicação automática." : "Operação concluída. Dados e chaves conservados. Abra a aplicação pelo atalho.");
+            // Read every control on the UI thread BEFORE scheduling the worker.
+            var request = new Dictionary<string, object?> { ["username"] = user?.Text, ["password"] = password?.Text, ["synthetic"] = demo.Checked, ["recovery_key"] = key.Text, ["recovery_password"] = phrase.Text };
+            if (!updating) { request["http_port"] = (int)httpPort.Value; request["db_port"] = (int)dbPort.Value; }
+            bool isRecovery = recovering.Checked;
+            if (isRecovery) request["archive"] = archive!.Text;
+            string action = isRecovery ? "recover" : updating ? "update" : "install";
+            phaseTimer.Start();
+            bool success = await WizardOperation.Execute(form, button, progress, status,
+                () => { string file = PrivateRequest(request); return Task.Run(() => Run(release, action, file, package)); },
+                error => error is UserError && !string.IsNullOrWhiteSpace(error.Message) ? error.Message : "A operação falhou. Preserve os dados e contacte a informática. Categoria: " + error.GetType().Name);
+            phaseTimer.Stop();
+            if (success) {
+                MessageBox.Show(form, isRecovery ? "Backup restaurado e verificado. Serviços bloqueados até à conferência da informática. Não há publicação automática." : "Operação concluída. Dados e chaves conservados. Abra a aplicação pelo atalho.", "Gestão Vertente Aveludada");
                 form.DialogResult = DialogResult.OK; form.Close();
-            }
-            catch (Exception error) { MessageBox.Show(error is UserError ? error.Message : "A operação falhou. Contacte a informática. Categoria: " + error.GetType().Name); button.Enabled = true; form.ControlBox = true; }
+            } else MessageBox.Show(form, status.Text, "Preparação interrompida — dados preservados", MessageBoxButtons.OK, MessageBoxIcon.Error);
         };
         return form.ShowDialog() == DialogResult.OK ? 0 : 1;
     }
@@ -239,16 +250,25 @@ sealed class NativeService : ServiceBase
         var info = new ProcessStartInfo(Path.Combine(Program.Release, "python/python.exe")) { WorkingDirectory = Path.Combine(Program.Release, "app"), UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         foreach (var arg in new[] { "-s", "-B", "-m", "native_windows.cli", "service", "--kind", kind, "--stop-file", stopFile }) info.ArgumentList.Add(arg);
         info.Environment["GVA_NATIVE_CHANNEL"] = Program.Channel;
+        info.Environment["PYTHONUTF8"] = "1"; info.Environment["PYTHONIOENCODING"] = "utf-8";
+        info.StandardErrorEncoding = System.Text.Encoding.UTF8;
         child = Process.Start(info)!;
         string errorFile = Path.Combine(Program.Root, "runtime", kind, "last-error.txt");
         child.ErrorDataReceived += (_, e) => { if (e.Data != null) try { if (!File.Exists(errorFile) || new System.IO.FileInfo(errorFile).Length < 131072) File.AppendAllText(errorFile, e.Data + Environment.NewLine); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } };
         child.BeginErrorReadLine();
         child.EnableRaisingEvents = true;
-        child.Exited += (_, _) => { if (!stopping) { ExitCode = 1; Stop(); } };
-        var deadline = DateTime.UtcNow.AddSeconds(100);
+        child.Exited += (_, _) => { if (!stopping) { ExitCode = 1067; Stop(); } };
+        var deadline = DateTime.UtcNow.AddSeconds(kind == "postgres" ? 240 : 100);
+        var extend = DateTime.UtcNow;
         while (!File.Exists(stopFile + ".ready"))
         {
-            if (child.HasExited || DateTime.UtcNow > deadline) throw new UserError("O serviço não ficou disponível. Preserve os dados.");
+            if (DateTime.UtcNow >= extend) { RequestAdditionalTime(30000); extend = DateTime.UtcNow.AddSeconds(20); }
+            if (child.HasExited) throw new UserError("O serviço terminou durante o arranque. Consulte runtime/" + kind + "/last-error.txt; preserve os dados.");
+            if (DateTime.UtcNow > deadline) {
+                // Cooperative stop only. Never kill an initializing PostgreSQL.
+                File.WriteAllText(stopFile, "stop"); ExitCode = 1067;
+                throw new UserError("O arranque excedeu o limite; foi pedido encerramento seguro. Preserve os dados e o diário.");
+            }
             Thread.Sleep(200);
         }
     }
