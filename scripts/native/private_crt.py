@@ -25,7 +25,8 @@ $f=([BitConverter]::ToString($h.ComputeHash($s.SignerCertificate.RawData))).Repl
 """
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-        env={**os.environ, "GVA_CRT_CHECK": str(path)},
+        # A pwsh build must not load PowerShell 7 modules into Windows PS 5.1.
+        env={k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"} | {"GVA_CRT_CHECK": str(path)},
         capture_output=True, timeout=60,
     )
     if result.returncode or json.loads(result.stdout.decode("utf-8-sig"))["signer"] not in signers:
