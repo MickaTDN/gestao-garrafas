@@ -73,9 +73,12 @@ class PostgresBootstrapTests(TestCase):
             "import pathlib,time; s=pathlib.Path(" + repr(str(stop)) + ");"
             "deadline=time.monotonic()+10;"
             "\nwhile not s.exists() and time.monotonic()<deadline: time.sleep(.01)"
-            "\npathlib.Path(" + repr(str(done)) + ").touch()"
+            "\np=pathlib.Path(" + repr(str(done) + ".new") + ");p.touch();p.replace(" + repr(str(done)) + ")"
         )
-        parent = "import subprocess,sys;subprocess.Popen([sys.executable,'-c'," + repr(daemon) + "])"
+        # A Windows process holds its working directory open until shutdown.
+        # The fixture daemon needs inherited pipes, not a handle on the test
+        # directory while TemporaryDirectory cleans up after the done marker.
+        parent = "import subprocess,sys;subprocess.Popen([sys.executable,'-c'," + repr(daemon) + "],cwd=sys.prefix)"
         original_run = subprocess.run
         returned = threading.Event()
         errors = []
