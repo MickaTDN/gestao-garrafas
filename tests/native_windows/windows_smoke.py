@@ -403,6 +403,10 @@ def report_failure(error, root):
     marker = Path(root) / "maintenance.json"
     if marker.is_file():
         detail += "; maintenance journal=" + marker.read_text(encoding="utf-8")
+    # Safe service categories only; never dump secret/config/request files.
+    from native_windows.windows import service_failure
+    for kind in ("postgres", "web", "backup", "publisher"):
+        log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
     log(
         "::error::Native Windows smoke: " + type(error).__name__ + ": " + detail.replace("\n", " "),
         error=True,

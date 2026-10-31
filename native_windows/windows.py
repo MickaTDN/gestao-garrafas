@@ -191,13 +191,34 @@ def activate(root):
             if state not in (2, 4):
                 native(["sc.exe", "start", name])
             for _ in range(150):
-                if service_state(name) == 4:
+                status = service_state(name)
+                if status == 4:
                     break
+                if status == 1:
+                    raise UnsafeOperation("O serviço " + kind + " parou: " + service_failure(root, kind))
                 time.sleep(1)
             else:
                 raise UnsafeOperation(
-                    "O serviço não ficou disponível; preserve os dados e consulte o diagnóstico."
+                    "O serviço " + kind + " não ficou disponível; " + service_failure(root, kind)
                 )
+
+
+def service_failure(root, kind):
+    import json
+    import re
+
+    try:
+        data = json.loads((Path(root) / "runtime" / kind / "failure.json").read_text())
+        category = data.get("category")
+        filename = data.get("file")
+        if isinstance(category, str) and re.fullmatch(r"[A-Za-z_]{1,80}", category):
+            label = "Categoria: " + category
+            if isinstance(filename, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", filename):
+                label += "; ficheiro=" + filename
+            return label + ". Preserve os dados e consulte o diagnóstico privado do serviço."
+    except (OSError, ValueError, TypeError):
+        pass
+    return "Consulte o diagnóstico privado do serviço; preserve os dados e o diário."
 
 
 def uninstall():
