@@ -25,7 +25,9 @@ assinatura empresarial e aprovação. Nenhum instalador é publicado por este PR
    posteriormente no mesmo menu de manutenção. Selecione o ficheiro e a credencial.
    Um backup antigo continua a precisar do kit/código ou da chave/frase originais.
 6. Reveja versão, origem e número de registos. Confirme expressamente a substituição
-   pelo estado do backup e que a origem está parada. Alterações posteriores ao
+   pelo estado do backup, que a origem está parada/isolada e que conferiu os
+   movimentos e exportações posteriores ao backup. Esta aprovação de identidade
+   e histórico, já exigida pela recuperação anterior, continua obrigatória. Alterações posteriores ao
    backup não fazem parte dessa fotografia. Não execute duas cópias da mesma origem.
 7. Aguarde a validação do novo cluster, esquema, chaves, permissões e serviços.
    Só a conclusão **Recuperação verificada** autoriza abrir a aplicação.

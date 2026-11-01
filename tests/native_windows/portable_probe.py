@@ -48,7 +48,13 @@ def run(root, directory, key, phrase):
         assert (root / "installation.json").read_bytes() == original
         health_http(root)
     view = preview(root, release, manifest, request)
-    confirmed = {**request, "confirmed": True, "source_offline": True, "token": view["token"]}
+    confirmed = {
+        **request,
+        "confirmed": True,
+        "source_offline": True,
+        "confirmed_identity_history": True,
+        "token": view["token"],
+    }
     # Failure AFTER actual pg_restore: check original cluster/keys/services survive.
     with patch(
         "native_windows.recovery_wizard.grants",
@@ -101,7 +107,13 @@ def fresh_destination(root, directory, request):
         root,
         release,
         manifest,
-        {**request, "confirmed": True, "source_offline": True, "token": summary["token"]},
+        {
+            **request,
+            "confirmed": True,
+            "source_offline": True,
+            "confirmed_identity_history": True,
+            "token": summary["token"],
+        },
         directory / "policy.json",
     )
     assert result["status"] == "verified-and-running"

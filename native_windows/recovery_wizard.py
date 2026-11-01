@@ -165,9 +165,10 @@ def restore(root, release, manifest, request, trust_path):
             request.get("confirmed") is not True
             or request.get("token") != summary["token"]
             or request.get("source_offline") is not True
+            or request.get("confirmed_identity_history") is not True
         ):
             raise UnsafeOperation(
-                "Reveja o resumo e confirme a substituição e o isolamento da instalação de origem."
+                "Reveja o resumo e confirme a substituição, o isolamento da origem e a conferência do histórico/exportações posteriores ao backup."
             )
         previous = read_state(root) if (root / "installation.json").exists() else None
         if root.exists() and previous is None:

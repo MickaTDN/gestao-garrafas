@@ -63,7 +63,12 @@ class RecoveryWizardTests(TestCase):
             "evidence": {"table": {"rows": 1, "sha256": "synthetic"}, "__sequences__": []},
         }
         self.summary = {"token": "test-token", "sha256": "test-hash"}
-        self.request = {"confirmed": True, "source_offline": True, "token": "test-token"}
+        self.request = {
+            "confirmed": True,
+            "source_offline": True,
+            "confirmed_identity_history": True,
+            "token": "test-token",
+        }
 
     @contextmanager
     def boundaries(self, failing=None):
@@ -150,7 +155,12 @@ class RecoveryWizardTests(TestCase):
         self.assertEqual(len(list(self.parent.glob("data-Failed-*"))), 3)
 
     def test_unconfirmed_or_stale_preview_does_not_stop_services(self):
-        for change in ({"confirmed": False}, {"source_offline": False}, {"token": "other"}):
+        for change in (
+            {"confirmed": False},
+            {"source_offline": False},
+            {"confirmed_identity_history": False},
+            {"token": "other"},
+        ):
             with self.boundaries() as calls, self.assertRaises(UnsafeOperation):
                 restore(
                     self.root,

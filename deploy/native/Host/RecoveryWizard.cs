@@ -79,13 +79,13 @@ internal static class RecoveryWizard
                     string summary = "Origem: " + preview.GetProperty("instance").GetString() + "\nVersão: " + preview.GetProperty("version").GetString() + "\n";
                     var labels = new Dictionary<string, string> { ["inventory_reference"] = "Referências", ["inventory_movement"] = "Movimentos e inventários", ["inventory_movementline"] = "Linhas de movimentos", ["inventory_location"] = "Localizações", ["inventory_sector"] = "Setores", ["accounts_user"] = "Utilizadores", ["accounts_accessprofile"] = "Perfis", ["inventory_document"] = "Documentos e assinaturas", ["inventory_auditevent"] = "Registos de auditoria" };
                     foreach (var table in preview.GetProperty("rows").EnumerateObject()) if (labels.TryGetValue(table.Name, out var label)) summary += label + ": " + table.Value.GetInt32() + "\n";
-                    summary += "\nTodos os restantes dados persistentes do servidor também serão verificados.\nAlterações posteriores ao backup não estão nesta cópia.\nA instalação anterior será preservada.";
+                    summary += "\nTodos os restantes dados persistentes do servidor também serão verificados.\nAlterações posteriores ao backup não estão nesta cópia.\nA instalação anterior será preservada.\nConfirme a conferência dos movimentos e exportações posteriores ao backup: não são reconstruídos automaticamente. A origem anterior deve estar parada e isolada.";
                     using var review = new Form { Text = "Conferir recuperação", Width = 650, Height = 550, StartPosition = FormStartPosition.CenterParent };
                     var rows = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = summary.Replace("\n", Environment.NewLine) };
-                    var accept = new Button { Dock = DockStyle.Bottom, Height = 55, Text = "Confirmo: origem parada e substituir dados pelo backup" };
+                    var accept = new Button { Dock = DockStyle.Bottom, Height = 55, Text = "Confirmo origem parada, histórico conferido e substituição" };
                     review.Controls.Add(rows); review.Controls.Add(accept); accept.Click += (_, _) => review.DialogResult = DialogResult.OK;
                     if (review.ShowDialog(form) != DialogResult.OK) return;
-                    request["confirmed"] = true; request["source_offline"] = true; request["token"] = preview.GetProperty("token").GetString();
+                    request["confirmed"] = true; request["source_offline"] = true; request["confirmed_identity_history"] = true; request["token"] = preview.GetProperty("token").GetString();
                     await Task.Run(() => Run(release, "recovery-restore", request, package));
                     MessageBox.Show(form, "Recuperação verificada. Aplicação e backups disponíveis neste computador. Dados anteriores preservados. Acesso Wi-Fi aguarda aprovação de rede.");
                     complete = true;
