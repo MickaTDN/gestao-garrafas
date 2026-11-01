@@ -303,6 +303,11 @@ def main(directory):
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     log("::notice::Native smoke: exact-version repair preserved data and signing identity")
+    # The uninstaller removed the 1.0 package directory. Python cached its
+    # package search path; subsequent imports must use the installed 1.1 code.
+    import native_windows
+
+    native_windows.__path__ = [str(Path(json.loads((root / "installation.json").read_text())["release"]) / "app/native_windows")]
     from tests.native_windows.portable_probe import run as portable_probe
 
     portable_request = portable_probe(root, directory, key, phrase)
