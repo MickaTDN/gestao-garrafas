@@ -192,3 +192,28 @@ class RecoveryWizardTests(TestCase):
             (self.root / "cluster/precious").read_bytes(), b"confirmed-data-and-history"
         )
         self.assertFalse((self.root / "activation-permit").exists())
+
+
+class ExternalBackupDestinationTests(TestCase):
+    def test_program_root_data_root_and_normalized_parent_paths_are_rejected(self):
+        from native_windows.backup_wizard import external_destination
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "data"
+            data.mkdir()
+            release = root / "program/releases/1.1.0/payload"
+            release.mkdir(parents=True)
+            (data / "installation.json").write_text(json.dumps({"release": str(release)}))
+            outside = root / "external"
+            outside.mkdir()
+            expected = outside / "copy.gvabackup"
+            self.assertEqual(external_destination(data, str(expected)), expected)
+            for path in (
+                data / "copy.gvabackup",
+                root / "program/copy.gvabackup",
+                outside / "../data/copy.gvabackup",
+            ):
+                with self.assertRaises(UnsafeOperation):
+                    external_destination(data, str(path))
+            self.assertFalse(expected.exists())

@@ -20,8 +20,9 @@ def external_destination(root, value):
     root = Path(root).resolve()
     target = Path(value)
     refuse_reparse(target)
+    target = target.resolve()
     state = read_state(root)
-    program = Path(state["release"]).resolve().parent.parent
+    program = Path(state["release"]).resolve().parent.parent.parent
     if (
         not target.is_absolute()
         or target.suffix.lower() != ".gvabackup"

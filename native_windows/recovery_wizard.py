@@ -85,6 +85,7 @@ def prepared(root, release, manifest, request):
     refuse_reparse(release)
     archive = Path(request["archive"])
     refuse_reparse(archive)
+    archive = archive.resolve()
     if not archive.is_file() or not 1 <= archive.stat().st_size <= LIMIT + 16414:
         raise UnsafeOperation("Selecione um ficheiro de backup válido com tamanho suportado.")
     required = 3 * archive.stat().st_size + 512 * 1024**2
@@ -169,7 +170,7 @@ def restore(root, release, manifest, request, trust_path):
                 "Reveja o resumo e confirme a substituição e o isolamento da instalação de origem."
             )
         previous = read_state(root) if (root / "installation.json").exists() else None
-        if root.exists() and any(root.iterdir()) and previous is None:
+        if root.exists() and previous is None:
             raise UnsafeOperation(
                 "Destino contém dados não reconhecidos; nenhum ficheiro foi adotado."
             )
@@ -216,7 +217,7 @@ def restore(root, release, manifest, request, trust_path):
                 root.rename(preserved)
                 old_moved = True
             else:
-                root.mkdir(exist_ok=True)
+                root.mkdir(exist_ok=False)
             root.mkdir(exist_ok=True)
             protect(root)
 
@@ -361,5 +362,5 @@ def restore(root, release, manifest, request, trust_path):
                 + type(error).__name__
             ) from error
         finally:
-            if root.exists():
+            if owns_journal and root.exists():
                 (root / "activation-permit").unlink(missing_ok=True)
