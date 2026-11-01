@@ -166,10 +166,13 @@ def validate_material(root):
             raise UnsafeOperation("A origem Android não corresponde à base desta instalação.")
 
 
-def backup(root):
+def backup(root, *, recovery_envelope=None, prune=True):
     root = Path(root)
     state = read_state(root)
     validate_material(root)
+    envelope_path = root / "secrets/recovery-envelope.json"
+    if recovery_envelope is None and envelope_path.exists():
+        recovery_envelope = json.loads(envelope_path.read_text())
     manage(
         root, "shell", "-c", "from native_windows.schema import assert_current; assert_current()"
     )
@@ -208,6 +211,7 @@ def backup(root):
                     "signing",
                     "tls",
                     "publisher.json",
+                    "runtime/web/documents",
                 ):
                     source = root / name
                     if source.is_dir():
@@ -250,11 +254,12 @@ def backup(root):
                 "package_sha256": state["package_sha256"],
                 "channel": state["channel"],
             },
+            recovery_envelope=recovery_envelope,
         )
         # Record transport integrity. GCM authentication is checked during recovery/update.
         write_json(
             target.with_suffix(".sha256.json"),
-            {"sha256": digest(target), "size": target.stat().st_size},
+            {"sha256": digest(target), "size": target.stat().st_size, "authenticated": True},
         )
         destination = config.get("copy_to")
         if destination:
@@ -273,12 +278,8 @@ def backup(root):
                     "A cópia empresarial falhou a integridade; cópia local conservada."
                 )
             os.replace(partial, final)
-        # Only completed files owned by this installation's backup directory; remote copies untouched.
-        for old in sorted(
-            target_root.glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime, reverse=True
-        )[keep:]:
-            old.unlink()
-            old.with_suffix(".sha256.json").unlink(missing_ok=True)
+        if prune:
+            prune_backups(target_root, keep)
         return target
 
 
@@ -315,14 +316,19 @@ def verify_archive(path):
                 or any(part in ("", ".", "..") for part in name.split("/"))
             ):
                 raise UnsafeOperation("Caminho inválido no backup.")
-            if name not in {
-                "database.dump",
-                "installation.json",
-                "backup-policy.json",
-                "recovery-public.pem",
-                "package-policy.json",
-                "publisher.json",
-            } and name.split("/")[0] not in {"secrets", "signing", "tls"}:
+            if (
+                name
+                not in {
+                    "database.dump",
+                    "installation.json",
+                    "backup-policy.json",
+                    "recovery-public.pem",
+                    "package-policy.json",
+                    "publisher.json",
+                }
+                and name.split("/")[0] not in {"secrets", "signing", "tls"}
+                and not name.startswith("runtime/web/documents/")
+            ):
                 raise UnsafeOperation("Ficheiro inesperado no backup.")
             total += item.size
             if total > 100 * 1024**3:
@@ -465,3 +471,37 @@ def grants(root):
     )
     with connection(root) as conn:
         conn.execute(text)
+
+
+def prune_backups(target_root, keep):
+    """Legacy/unknown files and the most recent trial-restored copy are protected.
+
+    Retention may exceed its target rather than remove the only known restorable
+    copy. External backups and files without bound authentication receipts are
+    never pruned by this installation.
+    """
+    candidates = []
+    anchor = None
+    for path in sorted(
+        Path(target_root).glob("gva-*.gvabackup"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
+        if path.is_symlink() or path.is_junction():
+            continue
+        receipt_path = path.with_suffix(".sha256.json")
+        try:
+            receipt = json.loads(receipt_path.read_text())
+            if (
+                receipt.get("authenticated") is not True
+                or receipt.get("size") != path.stat().st_size
+                or receipt.get("sha256") != digest(path)
+            ):
+                continue
+        except (OSError, ValueError):
+            continue
+        candidates.append(path)
+        if anchor is None and receipt.get("restore_verified") is True:
+            anchor = path
+    for path in candidates[keep:]:
+        if path != anchor:
+            path.unlink()
+            path.with_suffix(".sha256.json").unlink(missing_ok=True)

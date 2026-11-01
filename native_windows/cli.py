@@ -59,11 +59,15 @@ def main():
             "recover",
             "approve-recovery",
             "enable-publisher",
+            "portable-backup",
+            "recovery-preview",
+            "recovery-restore",
         ),
     )
     parser.add_argument("--package")
     parser.add_argument("--trust")
     parser.add_argument("--request")
+    parser.add_argument("--request-stdin", action="store_true")
     parser.add_argument("--kind")
     parser.add_argument("--stop-file")
     args = parser.parse_args()
@@ -78,6 +82,7 @@ def main():
             service(root, args.kind, args.stop_file)
         except Exception as error:
             from .state import write_json
+
             # Only fixed service runtime, never raw exceptions/SQL/credentials.
             if args.kind in {"postgres", "web", "backup", "publisher"}:
                 record = {"category": type(error).__name__}
@@ -93,7 +98,14 @@ def main():
     from .windows import administrator
 
     administrator()
-    if args.action in ("verify", "install", "update", "recover"):
+    if args.action in (
+        "verify",
+        "install",
+        "update",
+        "recover",
+        "recovery-preview",
+        "recovery-restore",
+    ):
         from .package import verify
 
         installed = (
@@ -103,7 +115,11 @@ def main():
         )
         trust_path = root / "package-policy.json" if installed else Path(args.trust)
         manifest = verify(
-            args.package, trust_path, installed=installed if args.action != "recover" else None
+            args.package,
+            trust_path,
+            installed=installed
+            if args.action not in ("recover", "recovery-preview", "recovery-restore")
+            else None,
         )
         if args.action == "verify":
             return
@@ -116,7 +132,25 @@ def main():
             request = json.loads(request_path.read_text(encoding="utf-8-sig"))
         finally:
             request_path.unlink(missing_ok=True)
-    if args.action == "install":
+    if args.request_stdin:
+        raw = sys.stdin.buffer.read(1024 * 1024 + 1)
+        if args.request or len(raw) > 1024 * 1024:
+            raise UnsafeOperation("Pedido de manutenção inválido.")
+        request = json.loads(raw)
+    if args.action == "portable-backup":
+        from .backup_wizard import export_backup
+
+        print(json.dumps(export_backup(root, request)))
+    elif args.action in ("recovery-preview", "recovery-restore"):
+        from .recovery_wizard import preview, restore
+
+        result = (
+            preview(root, release, manifest, request)
+            if args.action == "recovery-preview"
+            else restore(root, release, manifest, request, trust_path)
+        )
+        print(json.dumps(result))
+    elif args.action == "install":
         from .install import initial
 
         initial(root, release, manifest, request, trust_path)
