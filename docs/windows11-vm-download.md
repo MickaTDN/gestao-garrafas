@@ -10,8 +10,11 @@ seguro partilhar pastas pessoais ou utilizar dados reais; manter isolamento.
 Workflow: **Etapa D - Windows 11 synthetic homologation**,
 `.github/workflows/windows11-homologation.yml`.
 
-Fonte fixa: **f88861ce057b98be3636f9a23ae3b36aff08c8bb**, a main aprovada
-com o merge da Etapa C. Não há campo que permita escolher outro código/canal.
+Fonte fixa: **ced00452f7cbeee9634dff87659572aa9aa05497**, a main aprovada
+com os PR #22 e #23: dependências PostgreSQL privadas, diagnóstico/progresso do
+instalador e demonstração automática. Não há campo que permita escolher outro
+código/canal. A origem é fixada neste SHA aprovado; novos commits futuros na main
+não são incluídos automaticamente sem outra revisão deste workflow.
 O workflow histórico do PR #19 continua fixado a 5e34c6c e permanece inalterado.
 
 Par sintético do ciclo existente: **1.0.0 → 1.1.0**, compilado na mesma execução
@@ -26,8 +29,10 @@ para tentar convertê-lo. Uma futura instalação real terá canal, identidade d
 pacotes e processo de aprovação próprios, sem reaproveitar esta base de testes.
 
 A VM com 8 GB serve para os testes sintéticos. A exigência de 16 GB da distribuição
-release não foi reduzida. O utilizador configura conta/password de teste e chave/
-frase de recuperação; não há credenciais de produção nos instaladores.
+release não foi reduzida. Na primeira instalação limpa, a opção **Criar
+demonstração automática** gera conta, palavra-passe, chave e frase de recuperação
+exclusivas, sem preencher esses campos manualmente. Continua disponível a
+configuração manual completa. Não há credenciais de produção nos instaladores.
 
 ## 1. Revisão e execução manual no GitHub
 
@@ -40,10 +45,15 @@ frase de recuperação; não há credenciais de produção nos instaladores.
 4. Aguardar conclusão **verde**. Ler o resumo e confirmar o SHA fonte completo
    acima, ID da execução e tentativa. Falha/cancelamento não conta como aprovação.
 
-O runner hospedado Windows Server 2025 executa testes de segurança, auditoria das
-dependências, unidades nativas, ACL/NTFS, compilação dos dois EXEs e o ensaio real
+O runner hospedado Windows Server 2025 audita primeiro o código do workflow e as
+suas dependências. Depois seleciona e confirma a fonte aprovada e instala as suas
+dependências bloqueadas. Executa as regressões WinForms/STA de progresso/erro e as
+de demonstração (geração única, DPAPI, kit cifrado e rejeição de produção), unidades
+nativas, ACL/NTFS, compilação dos dois EXEs e o ensaio real
 de instalação, atualização, backups, recuperação e desinstalação. Isso não é
-homologação Windows 11/VirtualBox. A homologação nessa VM ainda será efetuada.
+homologação Windows 11/VirtualBox. O ciclo EXE da CI usa o pedido de configuração
+sintético existente; não interage com o novo assistente nem finge que o Windows
+Server é Windows 11. A homologação gráfica na VM ainda será efetuada.
 
 Os hashes dos EXEs são calculados antes dos ensaios e novamente antes de publicar.
 O download só é preparado após sucesso de todas as etapas e validado por cópia.
@@ -61,7 +71,7 @@ ZIP como ficheiro inerte e transferi-lo por um meio controlado; não abrir os EX
 no anfitrião, não montar pastas pessoais como partilhas permanentes.
 
 Em Artifacts da execução verde descarregar o ZIP com prefixo
-`UNAPPROVED-SYNTHETIC-UNSIGNED-f88861ce057b98be3636f9a23ae3b36aff08c8bb-`,
+`UNAPPROVED-SYNTHETIC-UNSIGNED-ced00452f7cbeee9634dff87659572aa9aa05497-`,
 seguido de ID da execução e tentativa. É necessário login GitHub. Retenção de
 **3 dias**; arquivar o par e hashes. Ao repetir a execução/tentativa, obter o par
 inteiro novo: não misturar versões assinadas por autoridades temporárias diferentes.
@@ -95,17 +105,26 @@ não criar exclusões, não ignorar avisos e não instalar certificados de teste
 anfitrião para contornar um bloqueio. Se necessário, preparar posteriormente uma
 assinatura confiável de homologação e repetir a validação desse pacote.
 
-## 4. Primeiro ensaio manual, apenas na VM
+## 4. Primeiro ensaio, apenas numa VM limpa e autorizada
 
 1. Confirmar checkpoint e que não existem serviços GVA nem utilização das portas
    8765/55432. Não terminar serviços ou apagar dados de outras instalações.
-2. Executar **1.0.0** pelo assistente. Usar conta fictícia, password própria e nova
-   chave de recuperação guardada separadamente da instalação, com frase forte.
-3. Abrir pelo atalho e criar apenas operações fictícias. Registar quantidades,
+2. Executar **1.0.0** pelo assistente. Confirmar que se trata da VM autorizada e
+   selecionar **Criar demonstração automática**. A conta, palavra-passe e material
+   de recuperação são gerados por instalação; não devem ser introduzidos nomes ou
+   credenciais reais. A deteção da VM e os controlos de segurança mantêm-se ativos.
+3. Na janela privada, revelar as credenciais apenas quando necessário e guardar
+   o kit cifrado `.gvademo` e o código em locais privados separados. O cofre DPAPI
+   está associado à conta Windows criadora; o kit não substitui o backup. Seguir
+   [Demonstração automática](windows-synthetic-demo.md). O login normal continua
+   obrigatório, utilizando a conta gerada. Abrir pelo atalho e criar apenas
+   operações fictícias. Registar quantidades,
    documentos e identidades antes da atualização.
 4. Fazer backup pelo menu de manutenção e conservar cópia, chave/frase e os EXEs.
 5. Executar **1.1.0** do mesmo ZIP, fornecendo os elementos de recuperação pedidos.
    Confirmar que dados, contas, PDFs, histórico e numeração são preservados.
+   Consultar os elementos gerados em **Dados privados da demonstração**, na
+   manutenção sintética; não é necessário inventar novas credenciais de recuperação.
 6. Testar reboot normal da VM pelo Windows e nova abertura. Nunca desligar o
    anfitrião para provocar uma falha.
 
@@ -114,6 +133,11 @@ o destino não pode já conter serviços/dados GVA. O instalador exige o payload
 exato do backup. Desinstalar normalmente conserva dados e backups; não equivale
 a uma limpeza completa. Não apagar cluster, chaves ou maintenance.json para
 forçar uma repetição. Guardar evidência privada antes de repor um checkpoint.
+
+A VM da instalação anterior que falhou deve permanecer preservada. Estes passos
+destinam-se a uma VM/clone limpo novo, após autorização; não reparam nem adotam
+automaticamente o cluster, serviços ou diário antigos. O modo **Configuração manual /
+recuperar backup** fica disponível para ensaiar o assistente completo separadamente.
 
 Não executar `windows_smoke.py` na VM fingindo GITHUB_ACTIONS=true. É uma rotina
 privilegiada limitada à CI e inclui falhas destrutivas. O reboot_probe atual

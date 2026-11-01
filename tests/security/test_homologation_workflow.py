@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from scripts.check_workflows import ARTIFACT_GUARD, ROOT, load_workflow
 
-SOURCE = "f88861ce057b98be3636f9a23ae3b36aff08c8bb"
+SOURCE = "ced00452f7cbeee9634dff87659572aa9aa05497"
 WORKFLOW = ROOT / ".github/workflows/windows11-homologation.yml"
 
 
@@ -66,10 +66,27 @@ class HomologationDownloadTests(unittest.TestCase):
             "github.repository == 'MickaTDN/gestao-garrafas'",
         ):
             self.assertIn(guard, self.job["if"])
-        source = self.steps[1]["run"]
+        source = next(s["run"] for s in self.steps if s.get("name", "").startswith("Select and verify"))
         self.assertIn("git fetch --no-tags --depth=1", source)
         self.assertIn("git checkout --detach " + SOURCE, source)
         self.assertIn("$head -ne '" + SOURCE + "'", source)
+
+    def test_workflow_revision_is_audited_before_selecting_approved_source(self):
+        names = [s.get("name", "") for s in self.steps]
+        audit = next(i for i, name in enumerate(names) if name.startswith("Workflow security"))
+        selected = next(i for i, name in enumerate(names) if name.startswith("Select and verify"))
+        self.assertLess(audit, selected)
+        self.assertEqual(self.steps[selected + 1]["run"], "uv sync --frozen --group security")
+
+    def test_demo_and_diagnostic_regressions_gate_the_built_pair(self):
+        build = next(i for i, s in enumerate(self.steps) if s.get("name", "").startswith("Build initial"))
+        selected = next(i for i, s in enumerate(self.steps) if s.get("name", "").startswith("Select and verify"))
+        for project in ("HostTests", "DemoTests"):
+            command = f"dotnet run --project tests/native_windows/{project}/{project}.csproj --configuration Release"
+            position = next(i for i, s in enumerate(self.steps) if s.get("run") == command)
+            self.assertLess(selected, position)
+            self.assertLess(position, build)
+        self.assertIn(SOURCE, self.steps[-1]["with"]["name"])
 
     def test_tests_must_pass_before_atomic_staging(self):
         self.assertEqual(self.stage["if"], "success()")

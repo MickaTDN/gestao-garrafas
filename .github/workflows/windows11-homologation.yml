@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: etapa-d-synthetic-homologation-f88861c
+  group: etapa-d-synthetic-homologation-ced0045
   cancel-in-progress: false
 jobs:
   validated-synthetic-download:
@@ -20,23 +20,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-      - name: Select and verify the sole authorized source commit
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (Test-Path "$env:RUNNER_TEMP\gva-native") { throw 'Download staging must be new' }
-          $validation = Join-Path $env:RUNNER_TEMP 'gva-validation'
-          if (Test-Path $validation) { throw 'Validation directory must be new' }
-          "GVA_VALIDATION_TEMP=$validation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          # Public read, literal repository and full SHA; no caller-supplied ref.
-          git fetch --no-tags --depth=1 https://github.com/MickaTDN/gestao-garrafas.git f88861ce057b98be3636f9a23ae3b36aff08c8bb
-          if ($LASTEXITCODE -ne 0) { throw 'Validated source fetch failed' }
-          git checkout --detach f88861ce057b98be3636f9a23ae3b36aff08c8bb
-          if ($LASTEXITCODE -ne 0) { throw 'Validated source checkout failed' }
-          $head = git rev-parse HEAD
-          if ($LASTEXITCODE -ne 0 -or $head -ne 'f88861ce057b98be3636f9a23ae3b36aff08c8bb') { throw 'Unexpected source revision' }
-          $changes = git status --porcelain
-          if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Source tree must be clean' }
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
@@ -45,7 +28,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Install pinned uv tool
         run: python -m pip install uv==0.12.23
-      - name: Install locked Python dependencies
+      - name: Install locked audit dependencies of the workflow revision
         run: uv sync --frozen --group security
       - name: Workflow security and locked dependency audit (no production secrets)
         shell: pwsh
@@ -60,6 +43,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Runtime dependency export failed' }
           uv run --frozen --group security pip-audit --disable-pip --no-deps --require-hashes --progress-spinner off --requirement "$env:RUNNER_TEMP\runtime-requirements.txt"
           if ($LASTEXITCODE -ne 0) { throw 'Runtime dependency audit failed' }
+      - name: Select and verify the sole authorized source commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path "$env:RUNNER_TEMP\gva-native") { throw 'Download staging must be new' }
+          $validation = Join-Path $env:RUNNER_TEMP 'gva-validation'
+          if (Test-Path $validation) { throw 'Validation directory must be new' }
+          "GVA_VALIDATION_TEMP=$validation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Public read, literal repository and full SHA; no caller-supplied ref.
+          git fetch --no-tags --depth=1 https://github.com/MickaTDN/gestao-garrafas.git ced00452f7cbeee9634dff87659572aa9aa05497
+          if ($LASTEXITCODE -ne 0) { throw 'Validated source fetch failed' }
+          git checkout --detach ced00452f7cbeee9634dff87659572aa9aa05497
+          if ($LASTEXITCODE -ne 0) { throw 'Validated source checkout failed' }
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $head -ne 'ced00452f7cbeee9634dff87659572aa9aa05497') { throw 'Unexpected source revision' }
+          $changes = git status --porcelain
+          if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Source tree must be clean' }
+      - name: Install locked dependencies of the approved source
+        run: uv sync --frozen --group security
+      - name: Native wizard STA progress and failure regression (no installation)
+        run: dotnet run --project tests/native_windows/HostTests/HostTests.csproj --configuration Release
+      - name: Synthetic VM demo and encrypted recovery kit regressions (no installation)
+        run: dotnet run --project tests/native_windows/DemoTests/DemoTests.csproj --configuration Release
       - name: Install pinned NSIS compiler
         run: choco install nsis --version=3.11 --yes --no-progress
       - name: Native updater and Windows encoding regression tests (no installation)
@@ -120,7 +126,7 @@ jobs:
           import hashlib, json, os, shutil, subprocess
           from pathlib import Path
 
-          commit = "f88861ce057b98be3636f9a23ae3b36aff08c8bb"
+          commit = "ced00452f7cbeee9634dff87659572aa9aa05497"
           if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != commit:
               raise RuntimeError("Source revision changed")
           private = Path(os.environ["GVA_VALIDATION_TEMP"]) / "gva-native"
@@ -174,7 +180,7 @@ jobs:
           always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'MickaTDN/gestao-garrafas'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: UNAPPROVED-SYNTHETIC-UNSIGNED-f88861ce057b98be3636f9a23ae3b36aff08c8bb-${{ github.run_id }}-${{ github.run_attempt }}
+          name: UNAPPROVED-SYNTHETIC-UNSIGNED-ced00452f7cbeee9634dff87659572aa9aa05497-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/gva-native/artifacts/*.exe
             ${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt
