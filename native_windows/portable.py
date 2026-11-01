@@ -93,13 +93,21 @@ def unlock(value, password):
 
 
 def header(path):
-    with Path(path).open("rb") as stream:
-        if stream.read(len(MAGIC)) != MAGIC:
-            raise UnsafeOperation("Formato de backup desconhecido.")
-        raw = stream.read(4)
-        if len(raw) != 4 or not 1 <= (length := struct.unpack(">I", raw)[0]) <= 16384:
-            raise UnsafeOperation("Cabeçalho de backup inválido.")
-        return json.loads(stream.read(length))
+    try:
+        with Path(path).open("rb") as stream:
+            if stream.read(len(MAGIC)) != MAGIC:
+                raise ValueError
+            raw = stream.read(4)
+            if len(raw) != 4 or not 1 <= (length := struct.unpack(">I", raw)[0]) <= 16384:
+                raise ValueError
+            value = json.loads(stream.read(length))
+            if not isinstance(value, dict) or value.get("schema") != 1:
+                raise ValueError
+            return value
+    except (OSError, ValueError, TypeError) as error:
+        raise UnsafeOperation(
+            "Cabeçalho ou formato de backup inválido. Instalação preservada."
+        ) from error
 
 
 def demo_material(path, code, channel):

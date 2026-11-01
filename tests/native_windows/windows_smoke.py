@@ -398,7 +398,7 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 2
+            == 3
         )
         assert conn.execute(
             "SELECT source_id::text,sequence FROM consultation_exportsource"

@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from native_windows.crypto_backup import create_recovery_key, decrypt, encrypt
 from native_windows.package import UnsafeOperation
-from native_windows.portable import decrypt_backup, demo_material, envelope, unlock
+from native_windows.portable import decrypt_backup, demo_material, envelope, header, unlock
 
 
 class PortableTests(TestCase):
@@ -134,3 +134,24 @@ class PortableTests(TestCase):
         with self.assertRaises(UnsafeOperation):
             decrypt(self.backup, target, self.private, self.old_phrase)
         self.assertEqual(partial.read_bytes(), b"previous-private-data")
+
+
+class PortableHeaderTests(TestCase):
+    def test_invalid_header_is_sanitized_and_never_echoes_private_input(self):
+        import struct
+
+        from native_windows.crypto_backup import MAGIC
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.gvabackup"
+            for value in (
+                b"PRIVATE SENTINEL",
+                MAGIC + struct.pack(">I", 131072),
+                MAGIC + struct.pack(">I", 2) + b"[]",
+                MAGIC + struct.pack(">I", 14) + b"PRIVATE VALUE!",
+            ):
+                path.write_bytes(value)
+                with self.assertRaises(UnsafeOperation) as caught:
+                    header(path)
+                self.assertNotIn("PRIVATE", str(caught.exception))
+                self.assertEqual(path.read_bytes(), value)

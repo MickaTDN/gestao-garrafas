@@ -38,3 +38,36 @@ class NativeBackupLinkTests(TestCase):
                 self.assertNotContains(
                     self.client.get(reverse("web:settings")), 'href="gva-backup-'
                 )
+
+
+class NativeMaintenanceGateTests(TestCase):
+    def test_journal_blocks_operations_until_removed_but_allows_cookieless_health(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        from config.native_maintenance import NativeMaintenanceMiddleware
+
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "maintenance.json"
+            marker.write_text('{"phase":"recovery-activation"}')
+            downstream = Mock(return_value=HttpResponse("ready"))
+            gate = NativeMaintenanceMiddleware(downstream)
+            factory = RequestFactory()
+            with self.settings(NATIVE_MAINTENANCE_FILE=str(marker)):
+                for request in (
+                    factory.post("/entrar/"),
+                    factory.post("/entradas/"),
+                    factory.get("/exportar-stock/"),
+                    factory.get("/entrar/", HTTP_COOKIE="sessionid=existing"),
+                ):
+                    response = gate(request)
+                    self.assertEqual(response.status_code, 503)
+                    self.assertEqual(response["Cache-Control"], "no-store")
+                downstream.assert_not_called()
+                self.assertEqual(gate(factory.get("/entrar/")).status_code, 200)
+                marker.unlink()
+                self.assertEqual(gate(factory.post("/entradas/")).status_code, 200)

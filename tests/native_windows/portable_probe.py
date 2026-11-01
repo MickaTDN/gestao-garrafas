@@ -112,9 +112,15 @@ def fresh_destination(root, directory, request):
         )
         assert (
             conn.execute(
-                "SELECT count(*) FROM inventory_document WHERE payload IS NOT NULL"
+                "SELECT count(*) FROM inventory_reportfile WHERE payload IS NOT NULL"
             ).fetchone()[0]
-            >= 2
+            == 3
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM inventory_document WHERE kind='signature' AND payload IS NOT NULL"
+            ).fetchone()[0]
+            == 1
         )
     assert Path(request["archive"]).exists()
     assert preserved.exists()

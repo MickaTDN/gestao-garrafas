@@ -12,6 +12,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from .crypto_backup import LIMIT
 from .install import create_cluster, health_http, prepare_acl, wait_database
 from .maintenance import connection, evidence, extract_verified, grants, matching_evidence, pg_tool
 from .package import UnsafeOperation, digest, refuse_reparse, version
@@ -84,10 +85,18 @@ def prepared(root, release, manifest, request):
     refuse_reparse(release)
     archive = Path(request["archive"])
     refuse_reparse(archive)
+    if not archive.is_file() or not 1 <= archive.stat().st_size <= LIMIT + 16414:
+        raise UnsafeOperation("Selecione um ficheiro de backup válido com tamanho suportado.")
+    required = 3 * archive.stat().st_size + 512 * 1024**2
+    if shutil.disk_usage(tempfile.gettempdir()).free < required:
+        raise UnsafeOperation(
+            "Espaço insuficiente para validar a cópia; instalação existente preservada."
+        )
     if root == archive or root in archive.parents:
         raise UnsafeOperation("Selecione a cópia externa, fora da instalação a recuperar.")
     with tempfile.TemporaryDirectory(prefix="gva-recovery-") as temporary:
         temp = Path(temporary)
+        refuse_reparse(temp)
         protect(temp)
         # Stable private copy closes file-selection/replacement races; it remains encrypted.
         frozen = temp / "input.gvabackup"

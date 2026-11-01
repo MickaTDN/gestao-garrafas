@@ -237,6 +237,10 @@ def backup(root, *, recovery_envelope=None, prune=True):
             for name in [*manifest["files"], "manifest.json"]:
                 handle.add(staging / name, arcname=name, recursive=False)
         verify_archive(archive)
+        # The private staging archive is still available to the owner-role backup
+        # service: rehearse restoration before encryption, without a private key.
+        # A failed rehearsal cannot publish/prune away an older recoverable copy.
+        restore_check(root, archive)
         target = target_root / (
             "gva-"
             + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -259,7 +263,12 @@ def backup(root, *, recovery_envelope=None, prune=True):
         # Record transport integrity. GCM authentication is checked during recovery/update.
         write_json(
             target.with_suffix(".sha256.json"),
-            {"sha256": digest(target), "size": target.stat().st_size, "authenticated": True},
+            {
+                "sha256": digest(target),
+                "size": target.stat().st_size,
+                "authenticated": True,
+                "restore_verified": True,
+            },
         )
         destination = config.get("copy_to")
         if destination:
@@ -491,7 +500,8 @@ def prune_backups(target_root, keep):
         try:
             receipt = json.loads(receipt_path.read_text())
             if (
-                receipt.get("authenticated") is not True
+                not isinstance(receipt, dict)
+                or receipt.get("authenticated") is not True
                 or receipt.get("size") != path.stat().st_size
                 or receipt.get("sha256") != digest(path)
             ):

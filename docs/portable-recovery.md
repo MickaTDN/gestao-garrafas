@@ -82,6 +82,10 @@ aprovado antes da utilização oficial. PostgreSQL continua apenas em loopback.
   original após verificar esquema e saúde. Se isso falhar, o diário mantém o
   arranque bloqueado. Uma interrupção de energia exige diagnóstico: não há
   eliminação nem escolha automática entre duas pastas de dados.
+- Os backups automáticos também fazem um restauro de ensaio enquanto a fotografia
+  privada está disponível, antes de cifrar/publicar. Não precisam da chave privada.
+- O diário bloqueia os pedidos à aplicação durante a troca; a autorização de
+  arranque para verificar a saúde dos serviços não autoriza novos movimentos.
 - Retenção só elimina cópias locais com recibos de autenticação ligados ao hash.
   Cópias antigas sem esse recibo e a última cópia com restauro de ensaio verificado
   ficam protegidas. O número pode exceder o alvo de retenção para preservar essas
