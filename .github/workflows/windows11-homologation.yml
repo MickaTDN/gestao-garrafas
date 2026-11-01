@@ -62,6 +62,13 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Source tree must be clean' }
       - name: Install locked dependencies of the approved source
         run: uv sync --frozen --group security
+      - name: Audit the approved runtime dependencies before building
+        shell: pwsh
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file "$env:RUNNER_TEMP\source-runtime-requirements.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'Approved runtime dependency export failed' }
+          uv run --frozen --group security pip-audit --disable-pip --no-deps --require-hashes --progress-spinner off --requirement "$env:RUNNER_TEMP\source-runtime-requirements.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'Approved runtime dependency audit failed' }
       - name: Native wizard STA progress and failure regression (no installation)
         run: dotnet run --project tests/native_windows/HostTests/HostTests.csproj --configuration Release
       - name: Synthetic VM demo and encrypted recovery kit regressions (no installation)

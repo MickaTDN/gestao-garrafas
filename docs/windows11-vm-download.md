@@ -46,8 +46,9 @@ configuração manual completa. Não há credenciais de produção nos instalado
    acima, ID da execução e tentativa. Falha/cancelamento não conta como aprovação.
 
 O runner hospedado Windows Server 2025 audita primeiro o código do workflow e as
-suas dependências. Depois seleciona e confirma a fonte aprovada e instala as suas
-dependências bloqueadas. Executa as regressões WinForms/STA de progresso/erro e as
+suas dependências. Depois seleciona e confirma a fonte aprovada, instala as suas
+dependências bloqueadas e volta a auditar o runtime que vai entrar nos pacotes.
+Executa as regressões WinForms/STA de progresso/erro e as
 de demonstração (geração única, DPAPI, kit cifrado e rejeição de produção), unidades
 nativas, ACL/NTFS, compilação dos dois EXEs e o ensaio real
 de instalação, atualização, backups, recuperação e desinstalação. Isso não é

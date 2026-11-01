@@ -77,6 +77,12 @@ class HomologationDownloadTests(unittest.TestCase):
         selected = next(i for i, name in enumerate(names) if name.startswith("Select and verify"))
         self.assertLess(audit, selected)
         self.assertEqual(self.steps[selected + 1]["run"], "uv sync --frozen --group security")
+        runtime = next(i for i, name in enumerate(names) if name.startswith("Audit the approved runtime"))
+        build = next(i for i, name in enumerate(names) if name.startswith("Build initial"))
+        self.assertLess(selected, runtime)
+        self.assertLess(runtime, build)
+        self.assertIn("pip-audit --disable-pip --no-deps --require-hashes", self.steps[runtime]["run"])
+        self.assertIn("throw 'Approved runtime dependency audit failed'", self.steps[runtime]["run"])
 
     def test_demo_and_diagnostic_regressions_gate_the_built_pair(self):
         build = next(i for i, s in enumerate(self.steps) if s.get("name", "").startswith("Build initial"))
