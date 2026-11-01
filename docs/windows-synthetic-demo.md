@@ -2,8 +2,9 @@
 
 Melhoria independente da correção PostgreSQL/CRT. O canal release, assinatura,
 contas de serviço, SQL, ACL de dados, backups e recuperação não são alterados.
-A correção do runtime PostgreSQL no PR separado continua necessária para instalar
-num Windows limpo sem as DLLs CRT. Esta melhoria não repara a instalação parcial
+A branch inclui a correção do runtime PostgreSQL integrada na main pelo PR #22
+(2bb9a633c74f1361deeabfdaea5cd763ef49cf55), necessária para um Windows limpo sem
+as DLLs CRT. Esta melhoria não repara a instalação parcial
 que falhou e não permite adotá-la ou apagar os seus dados.
 
 ## Primeira instalação
@@ -78,9 +79,13 @@ assinatura de editor, validações e identidade próprias, sem adotar a base de 
 Testes Windows próprios verificam rejeição de release/host físico/Server/VM não
 confirmada/estado existente; geração exclusiva; ACL e DPAPI; kit cifrado, roundtrip,
 código errado e alteração de conteúdo. Usam apenas material fictício temporário e
-não instalam serviços ou dados. O ciclo nativo manual de CI permanece intacto.
+não instalam serviços ou dados. A CI executa estes testes em conjunto com os de
+progresso/erro do assistente e com o ciclo nativo completo de instalação,
+atualização, backup, recuperação e desinstalação. Esse ciclo utiliza a configuração
+manual de CI; não simula a deteção de uma VM Windows 11 para aprovar a interface.
 
 A experiência gráfica automática completa e a prova real no VirtualBox Windows 11
-continuam pendentes de um futuro build autorizado e da homologação. Não se gera
-nem publica novo instalador como parte desta alteração. A pasta/cluster/journal da
+continuam pendentes de um futuro build autorizado e da homologação. A CI compila
+e executa pacotes temporários nos runners descartáveis; não disponibiliza novos
+instaladores nesta atualização do PR. A pasta/cluster/journal da
 VM que falhou permanecem preservados; não há qualquer rotina de limpeza automática.

@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 SMOKE_SUCCESS = (
     "Native installer: fresh EXE, services stop/start, 1.0->1.1, verified encrypted restore, "
     "downgrade refusal, stable Android identity, non-destructive uninstall: PASS"
@@ -98,6 +100,10 @@ def main(directory):
     from native_windows.windows import SERVICES, activate, stop_all
 
     health_http(root)
+    run([
+        "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
+        Path(__file__).parent / "Test-PrivateCRT.ps1", "-Root", root, "-Release", release,
+    ])
     manage(root, "shell", "-c", (Path(__file__).parent / "operation_fixture.py").read_text())
     run(
         [
@@ -403,6 +409,10 @@ def report_failure(error, root):
     marker = Path(root) / "maintenance.json"
     if marker.is_file():
         detail += "; maintenance journal=" + marker.read_text(encoding="utf-8")
+    # Safe service categories only; never dump secret/config/request files.
+    from native_windows.windows import service_failure
+    for kind in ("postgres", "web", "backup", "publisher"):
+        log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
     log(
         "::error::Native Windows smoke: " + type(error).__name__ + ": " + detail.replace("\n", " "),
         error=True,
