@@ -162,6 +162,25 @@ class RecoveryWizardTests(TestCase):
             calls["stop_all"].assert_not_called()
             self.assertTrue((self.root / "cluster/precious").exists())
 
+    def test_concurrent_journal_and_activation_permit_are_never_removed(self):
+        journal = self.root / "maintenance.json"
+        permit = self.root / "activation-permit"
+        journal.write_text('{"id":"another-operation"}')
+        permit.write_text("another-approved-release")
+        with self.boundaries() as calls, self.assertRaises(UnsafeOperation):
+            restore(
+                self.root,
+                self.release,
+                self.manifest,
+                self.request,
+                self.root / "package-policy.json",
+            )
+        calls["disable_all"].assert_not_called()
+        calls["stop_all"].assert_not_called()
+        self.assertEqual(journal.read_text(), '{"id":"another-operation"}')
+        self.assertEqual(permit.read_text(), "another-approved-release")
+        self.assertTrue((self.root / "cluster/precious").exists())
+
     def test_version_channel_and_internal_identity_are_checked(self):
         self.assertEqual(
             validate_snapshot(self.data, self.metadata, self.saved, self.manifest), self.old
