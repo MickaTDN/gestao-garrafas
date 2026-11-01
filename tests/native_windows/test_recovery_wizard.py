@@ -227,7 +227,7 @@ class ExternalBackupDestinationTests(TestCase):
             outside = root / "external"
             outside.mkdir()
             expected = outside / "copy.gvabackup"
-            self.assertEqual(external_destination(data, str(expected)), expected)
+            self.assertEqual(external_destination(data, str(expected)), expected.resolve())
             for path in (
                 data / "copy.gvabackup",
                 root / "program/copy.gvabackup",
