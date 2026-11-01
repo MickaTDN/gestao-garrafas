@@ -6,7 +6,8 @@ assinatura empresarial e aprovação. Nenhum instalador é publicado por este PR
 
 ## Utilização
 
-1. Abra o atalho **Gestão Vertente Aveludada** → **Cópias de segurança / recuperar**.
+1. Na aplicação web, como administrador, abra **Definições → Cópias de segurança**.
+   Também pode abrir o atalho **Gestão Vertente Aveludada** → **Cópias de segurança / recuperar**.
    A manutenção pede autorização administrativa Windows/UAC. A aplicação web e o
    perfil Consulta não recebem acesso às credenciais PostgreSQL nem aos serviços.
 2. Escolha **Criar cópia de segurança** e um ficheiro `.gvabackup` novo num disco ou

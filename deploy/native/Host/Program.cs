@@ -38,6 +38,11 @@ static class Program
                 return Run(Path.Combine(args[1], "payload"), action, args[2], args[1]);
             }
             if (args.Length == 3 && args[0] == "--preflight") { Preflight(args[1], args[2]); return 0; }
+            if (args.Length == 1 && (args[0] == "--backup-wizard" || args[0] == "--recovery-wizard")) {
+                bool admin = new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                if (!admin) { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, args[0]) { UseShellExecute = true, Verb = "runas" }); return 0; }
+                return RecoveryWizard.Show(Release, args[0] == "--recovery-wizard", Directory.GetParent(Release)!.FullName) ? 0 : 1;
+            }
             if (args.Length == 1 && args[0] == "--maintenance") { Maintenance(); return 0; }
             if (args.Length == 2 && args[0] == "--wizard") return Wizard(args[1]);
             if (args.Length == 1 && args[0] == "--uninstall") return Run(Release, "uninstall");

@@ -77,7 +77,9 @@ internal static class RecoveryWizard
                 } else {
                     var preview = await Task.Run(() => Run(release, "recovery-preview", request, package));
                     string summary = "Origem: " + preview.GetProperty("instance").GetString() + "\nVersão: " + preview.GetProperty("version").GetString() + "\n";
-                    foreach (var table in preview.GetProperty("rows").EnumerateObject()) summary += table.Name + ": " + table.Value.GetInt32() + "\n";
+                    var labels = new Dictionary<string, string> { ["inventory_reference"] = "Referências", ["inventory_movement"] = "Movimentos e inventários", ["inventory_movementline"] = "Linhas de movimentos", ["inventory_location"] = "Localizações", ["inventory_sector"] = "Setores", ["accounts_user"] = "Utilizadores", ["accounts_accessprofile"] = "Perfis", ["inventory_document"] = "Documentos e assinaturas", ["inventory_auditevent"] = "Registos de auditoria" };
+                    foreach (var table in preview.GetProperty("rows").EnumerateObject()) if (labels.TryGetValue(table.Name, out var label)) summary += label + ": " + table.Value.GetInt32() + "\n";
+                    summary += "\nTodos os restantes dados persistentes do servidor também serão verificados.\nAlterações posteriores ao backup não estão nesta cópia.\nA instalação anterior será preservada.";
                     using var review = new Form { Text = "Conferir recuperação", Width = 650, Height = 550, StartPosition = FormStartPosition.CenterParent };
                     var rows = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = summary.Replace("\n", Environment.NewLine) };
                     var accept = new Button { Dock = DockStyle.Bottom, Height = 55, Text = "Confirmo: origem parada e substituir dados pelo backup" };
