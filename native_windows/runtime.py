@@ -78,6 +78,8 @@ def service(root, kind, stop_file):
     ready_file = Path(str(stop_file) + ".ready")
     if kind == "postgres":
         # PostgreSQL owns WAL and crash recovery. Never use fsync=off or immediate shutdown.
+        from .postgres_process import command
+
         pg = release / "postgres/bin/pg_ctl.exe"
         if not (root / "cluster/PG_VERSION").is_file():
             bootstrap = root / "runtime/postgres/bootstrap-password"
@@ -86,9 +88,11 @@ def service(root, kind, stop_file):
                     "Cluster ausente/incompleto: inicialização automática recusada."
                 )
             try:
-                subprocess.run(
+                if Path(stop_file).exists():
+                    raise UnsafeOperation("Arranque cancelado; preserve o cluster e o diário.")
+                command(
+                    root, release, "initdb",
                     [
-                        str(release / "postgres/bin/initdb.exe"),
                         "-D",
                         str(root / "cluster"),
                         "--username=gva_cluster",
@@ -99,10 +103,8 @@ def service(root, kind, stop_file):
                         "--pwfile",
                         str(bootstrap),
                     ],
-                    check=True,
                     timeout=120,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    bootstrap=True,
                 )
                 (root / "cluster/postgresql.conf").write_text(
                     f"listen_addresses = '127.0.0.1'\nport = {state['db_port']}\nfsync = on\nsynchronous_commit = on\nfull_page_writes = on\npassword_encryption = 'scram-sha-256'\ntimezone = 'UTC'\n",
@@ -113,9 +115,11 @@ def service(root, kind, stop_file):
                 )
             finally:
                 bootstrap.unlink(missing_ok=True)
-        subprocess.run(
+        if Path(stop_file).exists():
+            raise UnsafeOperation("Arranque cancelado; preserve o cluster e o diário.")
+        command(
+            root, release, "pg_ctl",
             [
-                str(pg),
                 "-D",
                 str(root / "cluster"),
                 "-l",
@@ -123,7 +127,6 @@ def service(root, kind, stop_file):
                 "-w",
                 "start",
             ],
-            check=True,
             timeout=90,
         )
         ready_file.write_text("ready")

@@ -50,3 +50,7 @@ deploy/native/Host/bin/
 deploy/native/Host/obj/
 *.gvabackup
 *.gvabackup.partial
+
+# Native UI regression build products
+tests/native_windows/HostTests/bin/
+tests/native_windows/HostTests/obj/

@@ -31,6 +31,7 @@ def connection(root, database=None):
         user=credentials["username"],
         password=credentials["password"],
         autocommit=True,
+        connect_timeout=5,
     )
 
     if not 170000 <= conn.info.server_version < 180000:
