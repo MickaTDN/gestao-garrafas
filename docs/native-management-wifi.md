@@ -25,7 +25,10 @@ device-ca.crt, device-ca.crl. Exemplo config.json (sem credenciais):
 {"it_approved":true,"address":"192.168.20.10","hostname":"gestao.example.internal","port":8443,"backend_port":8766,"clients":["192.168.20.50/32"]}
 ```
 
-Pela interface de manutenção Python nativa, elevada pela informática, usar a ação
+No atalho Manutenção, a informática pode usar **Preparar Wi-Fi da Gestão**,
+selecionar config.json e depois **Ativar Wi-Fi da Gestão**, com confirmação.
+**Desativar Wi-Fi da Gestão** mantém o acesso local e o publicador Stock.
+Pela interface de manutenção Python nativa, elevada pela informática, também pode usar a ação
 `configure-management-wifi` com pedido `{"configuration":"CAMINHO/config.json"}`
 no mecanismo de pedidos privados existente. Depois usar `control-management-wifi`
 com `{"enable":true,"it_network_ready":true}`. Desativar com `{"enable":false}`.
