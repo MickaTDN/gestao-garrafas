@@ -83,6 +83,7 @@ class SheetReceipt(SheetEvidence):
     actor = models.ForeignKey("accounts.User", on_delete=models.PROTECT)
     original = models.BinaryField(editable=False)
     file_sha256 = models.CharField(max_length=64)
+    authorization = models.JSONField(default=dict)
     outcome = models.CharField(
         max_length=20,
         choices=[("pending", "Pendente"), ("duplicate", "Repetida"), ("conflict", "Conflito")],

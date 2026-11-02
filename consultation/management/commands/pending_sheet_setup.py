@@ -18,7 +18,7 @@ class Command(BaseCommand):
         path = key_path()
         if (
             not path.is_absolute()
-            or path.is_relative_to(Path(settings.BASE_DIR).resolve())
+            or path.resolve().is_relative_to(Path(settings.BASE_DIR).resolve())
             or path.is_symlink()
         ):
             raise CommandError("Use o diretório privado de assinatura, fora do código.")

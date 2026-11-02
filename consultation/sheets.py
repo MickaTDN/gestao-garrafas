@@ -86,7 +86,8 @@ def decode(raw):
         if (
             set(signed) != {"format", "version", "algorithm", "key_id", "payload", "signature"}
             or signed["format"] != "vertente-sheet"
-            or type(signed["version"]) is not int or signed["version"] != 1
+            or type(signed["version"]) is not int
+            or signed["version"] != 1
             or signed["algorithm"] != "ES256"
         ):
             raise ValueError
@@ -210,6 +211,14 @@ def _receive_sheet(raw, *, actor):
         original=raw,
         file_sha256=hashlib.sha256(raw).hexdigest(),
         outcome=outcome,
+        authorization={
+            "revision": device.revision,
+            "role": device.role,
+            "public_spki": device.public_spki,
+            "public_key_id": device.public_key_id,
+            "expires_at": device.expires_at.isoformat(),
+            "sheets_allowed": True,
+        },
     )
     AuditEvent.objects.create(
         actor=actor,
