@@ -8,6 +8,7 @@ from . import (
     import_views,
     operations,
     passwords,
+    pending_sheets,
     profiles,
     reports,
     user_admin,
@@ -17,6 +18,10 @@ from . import (
 app_name = "web"
 
 urlpatterns = [
+    path('folhas-pendentes/',pending_sheets.inbox,name='sheets'),
+    path('folhas-pendentes/rececao/<uuid:pk>/',pending_sheets.detail,name='sheet-receipt'),
+    path('folhas-pendentes/rececao/<uuid:pk>/original/',pending_sheets.original,name='sheet-original'),
+    path('folhas-pendentes/dispositivo/<uuid:pk>/revogar/',pending_sheets.revoke,name='sheet-revoke'),
     path("", views.home, name="home"),
     path("stock/", views.stock, name="stock"),
     path("stock/<int:pk>/", views.reference_detail, name="reference-detail"),

@@ -20,7 +20,7 @@ from .models import AuthorizedDevice, ExportSource
 from .signing import read_key, signed_snapshot
 
 
-def authorize_device(request, *, role, allow_import=False, days=365):
+def authorize_device(request, *, role, allow_import=False, days=365, allow_sheets=False):
     try:
         if (
             set(request) != {"format", "version", "device_id", "spki", "signature"}
@@ -68,8 +68,14 @@ def authorize_device(request, *, role, allow_import=False, days=365):
                 "A identidade/perfil está fixado. Utilize outro perfil de navegador/dispositivo, sem misturar dados privados."
             )
         device.revision += 1
-        device.save(update_fields=["revision"])
         now = timezone.now()
+        device.public_spki = request["spki"]
+        device.sheets_allowed = bool(allow_sheets)
+        device.expires_at = now + timedelta(days=days)
+        device.revoked_at = None
+        device.save(
+            update_fields=["revision", "public_spki", "sheets_allowed", "expires_at", "revoked_at"]
+        )
         payload = {
             "source_id": str(source.source_id),
             "device_id": device_id,
@@ -89,6 +95,7 @@ def authorize_device(request, *, role, allow_import=False, days=365):
                 "role": role,
                 "revision": device.revision,
                 "can_import": payload["can_import"],
+                "sheets_allowed": device.sheets_allowed,
             },
         )
         return envelope

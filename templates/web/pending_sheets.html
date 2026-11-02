@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<div class="card stack"><h1>Folhas pendentes</h1><p>A receção não altera stock nem confirma movimentos.</p><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn" type="submit">Receber ficheiro</button></form></div>
+<div class="card stack"><h2>Últimas 100 folhas recebidas</h2>{% for sheet in sheets %}<p>{{ sheet.sheet_id }} · {{ sheet.payload.physical_date }} · {{ sheet.payload.kind }} · {{ sheet.received_at }} {% for receipt in sheet.receipts.all %}<a href="{% url 'web:sheet-receipt' receipt.pk %}">{{ receipt.get_outcome_display }}</a> {% endfor %}</p>{% empty %}<p>Sem folhas recebidas.</p>{% endfor %}</div>
+<div class="card stack"><h2>Dispositivos autorizados a enviar folhas</h2>{% for device in devices %}<p>{{ device.device_id }} · {{ device.get_role_display }}{% if device.revoked_at %} · Revogado{% else %}<form method="post" action="{% url 'web:sheet-revoke' device.pk %}">{% csrf_token %}<button type="submit" class="btn secondary">Revogar envio deste dispositivo</button></form>{% endif %}</p>{% endfor %}</div>
+{% endblock %}
