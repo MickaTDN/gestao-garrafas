@@ -3,6 +3,7 @@
 import base64
 import json
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.test import TestCase
+from django.db import connections
+from django.test import TransactionTestCase
 from django.utils import timezone
 from jwcrypto import jwk
 
@@ -23,6 +25,18 @@ from tests.vertente.fixtures import grant, snapshot
 
 
 class SheetBrowserMixin:
+    @staticmethod
+    def database_call(operation):
+        # Playwright's sync driver runs a loop: never disable Django's async guard.
+        def run():
+            try:
+                return operation()
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(run).result()
+
     def sheets(self, method, *args):
         return self.page.evaluate(
             "async ({method,args})=>(await import('/assets/sheets.js'))[method](...args)",
@@ -48,10 +62,14 @@ class SheetBrowserMixin:
             override = self.settings(VERTENTE_SIGNING_KEY_FILE=str(path))
             override.enable()
             self.addCleanup(override.disable)
-            ExportSource.objects.create(pk=1, source_id=self.trust["source_id"])
-            authorization = authorize_device(
-                self.request, role=role, allow_import=True, allow_sheets=True
-            )
+
+            def authorize():
+                ExportSource.objects.create(pk=1, source_id=self.trust["source_id"])
+                return authorize_device(
+                    self.request, role=role, allow_import=True, allow_sheets=True
+                )
+
+            authorization = self.database_call(authorize)
         else:
             authorization = grant(self.key, self.trust, self.request, role=role, can_import=True)
         self.authorization = authorization
@@ -76,8 +94,10 @@ class SheetBrowserMixin:
                 self.recipient.export_to_pem(private_key=True, password=None)
             )
             output = Path(self.temporary.name) / "permission.json"
-            call_command(
-                "pending_sheet_authorize", device=self.request["device_id"], output=str(output)
+            self.database_call(
+                lambda: call_command(
+                    "pending_sheet_authorize", device=self.request["device_id"], output=str(output)
+                )
             )
             permission = json.loads(output.read_text())
         else:
@@ -122,6 +142,44 @@ class SheetBrowserMixin:
 
 
 class OfflineSheetBrowserTests(SheetBrowserMixin, VertenteBrowserBase):
+    def test_blank_fields_explicit_zero_and_capacity_survive_stock_refresh_and_reload(self):
+        self.provision_sheets()
+        id = self.sheets("createSheet", "entry")
+        self.sheets(
+            "editSheet",
+            id,
+            1,
+            {
+                "person": "",
+                "physical_date": "",
+                "notes": "",
+                "lines": [{"reference_id": "1", "boxes": None, "units": 0}],
+            },
+        )
+        refs = json.loads(
+            base64.urlsafe_b64decode(snapshot(self.key, self.trust)["payload"] + "==")
+        )["references"]
+        refs[0]["box_capacity"] = 12
+        self.call("importSnapshot", snapshot(self.key, self.trust, sequence=2, references=refs))
+        self.page.reload()
+        self.page.get_by_role("heading", name="Última atualização de stock", exact=True).wait_for()
+        self.sheets("unlockSheets", self.password)
+        s = self.sheets("sheetState")["sheets"][0]
+        self.assertEqual((s["id"], s["revision"], s["person"], s["physical_date"]), (id, 2, "", ""))
+        self.assertEqual(s["lines"][0]["boxes"], None)
+        self.assertEqual(s["lines"][0]["units"], 0)
+        self.assertEqual(s["lines"][0]["box_capacity"], 6)
+
+    def test_idle_lock_hides_person_and_preserves_encrypted_draft(self):
+        self.provision_sheets()
+        id = self.new_sheet()
+        self.page.clock.install()
+        self.page.clock.fast_forward(300001)
+        self.assertFalse(self.sheets("sheetState")["unlocked"])
+        self.assertEqual(self.sheets("sheetState")["sheets"], [])
+        self.sheets("unlockSheets", self.password)
+        self.assertEqual(self.sheets("sheetState")["sheets"][0]["id"], id)
+
     def test_employee_touch_flow_offline_blank_fields_save_reopen_and_download(self):
         from tests.vertente.fixtures import wait_offline_shell
 
@@ -328,12 +386,21 @@ class OfflineSheetBrowserTests(SheetBrowserMixin, VertenteBrowserBase):
         self.assertEqual(self.call("state")["grant"]["role"], "employee")
 
 
-class SheetInteroperabilityTests(SheetBrowserMixin, VertenteBrowserBase, TestCase):
+class SheetInteroperabilityTests(SheetBrowserMixin, VertenteBrowserBase, TransactionTestCase):
     databases = {"default"}
     database_reception = True
+    browser_per_test = True
 
     def test_browser_exports_both_types_and_real_receiver_preserves_stock_and_originals(self):
         self.provision_sheets()
+        files = []
+        for kind in ["entry", "exit"]:
+            id = self.new_sheet(kind)
+            exported = self.sheets("exportSheet", id, 2)
+            raw = self.page.evaluate("file=>JSON.stringify(file)", exported).encode()
+            files.append((kind, exported, raw))
+        self.context.close()
+        self.stop_browser()
         admin = get_user_model().objects.create_user(
             username="synthetic-sheet-receiver", role="admin"
         )
@@ -345,10 +412,7 @@ class SheetInteroperabilityTests(SheetBrowserMixin, VertenteBrowserBase, TestCas
             location=Location.objects.create(name="Local sintético"),
             box_capacity=6,
         )
-        for kind in ["entry", "exit"]:
-            id = self.new_sheet(kind)
-            exported = self.sheets("exportSheet", id, 2)
-            raw = json.dumps(exported).encode()
+        for kind, exported, raw in files:
             receipt = receive_sheet(raw, actor=admin)
             self.assertEqual(receipt.outcome, "pending")
             self.assertEqual(bytes(receipt.original), raw)
@@ -375,11 +439,13 @@ class SheetInteroperabilityTests(SheetBrowserMixin, VertenteBrowserBase, TestCas
         from consultation.models import AuthorizedDevice
 
         self.provision_sheets()
+        id = self.new_sheet()
+        exported = json.dumps(self.sheets("exportSheet", id, 2)).encode()
+        self.context.close()
+        self.stop_browser()
         admin = get_user_model().objects.create_user(
             username="synthetic-sheet-receiver", role="admin"
         )
-        id = self.new_sheet()
-        exported = json.dumps(self.sheets("exportSheet", id, 2)).encode()
         device = AuthorizedDevice.objects.get(pk=self.request["device_id"])
         device.sheets_allowed = False
         device.save(update_fields=["sheets_allowed"])

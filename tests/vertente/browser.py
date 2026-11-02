@@ -42,24 +42,40 @@ class VertenteBrowserBase(SimpleTestCase):
         cls.thread.start()
         cls.addClassCleanup(cls.server.server_close)
         cls.addClassCleanup(cls.server.shutdown)
-        cls.playwright = sync_playwright().start()
-        cls.addClassCleanup(cls.playwright.stop)
-        cls.browser = cls.playwright.chromium.launch(
+        if not getattr(cls, "browser_per_test", False):
+            cls.launch_browser(cls, cls.addClassCleanup)
+        cls.url = f"http://127.0.0.1:{cls.server.server_port}"
+
+    @staticmethod
+    def launch_browser(target, cleanup):
+        target.playwright = sync_playwright().start()
+        target.browser = target.playwright.chromium.launch(
             executable_path=os.getenv("CHROMIUM_PATH") or shutil.which("chromium"),
             headless=True,
             args=["--no-sandbox"],
         )
-        cls.addClassCleanup(cls.browser.close)
-        cls.url = f"http://127.0.0.1:{cls.server.server_port}"
+        stopped = False
+
+        def stop():
+            nonlocal stopped
+            if not stopped:
+                stopped = True
+                target.browser.close()
+                target.playwright.stop()
+
+        cleanup(stop)
+        return stop
 
     def setUp(self):
+        if getattr(self, "browser_per_test", False):
+            self.stop_browser = self.launch_browser(self, self.addCleanup)
         self.context = self.browser.new_context(
             viewport={"width": 393, "height": 851},
             is_mobile=True,
             has_touch=True,
             accept_downloads=True,
         )
-        self.addCleanup(self.context.close)
+        self.addCleanup(lambda: self.context.close() if self.browser.is_connected() else None)
         self.page = self.context.new_page()
         self.page.set_default_timeout(10000)
         self.key, self.trust = fixture()
