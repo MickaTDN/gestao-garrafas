@@ -24,7 +24,7 @@ def prepare_acl(root):
     for name, rights in {
         "cluster": [("postgres", "M")],
         "runtime": [(kind, "RX") for kind in SERVICES],
-        "runtime/web": [("web", "M")],
+        "runtime/web": [("web", "M"), ("wifi", "M"), ("backup", "R")],
         "runtime/postgres": [("postgres", "M")],
         "runtime/backup": [("backup", "M")],
         "runtime/publisher": [("publisher", "M")],

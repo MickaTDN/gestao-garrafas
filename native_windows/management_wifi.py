@@ -165,6 +165,7 @@ def setup(root, request):
         # Grant only the existing restricted application credentials, never owner.json.
         protect(root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("wifi", "R")])
         protect(root / "signing", [("web", "R"), ("backup", "R"), ("wifi", "R")])
+        protect(root / "runtime/web", [("web", "M"), ("wifi", "M"), ("backup", "R")])
 
 
 def control(root, request):
