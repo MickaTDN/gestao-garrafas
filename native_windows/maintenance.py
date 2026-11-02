@@ -164,6 +164,34 @@ def validate_material(root):
         ).fetchone()
         if not row or row[0] != trust["source_id"]:
             raise UnsafeOperation("A origem Android não corresponde à base desta instalação.")
+        exists = conn.execute("SELECT to_regclass('public.consultation_pendingsheet')").fetchone()[
+            0
+        ]
+        needed = bool(
+            exists
+            and conn.execute("SELECT EXISTS(SELECT 1 FROM consultation_pendingsheet)").fetchone()[0]
+        )
+    validate_pending_material(root, needed=needed)
+
+
+def validate_pending_material(root, *, needed):
+    import base64
+
+    from jwcrypto import jwk
+
+    path = Path(root) / "signing/pending-reception.pem"
+    if not path.exists() and not needed:
+        return  # Backups anteriores e instalações sem receção continuam válidos.
+    try:
+        key = jwk.JWK.from_pem(path.read_bytes())
+        public = json.loads(path.with_suffix(".public.json").read_text())
+        payload = json.loads(base64.urlsafe_b64decode(public["payload"] + "=="))
+        if not key.has_private or key.key_type != "RSA" or key.thumbprint() != payload["key_id"]:
+            raise ValueError
+    except Exception as error:
+        raise UnsafeOperation(
+            "Material de receção de folhas ausente ou inconsistente. Preserve as chaves e backups anteriores."
+        ) from error
 
 
 def backup(root):

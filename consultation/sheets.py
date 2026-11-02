@@ -26,6 +26,9 @@ ALGORITHMS = ["RSA-OAEP-256", "A256GCM"]
 
 
 def strict_json(raw):
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+
     def unique(pairs):
         result = {}
         for key, value in pairs:

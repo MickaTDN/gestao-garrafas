@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from jwcrypto import jwk
 
 from consultation.models import ExportSource
@@ -14,9 +15,14 @@ from consultation.signing import read_key, signed_snapshot
 class Command(BaseCommand):
     help = "Prepara uma chave RSA de receção separada e a chave pública autenticada pela origem."
 
+    @transaction.atomic
     def handle(self, *args, **options):
+        from accounts.permissions import authorization_lock
+
+        authorization_lock()
         path = key_path()
         from native_windows.package import refuse_reparse
+
         refuse_reparse(path)
         if (
             not path.is_absolute()
