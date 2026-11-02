@@ -10,6 +10,7 @@ ALLOWED_HOSTS = [_wifi["hostname"]]
 WIFI_ORIGIN = f"https://{_wifi['hostname']}:{_wifi['port']}"
 WIFI_PROXY_TOKEN = _wifi["proxy_token"]
 WIFI_BACKEND_PORT = _wifi["backend_port"]
+WIFI_DATA_ROOT = str(_root)
 CSRF_TRUSTED_ORIGINS = [WIFI_ORIGIN]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_NAME = "gva_wifi_session"

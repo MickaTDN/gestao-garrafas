@@ -1,6 +1,7 @@
 """Loopback alone is not a trusted proxy: require an installation-specific secret."""
 
 import hmac
+from pathlib import Path
 
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest
@@ -24,4 +25,9 @@ class NativeWifiGuard:
         # Not a public readiness endpoint: the proxy denies this path.
         if request.path == "/_native_wifi_ready" and request.method == "GET":
             return HttpResponse("ready")
+        root = getattr(settings, "WIFI_DATA_ROOT", None)
+        if root and (Path(root) / "maintenance.json").exists():
+            response = HttpResponse("Manutenção em curso. Aguarde a conclusão.", status=503)
+            response["Cache-Control"] = "no-store"
+            return response
         return self.get_response(request)
