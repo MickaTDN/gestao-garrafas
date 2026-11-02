@@ -98,6 +98,26 @@ class SheetTests(SheetFixtures, TestCase):
     def setUp(self):
         self.prepare()
 
+    def test_invalid_unicode_is_rejected_and_audited_not_a_server_error(self):
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+        from consultation.signing import b64
+
+        data = json.dumps({**self.payload, "notes": "\ud800"}, ensure_ascii=True).encode()
+        r, s = decode_dss_signature(
+            self.key.sign(b"vertente-sheet-v1\0" + data, ec.ECDSA(hashes.SHA256()))
+        )
+        signed = signed_snapshot(self.payload, self.key, kind="vertente-sheet", version=1)
+        signed["payload"], signed["signature"] = (
+            b64(data),
+            b64(r.to_bytes(32, "big") + s.to_bytes(32, "big")),
+        )
+        with self.assertRaises(ValidationError):
+            receive_sheet(self.packet(signed=signed), actor=self.admin)
+        self.assertFalse(PendingSheet.objects.exists())
+        self.assertTrue(AuditEvent.objects.filter(action="sheets.rejected_file").exists())
+
     def test_receive_entry_exit_and_unknown_references_without_stock_or_documents(self):
         for kind in ("entry", "exit"):
             receipt = receive_sheet(

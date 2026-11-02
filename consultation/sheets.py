@@ -57,6 +57,7 @@ def integer(value, minimum=0):
 def text(value, maximum):
     if not isinstance(value, str) or len(value) > maximum or "\x00" in value:
         raise ValueError("text")
+    value.encode("utf-8")  # Reject unpaired JSON surrogate escapes before persistence.
 
 
 def canonical_uuid(value):
