@@ -84,6 +84,15 @@ class NativeWifiOperationsTests(TestCase):
         self.assertEqual(client.post(url, data).status_code, 403)
         self.assertEqual(Movement.objects.count(), before)
         data["csrfmiddlewaretoken"] = client.cookies["gva_wifi_csrf"].value
-        self.assertEqual(client.post(url, data).status_code, 302)
+        self.assertEqual(
+            client.post(url, data, HTTP_ORIGIN="https://attacker.invalid").status_code, 403
+        )
+        self.assertEqual(
+            client.post(url, data, HTTP_ORIGIN="https://gestao.synthetic.test:8443").status_code,
+            302,
+        )
         client.force_login(self.viewer)
-        self.assertEqual(client.post(url, data).status_code, 403)
+        self.assertEqual(
+            client.post(url, data, HTTP_ORIGIN="https://gestao.synthetic.test:8443").status_code,
+            403,
+        )
