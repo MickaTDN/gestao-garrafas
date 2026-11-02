@@ -7,9 +7,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from jwcrypto import jwk
 
-from consultation.models import ExportSource
+from consultation.models import ExportSource, PendingSheet, SheetReceipt
 from consultation.sheets import key_path
 from consultation.signing import read_key, signed_snapshot
+from inventory.models import AuditEvent
 
 
 class Command(BaseCommand):
@@ -33,6 +34,14 @@ class Command(BaseCommand):
         public = path.with_suffix(".public.json")
         if path.exists() or public.exists():
             raise CommandError("Não se substituem chaves existentes; conserve-as com os backups.")
+        if (
+            PendingSheet.objects.exists()
+            or SheetReceipt.objects.exists()
+            or AuditEvent.objects.filter(action="sheets.recipient_provisioned").exists()
+        ):
+            raise CommandError(
+                "Recupere a chave original do backup; não se gera uma substituta para uma identidade já utilizada."
+            )
         source = ExportSource.objects.get(pk=1)
         signing = read_key(settings.VERTENTE_SIGNING_KEY_FILE)
         key = jwk.JWK.generate(kty="RSA", size=3072)
@@ -48,6 +57,10 @@ class Command(BaseCommand):
             out.write(key.export_to_pem(private_key=True, password=None))
         with public.open("x") as out:
             json.dump(signed, out)
+        AuditEvent.objects.create(
+            action="sheets.recipient_provisioned",
+            details={"source_id": str(source.source_id), "key_id": key.thumbprint()},
+        )
         self.stdout.write(
             "Chave de receção preparada. Distribua apenas o ficheiro público assinado."
         )

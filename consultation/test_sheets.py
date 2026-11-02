@@ -10,6 +10,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import DatabaseError, close_old_connections, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
@@ -297,6 +299,14 @@ class SheetTests(SheetFixtures, TestCase):
         receipt.refresh_from_db()
         self.assertEqual(bytes(receipt.original), raw)
         self.assertEqual(receipt.sheet.payload, self.payload)
+
+    def test_lost_key_is_not_silently_replaced_after_receipt(self):
+        receive_sheet(self.packet(), actor=self.admin)
+        path = Path(self.temp.name) / "pending-reception.pem"
+        path.unlink()
+        with self.assertRaisesMessage(CommandError, "Recupere a chave original"):
+            call_command("pending_sheet_setup")
+        self.assertFalse(path.exists())
 
 
 class SheetConcurrencyTests(SheetFixtures, TransactionTestCase):

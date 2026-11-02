@@ -174,6 +174,12 @@ def validate_material(root):
             exists
             and conn.execute("SELECT EXISTS(SELECT 1 FROM consultation_pendingsheet)").fetchone()[0]
         )
+        needed = (
+            needed
+            or conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM inventory_auditevent WHERE action='sheets.recipient_provisioned')"
+            ).fetchone()[0]
+        )
         validate_pending_material(root, needed=needed)
 
 
