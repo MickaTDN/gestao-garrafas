@@ -31,7 +31,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
 
-class VertenteBrowserTests(SimpleTestCase):
+class VertenteBrowserBase(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -121,6 +121,8 @@ class VertenteBrowserTests(SimpleTestCase):
         )
         return self.call("importSnapshot", self.last_snapshot)
 
+
+class VertenteBrowserTests(VertenteBrowserBase):
     def test_owner_onboarding_ui_original_icon_mobile_and_name_only_search(self):
         from tests.vertente.fixtures import grant
 

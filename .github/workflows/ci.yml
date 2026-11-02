@@ -34,15 +34,19 @@ jobs:
         run: docker compose up -d --wait db
       - name: Validate schema and application
         run: |
+          npm ci --ignore-scripts --no-audit
+          node scripts/build_jose.mjs --check
           uv run ruff check .
           uv run python scripts/build_vertente.py --check
           node --check vertente/assets/app.js
           node --check vertente/assets/domain.js
           node --check vertente/assets/store.js
+          node --check vertente/assets/sheets.js
+          node --check vertente/assets/sheet-ui.js
           uv run python manage.py check
           uv run python manage.py makemigrations --check --dry-run
           uv run python manage.py migrate --noinput
-          uv run python manage.py test accounts inventory imports web consultation tests.browser tests.windows.test_profile tests.vertente.browser tests.vertente.branding tests.native_windows --testrunner tests.ci.AnnotatingRunner --noinput
+          uv run python manage.py test accounts inventory imports web consultation tests.browser tests.windows.test_profile tests.vertente.browser tests.vertente.test_offline_sheets tests.vertente.branding tests.native_windows --testrunner tests.ci.AnnotatingRunner --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py collectstatic --noinput
           APP_ENV=production DJANGO_DEBUG=0 uv run python manage.py check --deploy --fail-level WARNING
       - name: Validate prepared server image (no deployment)

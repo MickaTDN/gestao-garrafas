@@ -40,7 +40,7 @@ http {
             limit_except GET { deny all; }
             try_files /index.html =404;
         }
-        location ~ ^/(index\.html|manifest\.webmanifest|service-worker\.js|assets/(app\.css|app\.js|domain\.js|store\.js|icon-(192|512)\.png))$ {
+        location ~ ^/(index\.html|manifest\.webmanifest|service-worker\.js|assets/(app\.css|app\.js|domain\.js|store\.js|sheets\.js|sheet-ui\.js|jose\.js|icon-(192|512)\.png))$ {
             limit_except GET { deny all; }
             try_files $uri =404;
         }

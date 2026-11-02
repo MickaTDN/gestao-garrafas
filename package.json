@@ -1,0 +1,7 @@
+{
+  "name": "stock-vertente-browser-crypto",
+  "private": true,
+  "type": "module",
+  "dependencies": { "jose": "6.2.15" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

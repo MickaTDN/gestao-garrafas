@@ -60,3 +60,6 @@ deploy/native/Host/obj/
 # Native UI regression build products
 tests/native_windows/HostTests/bin/
 tests/native_windows/HostTests/obj/
+node_modules/
+*.vasheet
+*.vadrafts.json
