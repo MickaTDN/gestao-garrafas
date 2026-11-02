@@ -13,6 +13,36 @@ from .state import exclusive, write_json
 from .windows import SERVICES, administrator, configure, native, protect, stop
 
 
+def owns_listener(port, pid):
+    """Never send the proxy secret to a different process on a reused local port."""
+    import ctypes
+    import socket
+    import struct
+
+    api = ctypes.WinDLL("iphlpapi").GetExtendedTcpTable
+    api.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_int,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+    ]
+    api.restype = ctypes.c_uint32
+    size = ctypes.c_uint32()
+    if api(None, ctypes.byref(size), True, 2, 3, 0) not in (0, 122):
+        raise UnsafeOperation("Não foi possível verificar o processo do backend.")
+    buffer = ctypes.create_string_buffer(size.value)
+    if api(buffer, ctypes.byref(size), True, 2, 3, 0):
+        return False
+    count = struct.unpack_from("<I", buffer.raw)[0]
+    for index in range(count):
+        row = struct.unpack_from("<6I", buffer.raw, 4 + index * 24)
+        if row[0] == 2 and socket.ntohs(row[2] & 0xFFFF) == port and row[5] == pid:
+            return True
+    return False
+
+
 def approved(root):
     # Runtime approvals are deliberately excluded from backups/restores (PR25).
     return (Path(root) / "runtime/wifi/approved").is_file()
@@ -204,6 +234,9 @@ def start(root, stop_file):
         for _ in range(60):
             if backend.poll() is not None:
                 raise UnsafeOperation("Backend HTTPS terminou durante o arranque.")
+            if not owns_listener(config["backend_port"], backend.pid):
+                time.sleep(0.5)
+                continue
             try:
                 req = urllib.request.Request(
                     f"http://127.0.0.1:{config['backend_port']}/_native_wifi_ready",
@@ -220,6 +253,8 @@ def start(root, stop_file):
                 time.sleep(0.5)
         else:
             raise UnsafeOperation("Backend HTTPS indisponível.")
+        if backend.poll() is not None or not owns_listener(config["backend_port"], backend.pid):
+            raise UnsafeOperation("O listener não pertence ao backend autorizado.")
         proxy = subprocess.Popen(
             [*args, "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
