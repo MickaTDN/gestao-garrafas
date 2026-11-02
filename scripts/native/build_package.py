@@ -34,12 +34,16 @@ from native_windows.package import (  # noqa: E402
 
 def add_synthetic_migration_probe(app):
     # Follow the approved consultation schema, never create a competing branch.
-    (app / "consultation/migrations/0005_native_synthetic_probe.py").write_text(
+    directory = app / "consultation/migrations"
+    latest = max(directory.glob("[0-9][0-9][0-9][0-9]_*.py")).stem
+    name = f"{int(latest[:4]) + 1:04d}_native_synthetic_probe"
+    (directory / (name + ".py")).write_text(
         "from django.db import migrations\n"
         "class Migration(migrations.Migration):\n"
-        "    dependencies = [('consultation', '0004_sheet_evidence_guards')]\n"
+        f"    dependencies = [('consultation', '{latest}')]\n"
         "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
     )
+    return name
 
 
 def unpack(archive, target):
