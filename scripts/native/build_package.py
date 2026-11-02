@@ -32,6 +32,16 @@ from native_windows.package import (  # noqa: E402
 )
 
 
+def add_synthetic_migration_probe(app):
+    # Follow the approved consultation schema, never create a competing branch.
+    (app / "consultation/migrations/0005_native_synthetic_probe.py").write_text(
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = [('consultation', '0004_sheet_evidence_guards')]\n"
+        "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
+    )
+
+
 def unpack(archive, target):
     target.mkdir()
     if archive.name.endswith(".tar.gz"):
@@ -194,12 +204,7 @@ def build(args):
         ),
     )
     if args.synthetic_migration_probe:
-        (app / "consultation/migrations/0003_native_synthetic_probe.py").write_text(
-            "from django.db import migrations\n"
-            "class Migration(migrations.Migration):\n"
-            "    dependencies = [('consultation', '0002_authorizeddevice')]\n"
-            "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
-        )
+        add_synthetic_migration_probe(app)
 
     def write(path, value):
         Path(path).write_text(json.dumps(value, sort_keys=True, indent=2), encoding="utf-8")
