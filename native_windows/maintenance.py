@@ -159,6 +159,9 @@ def validate_material(root):
     if not any(item["spki"] == public for item in trust["keys"]):
         raise UnsafeOperation("A confiança Android não corresponde à chave da instalação.")
     with connection(root) as conn:
+        # Provisioning uses the same lock; never inspect a half-written pair.
+        # The connection closes on exit, also releasing this session lock.
+        conn.execute("SELECT pg_advisory_lock(73194622)")
         row = conn.execute(
             "SELECT source_id::text FROM consultation_exportsource WHERE id=1"
         ).fetchone()
@@ -171,7 +174,7 @@ def validate_material(root):
             exists
             and conn.execute("SELECT EXISTS(SELECT 1 FROM consultation_pendingsheet)").fetchone()[0]
         )
-    validate_pending_material(root, needed=needed)
+        validate_pending_material(root, needed=needed)
 
 
 def validate_pending_material(root, *, needed):
