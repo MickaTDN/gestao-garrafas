@@ -230,15 +230,19 @@ def start(root, stop_file):
                 raise UnsafeOperation("O acesso Wi-Fi parou.")
             time.sleep(0.5)
     finally:
-        if len(processes) == 2 and processes[1].poll() is None:
-            subprocess.run(
-                [*args, "-s", "quit"],
-                timeout=20,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            processes[1].wait(timeout=60)
-        for process in processes:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=65)
+        try:
+            if len(processes) == 2 and processes[1].poll() is None:
+                subprocess.run(
+                    [*args, "-s", "quit"],
+                    timeout=15,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                processes[1].wait(timeout=45)
+        finally:
+            # Only our HTTP/proxy children, never PostgreSQL. Roll back any
+            # interrupted request instead of leaving an old backend orphaned.
+            for process in processes:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)

@@ -50,6 +50,11 @@ o mesmo movimento antes de repetir. Não há confirmação offline nem cache pri
 Configuração/certificados ficam em secrets/management-wifi, abrangidos pelo backup
 atual e pelo PR #25. A aprovação de arranque fica exclusivamente em runtime/wifi,
 fora da cobertura de restauro; recuperar exige nova autorização no destino.
+Comparação mecânica com o commit b9fc725 do PR #25 identificou conflitos de
+integração em native_windows/cli.py e native_windows/install.py: preservar as
+novas ações de ambas as etapas e combinar os direitos de leitura Wi-Fi com a
+proteção explícita da chave de recuperação. Não integrar automaticamente. O
+ensaio conjunto com esse PR continua necessário antes de homologar recuperação.
 Atualizações param este serviço antes de parar PostgreSQL. O publicador Stock
 continua separado. Não instalar versões antigas após migrações mais recentes.
 
