@@ -74,7 +74,7 @@ export async function database() {
   });
   return connection;
 }
-async function raw() {
+export async function raw() {
   const db = await database(),
     tx = db.transaction(["meta", "snapshots", "vault"], "readonly"),
     done = completion(tx);
@@ -83,9 +83,10 @@ async function raw() {
   );
   await done;
   const m = Object.fromEntries(meta.map((x) => [x.id, x.value]));
-  return { meta: m, snapshots, vault: vault[0]?.value };
+  return { meta: m, snapshots, vault: vault.find(v => v.id === "owner")?.value,
+    sheetVault: vault.find(v => v.id === "sheets")?.value };
 }
-async function commit(before, write) {
+export async function commit(before, write) {
   const db = await database(),
     tx = db.transaction(["meta", "snapshots", "vault"], "readwrite"),
     done = completion(tx);
@@ -161,7 +162,7 @@ export async function deviceRequest() {
     signature: encode(new Uint8Array(sig)),
   };
 }
-async function authorization(saved) {
+export async function authorization(saved) {
   insist(
     saved.meta.trust && saved.meta.device && saved.meta.grant,
     "Dispositivo ainda não autorizado. Peça ativação à informática.",
@@ -236,10 +237,12 @@ export async function enroll(bundle, fingerprint) {
   );
   lock();
 }
-export async function activate(envelope) {
+export async function activate(envelope, expectedRole = null) {
   const saved = await raw();
   insist(saved.meta.device, "Crie primeiro o pedido deste dispositivo.");
   const g = await validateGrant(envelope, saved.meta.trust, saved.meta.device);
+  insist(expectedRole === null || expectedRole === g.role,
+    "O utilizador escolhido não corresponde à autorização assinada deste dispositivo.");
   insist(
     !saved.meta.role || saved.meta.role === g.role,
     "Não se misturam perfis no mesmo armazenamento. Use um dispositivo/perfil de navegador distinto.",
@@ -260,11 +263,12 @@ export async function activate(envelope) {
 }
 export function lock() {
   session = null;
+  window.dispatchEvent(new Event("vertente-lock"));
 }
 export function touch() {
   if (session && Date.now() - session.last < 300000) session.last = Date.now();
 }
-async function derive(password, salt, uses) {
+export async function derive(password, salt, uses) {
   insist(
     typeof password === "string" && password.length >= 16,
     "Use uma frase-passe de pelo menos 16 caracteres. Não fica guardada e não pode ser recuperada.",
@@ -284,7 +288,9 @@ async function derive(password, salt, uses) {
     uses,
   );
 }
-async function seal(data, key, salt, source) {
+export async function seal(data, key, salt, source, {
+  format = "vertente-owner-encrypted", context = "stock-owner-v1\0" + source,
+} = {}) {
   const plain = new TextEncoder().encode(JSON.stringify(data));
   insist(
     plain.length < MAX_FILE - 1024,
@@ -295,13 +301,13 @@ async function seal(data, key, salt, source) {
     {
       name: "AES-GCM",
       iv,
-      additionalData: new TextEncoder().encode("stock-owner-v1\0" + source),
+      additionalData: new TextEncoder().encode(context),
     },
     key,
     plain,
   );
   return {
-    format: "vertente-owner-encrypted",
+    format,
     version: 1,
     source_id: source,
     kdf: "PBKDF2-SHA256",
@@ -311,7 +317,10 @@ async function seal(data, key, salt, source) {
     ciphertext: encode(new Uint8Array(ciphertext)),
   };
 }
-async function unseal(file, key, source) {
+export async function unseal(file, key, source, {
+  format = "vertente-owner-encrypted", context = "stock-owner-v1\0" + source,
+  validate = validateVault,
+} = {}) {
   exact(file, [
     "format",
     "version",
@@ -323,7 +332,7 @@ async function unseal(file, key, source) {
     "ciphertext",
   ]);
   insist(
-    file.format === "vertente-owner-encrypted" &&
+    file.format === format &&
       file.version === 1 &&
       file.source_id === source &&
       file.kdf === "PBKDF2-SHA256" &&
@@ -338,12 +347,12 @@ async function unseal(file, key, source) {
       {
         name: "AES-GCM",
         iv,
-        additionalData: new TextEncoder().encode("stock-owner-v1\0" + source),
+        additionalData: new TextEncoder().encode(context),
       },
       key,
       bytes(file.ciphertext, MAX_FILE + 32),
     );
-    return validateVault(
+    return validate(
       JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)),
       source,
     );
@@ -495,10 +504,10 @@ export function validateVault(v, source) {
   return v;
 }
 async function owner(saved, g) {
-  insist(g.role === "owner", "Esta função é exclusiva do Proprietário.");
+  insist(g.role === "owner", "Esta função é exclusiva de Fábio.");
   if (!session || Date.now() - session.last >= 300000) {
     lock();
-    throw new Error("Desbloqueie o cofre do Proprietário.");
+    throw new Error("Desbloqueie o cofre de Fábio.");
   }
   insist(
     !saved.vault || saved.vault.salt === encode(session.salt),
@@ -511,7 +520,7 @@ async function owner(saved, g) {
 export async function unlock(password) {
   const saved = await raw(),
     g = await authorization(saved);
-  insist(g.role === "owner", "Esta função é exclusiva do Proprietário.");
+  insist(g.role === "owner", "Esta função é exclusiva de Fábio.");
   const salt = saved.vault
     ? bytes(saved.vault.salt, 16)
     : crypto.getRandomValues(new Uint8Array(16));
@@ -525,7 +534,7 @@ export async function unlock(password) {
   }
   session = { key, salt, last: Date.now() };
 }
-async function copyOf(saved) {
+export async function copyOf(saved) {
   let recovered = false;
   for (const c of [...saved.snapshots].sort((a, b) => b.id - a.id)) {
     try {
@@ -671,7 +680,7 @@ export async function importSnapshot(envelope) {
     g = await authorization(saved);
   insist(
     g.can_import,
-    "O Empregado não está autorizado a importar atualizações.",
+    "Daniel não está autorizado a importar atualizações.",
   );
   const recovery = envelope.format === "vertente-receipts";
   const data = recovery
@@ -680,7 +689,7 @@ export async function importSnapshot(envelope) {
   if (recovery)
     insist(
       g.role === "owner",
-      "A recuperação de encomendas é exclusiva do Proprietário.",
+      "A recuperação de encomendas é exclusiva de Fábio.",
     );
   const mark = saved.meta.watermark,
     floor = saved.meta.floor;

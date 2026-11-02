@@ -1,4 +1,6 @@
 import { MAX_FILE, today, summary, matches, low, pending } from "./domain.js";
+import { sheetState, touchSheets } from "./sheets.js";
+import { sheetsView } from "./sheet-ui.js";
 import {
   state,
   enroll,
@@ -50,7 +52,7 @@ async function action(work, success) {
   if (busy) return;
   busy = true;
   document.querySelectorAll("button").forEach((b) => {
-    b.disabled = true;
+    if (!b.closest("dialog")) b.disabled = true;
   });
   try {
     const outcome = await work();
@@ -139,14 +141,14 @@ function optionalNumber(input) {
     throw new Error("Indique um número inteiro não negativo.");
   return Number(input.value);
 }
-function inputQuantities(ref, values = { boxes: null, units: null }) {
-  const boxes = field("Caixas", "number", "boxes", {
+function inputQuantities(ref, values = { boxes: null, units: null }, prefix = "") {
+  const boxes = field("Caixas", "number", prefix + "boxes", {
     min: "0",
     step: "1",
     value: values.boxes ?? "",
     disabled: !ref.box_capacity,
   });
-  const units = field("Garrafas soltas", "number", "units", {
+  const units = field("Garrafas soltas", "number", prefix + "units", {
     min: "0",
     step: "1",
     value: values.units ?? "",
@@ -227,7 +229,7 @@ function unlockForm() {
     node(
       "h2",
       current.vaultExists
-        ? "Desbloquear Proprietário"
+        ? "Desbloquear Fábio"
         : "Proteger as encomendas",
     ),
   );
@@ -275,7 +277,7 @@ function setup() {
     node(
       "p",
       current.authError ||
-        "A informática autoriza individualmente este dispositivo. Não existe seleção livre de perfil.",
+        "Fábio e Daniel utilizam autorizações individuais. A informática associa este dispositivo ao utilizador; escolher um nome não concede permissões.",
     ),
   );
   const trust = node("form", undefined, "card stack"),
@@ -343,11 +345,17 @@ function setup() {
     }),
     go = node("button", "Ativar dispositivo");
   go.type = "submit";
-  append(grant, node("h3", "3. Ativar acesso"), gf.wrap, go);
+  const userLabel = node("label", "Utilizador autorizado"), user = node("select");
+  user.id = "authorized-user"; userLabel.htmlFor = user.id;
+  for (const [value, label] of [["owner", "Fábio"], ["employee", "Daniel"]]) {
+    const option = node("option", label); option.value = value; user.append(option);
+  }
+  user.value = current.grant?.role || "owner";
+  append(grant, node("h3", "3. Ativar acesso"), userLabel, user, gf.wrap, go);
   grant.addEventListener("submit", (e) => {
     e.preventDefault();
     action(
-      async () => activate(await fileJSON(gf.input)),
+      async () => activate(await fileJSON(gf.input), user.value),
       "Dispositivo autorizado.",
     );
   });
@@ -389,7 +397,7 @@ function referenceDetail(ref) {
 }
 function orderForm(ref, existing = null) {
   if (!isOwner() || !current.unlocked) {
-    message("Desbloqueie o Proprietário.", true);
+    message("Desbloqueie Fábio.", true);
     return;
   }
   content.replaceChildren(stamp());
@@ -699,7 +707,7 @@ function settingsView() {
     else
       content.append(
         button(
-          "Bloquear Proprietário",
+          "Bloquear Fábio",
           () => {
             lock();
             refresh();
@@ -712,7 +720,7 @@ function settingsView() {
     content,
     node(
       "p",
-      `Perfil: ${isOwner() ? "Proprietário" : "Empregado"} · autorização válida até ${date(current.grant.expires_at)}`,
+      `Utilizador: ${isOwner() ? "Fábio" : "Daniel"} · autorização válida até ${date(current.grant.expires_at)}`,
       "card",
     ),
   );
@@ -841,7 +849,7 @@ function settingsView() {
     content,
     node(
       "p",
-      "Use dispositivos/perfis de navegador separados para Proprietário e Empregados. Revogações offline só são conhecidas após renovação/atualização autorizada; proteja os dispositivos com as políticas da empresa.",
+      "Use dispositivos/perfis de navegador separados para Fábio e Daniel. Revogações offline só são conhecidas após renovação/atualização autorizada; proteja os dispositivos com as políticas da empresa.",
       "muted",
     ),
   );
@@ -850,7 +858,7 @@ function render() {
   content.replaceChildren();
   connection();
   document.querySelector("#nav-orders").hidden = !isOwner();
-  for (const name of ["stock", "orders", "settings"])
+  for (const name of ["stock", "sheets", "orders", "settings"])
     document
       .querySelector("#nav-" + name)
       .setAttribute("aria-current", section === name ? "page" : "false");
@@ -858,7 +866,9 @@ function render() {
     content.append(setup());
     return;
   }
-  if (section === "orders") ordersView();
+  if (section === "sheets") sheetsView({content, current, node, append, field, button, action, refresh,
+    confirm, fileJSON, download, inputQuantities, optionalNumber, quantity});
+  else if (section === "orders") ordersView();
   else if (section === "settings") settingsView();
   else stockView();
 }
@@ -869,6 +879,7 @@ async function refresh() {
   content.setAttribute("aria-busy", "true");
   try {
     const updated = await state();
+    updated.sheetState = await sheetState();
     if (version !== refreshVersion) return;
     current = updated;
     render();
@@ -879,7 +890,7 @@ async function refresh() {
     }
   }
 }
-for (const name of ["stock", "orders", "settings"])
+for (const name of ["stock", "sheets", "orders", "settings"])
   document.querySelector("#nav-" + name).addEventListener("click", () => {
     if (name === "orders" && !isOwner()) return;
     section = name;
@@ -888,13 +899,16 @@ for (const name of ["stock", "orders", "settings"])
 window.addEventListener("online", connection);
 window.addEventListener("offline", connection);
 for (const event of ["pointerdown", "keydown"])
-  document.addEventListener(event, () => touch());
+  document.addEventListener(event, () => {touch(); touchSheets();});
 async function checkSession() {
   const updated = await state();
+  updated.sheetState = await sheetState();
   if (
     !current ||
     current.authorized !== updated.authorized ||
-    current.unlocked !== updated.unlocked
+    current.unlocked !== updated.unlocked ||
+    current.sheetState?.unlocked !== updated.sheetState.unlocked ||
+    current.sheetState?.allowed !== updated.sheetState.allowed
   ) {
     current = updated;
     render();

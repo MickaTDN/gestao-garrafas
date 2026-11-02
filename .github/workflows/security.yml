@@ -31,5 +31,7 @@ jobs:
           uv run --frozen --group security zizmor --offline --persona auditor --min-severity informational --min-confidence low --no-ignores .github/workflows
       - name: Audit hashed runtime dependencies against current advisories
         run: |
+          npm ci --ignore-scripts --no-audit
+          npm audit
           uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/runtime-requirements.txt"
           uv run --frozen --group security pip-audit --disable-pip --no-deps --require-hashes --progress-spinner off --requirement "$RUNNER_TEMP/runtime-requirements.txt"

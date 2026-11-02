@@ -13,6 +13,9 @@ PUBLIC = [
     "assets/app.js",
     "assets/domain.js",
     "assets/store.js",
+    "assets/sheets.js",
+    "assets/sheet-ui.js",
+    "assets/jose.js",
     "assets/icon-192.png",
     "assets/icon-512.png",
 ]
