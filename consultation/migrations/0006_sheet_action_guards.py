@@ -39,7 +39,7 @@ def install(apps, editor):
         FOR EACH ROW EXECUTE FUNCTION check_sheet_action();
     CREATE TRIGGER protect_sheet_action BEFORE UPDATE OR DELETE ON consultation_sheetaction
         FOR EACH ROW EXECUTE FUNCTION protect_sheet_evidence();
-    """)
+    """, params=None)
 
 
 def reverse(apps, editor):
