@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<div class="intro"><h1>{{ title }}</h1></div>
+<p class="banner">Receber, corrigir e conferir não altera stock. Só a confirmação explícita cria o movimento e os documentos oficiais.</p>
+<div class="toolbar"><a class="btn secondary" href="{% url 'web:sheets' %}">Receber ficheiro</a><a class="btn secondary" href="?state=pending">Por decidir</a><a class="btn secondary" href="?state=confirmed">Confirmadas</a><a class="btn secondary" href="?state=rejected">Rejeitadas</a><a class="btn secondary" href="?state=all">Todas</a></div>
+<div class="stack">{% for row in rows %}<article class="card stack"><h2>{{ row.origin }} · {{ row.state }}</h2><p>Data física comunicada: {{ row.payload.physical_date }} · {{ row.payload.person }}</p><p>{{ row.payload.lines|length }} referências · {{ row.payload.notes }}</p><a class="btn" href="{% url 'web:sheet-process' row.sheet.pk %}">Abrir folha {{ row.sheet.sheet_id }}</a></article>{% empty %}<p class="card">Sem folhas neste estado.</p>{% endfor %}</div>
+<p>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</p><div class="toolbar">{% if page_obj.has_previous %}<a href="?state={{ filter_state }}&amp;page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}{% if page_obj.has_next %}<a href="?state={{ filter_state }}&amp;page={{ page_obj.next_page_number }}">Seguinte</a>{% endif %}</div>
+{% endblock %}

@@ -25,5 +25,6 @@ GRANT UPDATE (payload,reproductions) ON inventory_reportfile TO :"app_role";
 -- Consultation metadata only; never grants stock modification.
 GRANT INSERT, UPDATE ON consultation_exportsource TO :"app_role";
 GRANT INSERT ON consultation_pendingsheet, consultation_sheetreceipt TO :"app_role";
+GRANT INSERT ON consultation_sheetaction TO :"app_role";
 GRANT UPDATE (revoked_at) ON consultation_authorizeddevice TO :"app_role";
 -- Device enrollment is an owner/IT command, never writable by the web role.
