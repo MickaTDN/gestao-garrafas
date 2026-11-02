@@ -17,6 +17,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.http import StreamingHttpResponse
 from django.test import override_settings
 from jwcrypto import jwk
 from playwright.sync_api import sync_playwright
@@ -54,6 +55,16 @@ class LostResponse:
             self.committed.set()
             if not self.release.wait(15):
                 raise RuntimeError("Synthetic response-loss synchronization failed")
+            # Chromium offline emulation does not reliably close an already-open
+            # socket. Actually truncate the response AFTER the real DB commit;
+            # the successful signed receipt must never reach the browser.
+            def interrupted():
+                yield b"{"
+                raise ConnectionResetError("Synthetic response interrupted after receipt commit")
+
+            lost = StreamingHttpResponse(interrupted(), content_type="application/json")
+            lost["Content-Length"] = "1024"
+            return lost
         return response
 
 

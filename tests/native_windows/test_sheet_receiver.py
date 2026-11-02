@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from native_windows.package import UnsafeOperation
 from native_windows.publisher import render as render_publisher
-from native_windows.sheet_receiver import approved, control, render
+from native_windows.sheet_receiver import approved, control, prepare_account, render
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -126,3 +126,15 @@ class SheetReceiverProfileTests(TestCase):
             self.assertTrue(approved(self.root))
             control(self.root, {"enable": False})
             self.assertFalse(approved(self.root))
+
+    def test_opt_in_on_older_installation_adds_only_exact_receiver_read_grants(self):
+        with patch("native_windows.sheet_receiver.native") as command:
+            prepare_account(self.root)
+        self.assertEqual(command.call_count, 7)
+        for args in command.call_args_list:
+            text = " ".join(args.args[0])
+            self.assertNotIn("owner.json", text)
+            self.assertNotIn("recovery", text)
+            self.assertNotIn("(OI)", text)
+            self.assertNotIn("/inheritance", text)
+            self.assertIn("NT SERVICE\\GVASheetReceiver:", text)

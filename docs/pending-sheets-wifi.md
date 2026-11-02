@@ -107,6 +107,14 @@ compatibilidade deve incluir receção seguida de conferência/confirmação exp
 do PR #31; a receção isolada nunca cria movimentos. Adaptar também as contagens dos
 fixtures Windows quando as suites forem compostas. Os PR originais ficam intactos.
 
+Verificação adicional em árvores temporárias, sem alterar branches: 12 testes
+unitários do backup portátil/recetor com o PR #25 e 8 testes de separação dos
+gateways com o PR #28 passaram. Existem conflitos de integração futuros na UI de
+manutenção, CLI e ACLs (`#25`: três ficheiros; `#28`: cinco, incluindo fixtures).
+Devem conservar as ações de ambos os módulos, contas distintas e concessões
+mínimas; não resolver por substituição integral de um lado. Estes ensaios unitários
+não substituem um ciclo Windows conjunto após integração autorizada.
+
 ## Validação e homologação física
 
 - Testes do serviço comum: idempotência ficheiro/Wi-Fi, conflito, revogação,

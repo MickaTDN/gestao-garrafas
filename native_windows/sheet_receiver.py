@@ -24,6 +24,25 @@ def approved(root):
     return (Path(root) / "runtime/receiver/approved").is_file()
 
 
+def prepare_account(root):
+    """Opt-in upgrades may predate this account; add only its exact read grants.
+
+    Never reset parent DACLs or propagate an extra reader to owner/recovery secrets.
+    Existing accounts, backup protections and sibling gateway ACLs remain intact.
+    """
+    root = Path(root)
+    for path, access in [
+        (root, "RX"),
+        (root / "runtime", "RX"),
+        (root / "secrets", "RX"),
+        (root / "signing", "RX"),
+        (root / "secrets/app.json", "R"),
+        (root / "signing/signing.pem", "R"),
+        (root / "signing/pending-reception.pem", "R"),
+    ]:
+        native(["icacls.exe", str(path), "/grant:r", f"NT SERVICE\\{SERVICES['receiver']}:{access}"])
+
+
 def render(root, release, config):
     from .publisher import render as validate_network
 
@@ -131,6 +150,7 @@ def setup(root, request):
             if not (source.parent / name).is_file():
                 raise UnsafeOperation("Certificados/CRL em falta.")
         configure(root, release, create=not exists(SERVICES["receiver"]), only="receiver")
+        prepare_account(root)
         target.mkdir()
         protect(target, [("receiver", "R"), ("backup", "R")])
         for name in TLS_FILES:
