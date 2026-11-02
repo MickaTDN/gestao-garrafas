@@ -119,7 +119,8 @@ def validate(workflow, approved):
                 if inputs.get("retention-days") != "3":
                     errors.append(prefix + "test artefact retention must be three days")
                 if set(inputs.get("path", "").splitlines()) != ARTIFACT_PATHS:
-                    errors.append(prefix + "only synthetic installers and checksums may be uploaded")
+                    if set(inputs.get("path", "").splitlines()) != ARTIFACT_PATHS | {"${{ runner.temp }}/gva-native/artifacts/PROVENANCE.json"}:
+                        errors.append(prefix + "only synthetic installers, checksums and provenance may be uploaded")
     return errors
 
 

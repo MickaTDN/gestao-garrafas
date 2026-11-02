@@ -1,4 +1,4 @@
-# Etapa D: manual delivery of the approved main revision for disposable VM homologation.
+# Etapa D: manual delivery of the CI-validated PR #25 revision for VM homologation.
 # The historical PR #19 workflow remains unchanged. No input can
 # select another source revision, signing authority or release channel.
 name: Etapa D - Windows 11 synthetic homologation
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: etapa-d-synthetic-homologation-ced0045
+  group: etapa-d-synthetic-homologation-pr25
   cancel-in-progress: false
 jobs:
   validated-synthetic-download:
@@ -52,12 +52,12 @@ jobs:
           if (Test-Path $validation) { throw 'Validation directory must be new' }
           "GVA_VALIDATION_TEMP=$validation" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           # Public read, literal repository and full SHA; no caller-supplied ref.
-          git fetch --no-tags --depth=1 https://github.com/MickaTDN/gestao-garrafas.git ced00452f7cbeee9634dff87659572aa9aa05497
+          git fetch --no-tags --depth=1 https://github.com/MickaTDN/gestao-garrafas.git b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4
           if ($LASTEXITCODE -ne 0) { throw 'Validated source fetch failed' }
-          git checkout --detach ced00452f7cbeee9634dff87659572aa9aa05497
+          git checkout --detach b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4
           if ($LASTEXITCODE -ne 0) { throw 'Validated source checkout failed' }
           $head = git rev-parse HEAD
-          if ($LASTEXITCODE -ne 0 -or $head -ne 'ced00452f7cbeee9634dff87659572aa9aa05497') { throw 'Unexpected source revision' }
+          if ($LASTEXITCODE -ne 0 -or $head -ne 'b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4') { throw 'Unexpected source revision' }
           $changes = git status --porcelain
           if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Source tree must be clean' }
       - name: Install locked dependencies of the approved source
@@ -133,7 +133,7 @@ jobs:
           import hashlib, json, os, shutil, subprocess
           from pathlib import Path
 
-          commit = "ced00452f7cbeee9634dff87659572aa9aa05497"
+          commit = "b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4"
           if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != commit:
               raise RuntimeError("Source revision changed")
           private = Path(os.environ["GVA_VALIDATION_TEMP"]) / "gva-native"
@@ -167,6 +167,15 @@ jobs:
               lines.append(expected[name] + "  " + name)
           checksums = "\n".join(lines) + "\n"
           (staging / "SHA256SUMS.txt").write_text(checksums, encoding="ascii")
+          provenance = {
+              "schema": 1, "channel": "synthetic", "production_approved": False,
+              "source_commit": commit, "workflow_commit": os.environ["GITHUB_SHA"],
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "run_id": os.environ["GITHUB_RUN_ID"], "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "installers": expected, "hosted_windows_validation": "passed",
+              "windows11_two_vm_homologation": "pending",
+          }
+          (staging / "PROVENANCE.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="ascii")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write("## Etapa D synthetic installers - successful hosted Windows validation\n\n")
               summary.write("Not approved for production; no enterprise Authenticode signature.\n")
@@ -187,9 +196,10 @@ jobs:
           always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'MickaTDN/gestao-garrafas'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: UNAPPROVED-SYNTHETIC-UNSIGNED-ced00452f7cbeee9634dff87659572aa9aa05497-${{ github.run_id }}-${{ github.run_attempt }}
+          name: UNAPPROVED-SYNTHETIC-UNSIGNED-b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/gva-native/artifacts/*.exe
             ${{ runner.temp }}/gva-native/artifacts/SHA256SUMS.txt
+            ${{ runner.temp }}/gva-native/artifacts/PROVENANCE.json
           if-no-files-found: error
           retention-days: 3
