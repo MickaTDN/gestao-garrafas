@@ -63,5 +63,6 @@ def original(request, pk):
 @administrator_required
 @require_http_methods(["POST"])
 def revoke(request, pk):
+    get_object_or_404(AuthorizedDevice, pk=pk)
     revoke_device(pk, actor=request.user)
     return redirect("web:sheets")

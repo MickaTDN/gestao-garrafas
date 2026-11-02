@@ -100,10 +100,21 @@ def main(directory):
     from native_windows.windows import SERVICES, activate, stop_all
 
     health_http(root)
-    run([
-        "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
-        Path(__file__).parent / "Test-PrivateCRT.ps1", "-Root", root, "-Release", release,
-    ])
+    run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            Path(__file__).parent / "Test-PrivateCRT.ps1",
+            "-Root",
+            root,
+            "-Release",
+            release,
+        ]
+    )
+    manage(root, "pending_sheet_setup")
+    pending_key_before = (root / "signing/pending-reception.pem").read_bytes()
     manage(root, "shell", "-c", (Path(__file__).parent / "operation_fixture.py").read_text())
     run(
         [
@@ -395,6 +406,15 @@ def main(directory):
             "SELECT source_id::text,sequence FROM consultation_exportsource"
         ).fetchone() == (source[0], source[1] + 1)
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
+    assert (root / "signing/pending-reception.pem").read_bytes() == pending_key_before
+    with connection(root) as conn:
+        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 1
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM consultation_sheetreceipt WHERE outcome IN ('pending','duplicate') AND octet_length(original)>0"
+            ).fetchone()[0]
+            == 2
+        )
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
@@ -411,6 +431,7 @@ def report_failure(error, root):
         detail += "; maintenance journal=" + marker.read_text(encoding="utf-8")
     # Safe service categories only; never dump secret/config/request files.
     from native_windows.windows import service_failure
+
     for kind in ("postgres", "web", "backup", "publisher"):
         log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
     log(

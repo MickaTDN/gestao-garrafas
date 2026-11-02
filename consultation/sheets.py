@@ -272,7 +272,7 @@ def reference_warnings(sheet):
                 for line in sheet.payload["lines"]
                 if line["reference_id"].isascii()
                 and line["reference_id"].isdigit()
-                and len(line["reference_id"]) < 10
+                and 0 < int(line["reference_id"]) <= 9223372036854775807
             ]
         )
     }

@@ -12,7 +12,7 @@ def install(apps, editor):
 
 
 def reverse(apps, editor):
-    if apps.get_model('consultation','PendingSheet').objects.exists() or apps.get_model('consultation','AuthorizedDevice').objects.exclude(public_spki='').exists():
+    if apps.get_model('consultation','PendingSheet').objects.exists() or apps.get_model('consultation','SheetReceipt').objects.exists() or apps.get_model('consultation','AuthorizedDevice').objects.exclude(public_spki='').exists():
         raise IrreversibleError('Preserve folhas, autorizações e chaves. Não reverta este esquema com evidências existentes.')
     if editor.connection.vendor == 'postgresql':
         editor.execute('DROP TRIGGER protect_pending_sheet ON consultation_pendingsheet; DROP TRIGGER protect_sheet_receipt ON consultation_sheetreceipt; DROP FUNCTION protect_sheet_evidence();')

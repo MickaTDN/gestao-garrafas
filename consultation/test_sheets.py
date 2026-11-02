@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, close_old_connections, connection, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from jwcrypto import jwe, jwk
@@ -248,6 +248,35 @@ class SheetTests(SheetFixtures, TestCase):
         self.assertNotIn(b"box_capacity", raw)
         receipt = receive_sheet(raw, actor=self.admin)
         self.assertEqual(receipt.file_sha256, hashlib.sha256(raw).hexdigest())
+        self.assertEqual(receipt.authorization["public_key_id"], self.device.public_key_id)
+
+    def test_csrf_required_for_file_reception(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin)
+        response = client.post(
+            reverse("web:sheets"), {"file": SimpleUploadedFile("fake.vasheet", self.packet())}
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(PendingSheet.objects.exists())
+
+    def test_bounds_and_schema_are_validated_before_persistence(self):
+        for change in (
+            {"physical_date": "2026-02-30"},
+            {"revision": True},
+            {"person": ""},
+            {"notes": "x" * 4001},
+            {"lines": self.payload["lines"] * 501},
+        ):
+            with self.subTest(change=list(change)), self.assertRaises(ValidationError):
+                receive_sheet(self.packet({**self.payload, **change}), actor=self.admin)
+        self.assertFalse(PendingSheet.objects.exists())
+
+    def test_original_and_payload_roundtrip_from_database(self):
+        raw = self.packet()
+        receipt = receive_sheet(raw, actor=self.admin)
+        receipt.refresh_from_db()
+        self.assertEqual(bytes(receipt.original), raw)
+        self.assertEqual(receipt.sheet.payload, self.payload)
 
 
 class SheetConcurrencyTests(SheetFixtures, TransactionTestCase):

@@ -51,3 +51,58 @@ for kind in ("entry", "exit"):
         validation="signed" if kind == "exit" else None,
         signature_data=signature if kind == "exit" else None,
     )
+
+
+def pending_fixture():
+    import json
+    import uuid
+    from datetime import timedelta
+
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from django.utils import timezone
+    from jwcrypto import jwe, jwk
+
+    from consultation.models import AuthorizedDevice, ExportSource
+    from consultation.sheets import key_path, receive_sheet
+    from consultation.signing import public_key, signed_snapshot
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    public = public_key(key)
+    device = AuthorizedDevice.objects.create(
+        device_id=uuid.uuid4(),
+        public_key_id=public["key_id"],
+        public_spki=public["spki"],
+        role="employee",
+        revision=1,
+        sheets_allowed=True,
+        expires_at=timezone.now() + timedelta(days=1),
+    )
+    source = ExportSource.objects.get(pk=1)
+    payload = {
+        "source_id": str(source.source_id),
+        "device_id": str(device.pk),
+        "authorization_revision": 1,
+        "sheet_id": str(uuid.uuid4()),
+        "revision": 1,
+        "kind": "entry",
+        "physical_date": "2026-01-02",
+        "person": "Pessoa fictícia pendente",
+        "notes": "Folha de ensaio sem efeito no stock",
+        "lines": [{"reference_id": str(ref.pk), "boxes": 1, "units": 2, "box_capacity": 6}],
+    }
+    signed = signed_snapshot(payload, key, kind="vertente-sheet", version=1)
+    recipient = jwk.JWK.from_pem(key_path().read_bytes())
+    envelope = jwe.JWE(
+        json.dumps(signed).encode(),
+        protected={"alg": "RSA-OAEP-256", "enc": "A256GCM", "kid": recipient.thumbprint()},
+        recipient=recipient.public(),
+    )
+    raw = json.dumps(
+        {"format": "vertente-pending-sheet", "version": 1, "jwe": envelope.serialize(compact=True)}
+    ).encode()
+    receipt = receive_sheet(raw, actor=actor)
+    assert receipt.outcome == "pending"
+    assert receive_sheet(raw, actor=actor).outcome == "duplicate"
+
+
+pending_fixture()

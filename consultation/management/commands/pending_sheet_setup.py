@@ -16,6 +16,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         path = key_path()
+        from native_windows.package import refuse_reparse
+        refuse_reparse(path)
         if (
             not path.is_absolute()
             or path.resolve().is_relative_to(Path(settings.BASE_DIR).resolve())

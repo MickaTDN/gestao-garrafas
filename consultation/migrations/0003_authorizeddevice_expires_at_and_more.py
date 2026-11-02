@@ -57,7 +57,7 @@ class Migration(migrations.Migration):
                 ('outcome', models.CharField(choices=[('pending', 'Pendente'), ('duplicate', 'Repetida'), ('conflict', 'Conflito')], max_length=20)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('actor', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
-                ('sheet', models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='receipts', to='consultation.pendingsheet')),
+                ('sheet', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='receipts', to='consultation.pendingsheet')),
             ],
             options={
                 'abstract': False,
