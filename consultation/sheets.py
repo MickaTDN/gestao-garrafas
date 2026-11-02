@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 from jwcrypto import jwe, jwk
@@ -150,8 +150,8 @@ def decode(raw):
 
 
 @transaction.atomic
-def _receive_sheet(raw, *, actor):
-    require_access(actor, "admin")
+def _receive_sheet(raw, *, actor, principal=None):
+    _authorize_receiver(actor, principal)
     signed, data, payload = decode(raw)
     source = ExportSource.objects.select_for_update().filter(pk=1).first()
     device = (
@@ -167,6 +167,7 @@ def _receive_sheet(raw, *, actor):
         or device.expires_at <= timezone.now()
         or device.revision != payload["authorization_revision"]
         or not device.public_spki
+        or (principal is not None and str(device.pk) != principal.device_id)
         or signed["key_id"] != device.public_key_id
     ):
         raise ValidationError(
@@ -222,6 +223,10 @@ def _receive_sheet(raw, *, actor):
             "public_key_id": device.public_key_id,
             "expires_at": device.expires_at.isoformat(),
             "sheets_allowed": True,
+            "device_id": str(device.pk),
+            "sheet_revision": payload["revision"],
+            "transport": "wifi" if principal else "file",
+            "certificate_sha256": principal.certificate_sha256 if principal else None,
         },
     )
     AuditEvent.objects.create(
@@ -237,13 +242,26 @@ def _receive_sheet(raw, *, actor):
     return receipt
 
 
-def receive_sheet(raw, *, actor):
-    require_access(actor, "admin")
+def _authorize_receiver(actor, principal):
+    if principal is None:
+        require_access(actor, "admin")
+    else:
+        from accounts.permissions import authorization_lock
+
+        from .transport import DevicePrincipal
+
+        if not isinstance(principal, DevicePrincipal) or actor is not None:
+            raise PermissionDenied("Identidade de transporte inválida.")
+        authorization_lock()
+
+
+def receive_sheet(raw, *, actor=None, principal=None):
+    _authorize_receiver(actor, principal)
     try:
-        return _receive_sheet(raw, actor=actor)
+        return _receive_sheet(raw, actor=actor, principal=principal)
     except ValidationError:
         with transaction.atomic():
-            require_access(actor, "admin")
+            _authorize_receiver(actor, principal)
             AuditEvent.objects.create(
                 actor=actor,
                 action="sheets.rejected_file",

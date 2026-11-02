@@ -59,6 +59,8 @@ def main():
             "recover",
             "approve-recovery",
             "enable-publisher",
+            "configure-sheet-receiver",
+            "control-sheet-receiver",
         ),
     )
     parser.add_argument("--package")
@@ -78,8 +80,9 @@ def main():
             service(root, args.kind, args.stop_file)
         except Exception as error:
             from .state import write_json
+
             # Only fixed service runtime, never raw exceptions/SQL/credentials.
-            if args.kind in {"postgres", "web", "backup", "publisher"}:
+            if args.kind in {"postgres", "web", "backup", "publisher", "receiver"}:
                 record = {"category": type(error).__name__}
                 if isinstance(error, OSError):
                     record["file"] = Path(error.filename).name if error.filename else None
@@ -163,6 +166,14 @@ def main():
         from .publisher import enable
 
         enable(root, request)
+    elif args.action == "configure-sheet-receiver":
+        from .sheet_receiver import setup
+
+        setup(root, request)
+    elif args.action == "control-sheet-receiver":
+        from .sheet_receiver import control
+
+        control(root, request)
     elif args.action == "publisher":
         from .publisher import configure_publisher
         from .state import exclusive

@@ -91,7 +91,9 @@ def service(root, kind, stop_file):
                 if Path(stop_file).exists():
                     raise UnsafeOperation("Arranque cancelado; preserve o cluster e o diário.")
                 command(
-                    root, release, "initdb",
+                    root,
+                    release,
+                    "initdb",
                     [
                         "-D",
                         str(root / "cluster"),
@@ -118,7 +120,9 @@ def service(root, kind, stop_file):
         if Path(stop_file).exists():
             raise UnsafeOperation("Arranque cancelado; preserve o cluster e o diário.")
         command(
-            root, release, "pg_ctl",
+            root,
+            release,
+            "pg_ctl",
             [
                 "-D",
                 str(root / "cluster"),
@@ -197,6 +201,10 @@ def service(root, kind, stop_file):
                 time.sleep(1)
     elif kind == "publisher":
         from .publisher import start
+
+        start(root, stop_file)
+    elif kind == "receiver":
+        from .sheet_receiver import start
 
         start(root, stop_file)
     else:

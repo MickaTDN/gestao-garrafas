@@ -1,6 +1,6 @@
 import { normalize } from "./domain.js";
 import { configureSheets, unlockSheets, lockSheets, createSheet, editSheet,
-  exportSheet, backupSheets, restoreSheets } from "./sheets.js";
+  exportSheet, backupSheets, restoreSheets, configureTransport, disableTransport, sendSheet } from "./sheets.js";
 
 let editing = null;
 export function sheetsView(ui) {
@@ -23,6 +23,20 @@ export function sheetsView(ui) {
     setup.append(form);
   }
   content.append(setup);
+  const wifi = node("details", undefined, "card stack");
+  const wifiForm = node("form"), policy = field("Política de envio Wi-Fi assinada", "file", "sheet-wifi-policy", {accept: ".json"});
+  const consent = field("Ativar envio manual pelo Wi-Fi autorizado neste dispositivo", "checkbox", "sheet-wifi-consent", {required: true});
+  const activate = node("button", "Ativar envio Wi-Fi"); activate.type = "submit";
+  append(wifi, node("summary", "Configurar envio Wi-Fi (opcional)"), node("p", "Exige HTTPS confiável, certificado individual Android e configuração aprovada pela informática. O publicador Stock continua apenas de leitura."));
+  append(wifiForm, policy.wrap, consent.wrap, activate);
+  wifiForm.addEventListener("submit", e => {e.preventDefault(); action(async () => {
+    await configureTransport(await fileJSON(policy.input, 65536), consent.input.checked);
+  }, "Envio manual ativado neste dispositivo. Nenhuma folha foi enviada.");});
+  wifi.append(wifiForm);
+  if (state.transportEnabled) wifi.append(button("Desativar envio Wi-Fi", () => action(disableTransport, "Envio Wi-Fi desativado neste dispositivo."), true));
+  content.append(wifi);
+  const deliveryLabel = s => ({received: "Recebido · não é confirmação oficial", duplicate: "Duplicado · já recebido, sem novo movimento",
+    conflict: "Conflito · exige revisão administrativa", failure: "Falha · receção não comprovada nesta tentativa"})[state.deliveries?.[s.id]?.state] || "Por enviar · sem comprovativo digital de receção";
   if (!state.allowed) {content.append(node("p", state.error, "card")); return;}
   if (!state.unlocked) {
     const form = node("form", undefined, "card stack");
@@ -43,6 +57,10 @@ export function sheetsView(ui) {
     const writable = s.state === "draft";
     append(form, node("h3", (s.kind === "entry" ? "Entrada" : "Saída") + " · revisão " + s.revision),
       node("p", s.id, "code"));
+    const delivery = state.deliveries?.[s.id];
+    append(form, node("p", deliveryLabel(s), "badge"));
+    if (delivery?.receipt_id) append(form, node("p", `Comprovativo ${delivery.receipt_id} · ${delivery.received_at}`));
+    if (delivery?.message) append(form, node("p", delivery.message, "warning"));
     const person = field(s.kind === "entry" ? "Quem entregou" : "Quem levantou", "text", "sheet-person", {value: s.person, maxLength: 200, disabled: !writable});
     const physical = field("Data física comunicada", "date", "sheet-date", {value: s.physical_date, disabled: !writable});
     const notes = field("Observações", "text", "sheet-notes", {value: s.notes, maxLength: 4000, disabled: !writable});
@@ -99,6 +117,15 @@ export function sheetsView(ui) {
       download(await exportSheet(s.id, s.revision), `folha-${s.id}-r${s.revision}.vasheet`);
     }, "Ficheiro disponibilizado. Receção e confirmação pelo escritório ainda não estão comprovadas.")));
     if (!writable) form.append(node("p", "Esta folha não pode ser reescrita. A reexportação mantém o mesmo UUID, revisão e ficheiro; nenhuma alteração é enviada silenciosamente.", "warning"));
+    if (writable && state.transportEnabled) form.append(button("Preparar para envio Wi-Fi", () => action(async () => {
+      if (dirty) throw new Error("Guarde as alterações antes de preparar o envio.");
+      const total = s.lines.map(l => `${l.reference_id} · ${l.name}: ${quantity(l.boxes, l.units, l.box_capacity)} garrafas`).join("\n");
+      if (!(await confirm("Preparar folha imutável", `${s.person}\n${s.physical_date}\n${total}\nA preparação não envia nem confirma movimentos.`))) return false;
+      await exportSheet(s.id, s.revision);
+    }, "Folha preparada, ainda sem prova de receção.")));
+    if (s.state === "exported" && state.transportEnabled) form.append(button("Enviar pelo Wi-Fi autorizado", () => action(async () => {
+      try {await sendSheet(s.id, s.revision);} catch (error) {await refresh(); throw error;}
+    }, "Comprovativo verificado. Consulte o estado; não é confirmação oficial.")));
     form.append(button("Voltar às folhas", () => {editing = null; refresh();}, true));
     content.append(form); return;
   }
@@ -106,10 +133,11 @@ export function sheetsView(ui) {
   for (const [kind, label] of [["entry", "Preparar entrada"], ["exit", "Preparar saída"]])
     actions.append(button(label, () => action(async () => {editing = await createSheet(kind);})));
   content.append(actions);
-  const labels = {draft: "Rascunho", cancelled: "Cancelada localmente", exported: "Exportada · sem comprovativo de receção"};
+  const labels = {draft: "Rascunho", cancelled: "Cancelada localmente", exported: "Preparada · ficheiro imutável"};
   for (const s of [...state.sheets].reverse()) {
     const card = node("section", undefined, "card");
     append(card, node("h3", `${s.kind === "entry" ? "Entrada" : "Saída"} · ${labels[s.state]}`),
+      node("p", deliveryLabel(s)),
       node("p", `${s.person || "Pessoa por indicar"} · ${s.physical_date || "Data por indicar"} · ${s.lines.length} referências`),
       button("Abrir folha " + s.id, () => {editing = s.id; refresh();}, true)); content.append(card);
   }

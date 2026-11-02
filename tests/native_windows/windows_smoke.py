@@ -145,6 +145,9 @@ def main(directory):
     from tests.native_windows.tls_probe import main as tls_probe
 
     tls_probe(root, directory)
+    from tests.native_windows.sheet_receiver_probe import main as receiver_probe
+
+    receiver_probe(root, directory)
     tls_before = {
         path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
     }
@@ -408,13 +411,15 @@ def main(directory):
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
     assert (root / "signing/pending-reception.pem").read_bytes() == pending_key_before
     with connection(root) as conn:
-        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 2
         assert (
             conn.execute(
                 "SELECT count(*) FROM consultation_sheetreceipt WHERE outcome IN ('pending','duplicate') AND octet_length(original)>0"
             ).fetchone()[0]
-            == 2
+            == 4
         )
+        assert conn.execute("SELECT count(*) FROM consultation_sheetreceipt WHERE actor_id IS NULL").fetchone()[0] == 2
+    assert not (root / "runtime/receiver/approved").exists()
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"

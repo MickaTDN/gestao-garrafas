@@ -78,7 +78,7 @@ class PendingSheet(SheetEvidence):
 class SheetReceipt(SheetEvidence):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sheet = models.ForeignKey(PendingSheet, on_delete=models.PROTECT, related_name="receipts")
-    actor = models.ForeignKey("accounts.User", on_delete=models.PROTECT)
+    actor = models.ForeignKey("accounts.User", on_delete=models.PROTECT, null=True, blank=True)
     original = models.BinaryField(editable=False)
     file_sha256 = models.CharField(max_length=64)
     authorization = models.JSONField(default=dict)

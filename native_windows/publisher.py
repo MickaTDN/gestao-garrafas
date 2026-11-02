@@ -53,6 +53,17 @@ def render(release, root, config):
     runtime = Path(root) / "runtime/publisher"
     template = (Path(release) / "app/deploy/vertente/nginx.conf.template").read_text()
     template = template.replace("__HOST__", config["hostname"])
+    public_policy = Path(root) / "tls/sheet-transport.public.json"
+    if public_policy.is_file():
+        import base64
+
+        from .receiver_policy import origin
+
+        policy = json.loads(public_policy.read_text())
+        data = json.loads(base64.urlsafe_b64decode(policy["payload"] + "=="))
+        if data["stock_origin"] == f"https://{config['hostname']}:{config.get('port', 8444)}":
+            target = origin(data["receiver_origin"])
+            template = template.replace("connect-src 'self';", f"connect-src 'self' {target};")
     template = template.replace("/dev/stderr", quote(runtime / "error.log"))
     template = template.replace("/tmp/nginx.pid", quote(runtime / "nginx.pid"))
     template = template.replace(
