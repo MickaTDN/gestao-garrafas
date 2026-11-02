@@ -134,6 +134,9 @@ def main(directory):
     from tests.native_windows.tls_probe import main as tls_probe
 
     tls_probe(root, directory)
+    from tests.native_windows.management_wifi_probe import main as management_wifi_probe
+
+    management_wifi_probe(root, directory)
     tls_before = {
         path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
     }

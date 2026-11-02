@@ -250,7 +250,7 @@ sealed class NativeService : ServiceBase
     volatile bool stopping;
     string stopFile = "";
     public NativeService(string kind)
-    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
+    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", "wifi" => "GVAManagementWifi", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
     protected override void OnStart(string[] args)
     {
         RequestAdditionalTime(120000);

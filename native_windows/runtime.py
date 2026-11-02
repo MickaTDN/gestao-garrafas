@@ -195,6 +195,10 @@ def service(root, kind, stop_file):
             deadline = time.monotonic() + 24 * 3600
             while time.monotonic() < deadline and not Path(stop_file).exists():
                 time.sleep(1)
+    elif kind == "wifi":
+        from .management_wifi import start
+
+        start(root, stop_file)
     elif kind == "publisher":
         from .publisher import start
 
