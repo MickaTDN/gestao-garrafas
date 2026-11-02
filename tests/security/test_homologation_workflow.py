@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from scripts.check_workflows import ARTIFACT_GUARD, ROOT, load_workflow
 
-SOURCE = "ced00452f7cbeee9634dff87659572aa9aa05497"
+SOURCE = "b9fc7257b3d70abeadc2da2d005ed52bbc5fdad4"
 WORKFLOW = ROOT / ".github/workflows/windows11-homologation.yml"
 
 
@@ -112,16 +112,22 @@ class HomologationDownloadTests(unittest.TestCase):
         self.assertIn('"$root\\policy.json" --key "$root\\signing.pem"', build)
         self.assertIn("'/DChannel=synthetic'", build)
 
-    def test_valid_pair_has_only_three_public_files_and_provenance(self):
+    def test_valid_pair_has_only_four_public_files_and_provenance(self):
         (self.private / "signing.pem").write_text("PRIVATE TEST SENTINEL")
         self.run_stage()
         self.assertEqual(
-            {p.name for p in self.target.iterdir()}, set(self.names) | {"SHA256SUMS.txt"}
+            {p.name for p in self.target.iterdir()}, set(self.names) | {"SHA256SUMS.txt", "PROVENANCE.json"}
         )
         checksums = (self.target / "SHA256SUMS.txt").read_text()
         self.assertIn(SOURCE, checksums)
         self.assertIn("/actions/runs/123/attempts/2", checksums)
         self.assertNotIn("PRIVATE TEST SENTINEL", checksums)
+        provenance = json.loads((self.target / "PROVENANCE.json").read_text())
+        self.assertEqual(provenance["source_commit"], SOURCE)
+        self.assertEqual(provenance["run_id"], "123")
+        self.assertEqual(provenance["attempt"], "2")
+        self.assertEqual(provenance["installers"], self.hashes)
+        self.assertFalse(provenance["production_approved"])
         for name, digest in self.hashes.items():
             self.assertIn(digest + "  " + name, checksums)
 
