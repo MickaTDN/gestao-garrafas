@@ -6,7 +6,7 @@ from django.utils import timezone
 from inventory.models import Location, Sector
 from inventory.ordering import ordered_sectors
 
-from .catalog_forms import SectorSelect, StyledFieldsMixin
+from .catalog_forms import ReferenceForm, SectorSelect, StyledFieldsMixin
 from .forms import StockFilterForm
 
 
@@ -62,6 +62,27 @@ class HeaderForm(OperationForm):
     reason = forms.CharField(
         label="Motivo geral / observações", required=False, widget=forms.Textarea(attrs={"rows": 2})
     )
+
+
+class EntryReferenceForm(ReferenceForm):
+    revision = forms.IntegerField(widget=forms.HiddenInput)
+    proposal_id = forms.CharField(required=False, widget=forms.HiddenInput)
+    boxes = forms.IntegerField(
+        label="Caixas recebidas", required=False, min_value=0, max_value=2147483647
+    )
+    units = forms.IntegerField(
+        label="Garrafas soltas recebidas", required=False, min_value=0, max_value=2147483647
+    )
+
+    def clean(self):
+        data = super().clean()
+        from inventory.services import bottle_total
+
+        if not self.errors:
+            total = bottle_total(data.get("boxes"), data.get("units"), data.get("box_capacity"))
+            if total is None or total <= 0:
+                raise forms.ValidationError("Indique uma quantidade recebida positiva.")
+        return data
 
 
 class LineForm(OperationForm):

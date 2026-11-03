@@ -436,3 +436,82 @@ class SheetTransportHTTPSIntegrationTests(StaticLiveServerTestCase):
             self.sheets("sendSheet", second, 2)
         self.assertEqual(self.database_call(lambda: PendingSheet.objects.count()), 1)
         self.assertEqual(self.context.cookies(), [])
+
+    def test_version_two_proposal_real_https_manual_retry_and_admin_confirmation(self):
+        identity = "proposal:" + str(uuid.uuid4())
+        id = self.sheets("createSheet", "entry")
+        self.sheets(
+            "editSheet",
+            id,
+            1,
+            {
+                "person": "Pessoa fictícia de proposta Wi-Fi",
+                "physical_date": "2026-10-01",
+                "notes": "Proposta autenticada sintética",
+                "lines": [
+                    {"reference_id": self.ref_id, "boxes": None, "units": 2},
+                    {
+                        "reference_id": identity,
+                        "boxes": 1,
+                        "units": 2,
+                        "proposal": {"name": "Nova garrafa Wi-Fi fictícia", "box_capacity": 6},
+                    },
+                ],
+            },
+        )
+        wire = self.sheets("exportSheet", id, 2)
+        self.assertEqual(wire["version"], 2)
+        self.sheets("sendSheet", id, 2)
+        self.assertEqual(self.sheets("sheetState")["deliveries"][id]["state"], "received")
+        self.assertEqual(self.database_call(lambda: Reference.objects.count()), 1)
+        self.assertEqual(self.database_call(lambda: Movement.objects.count()), 0)
+        raw = self.page.evaluate("file=>JSON.stringify(file)", wire).encode()
+
+        def approve():
+            from consultation.review import confirm_sheet, correct_sheet, review_sheet
+            from consultation.sheets import receive_sheet
+
+            sheet = receive_sheet(raw, actor=self.admin).sheet
+            payload = sheet.payload
+            line = payload["lines"][-1]
+            approved = {
+                **line,
+                "proposal": {
+                    **line["proposal"],
+                    "location_id": self.ref.location_id,
+                    "sector_id": None,
+                },
+            }
+            event = correct_sheet(
+                sheet.pk,
+                actor=self.admin,
+                sequence=0,
+                reason="Aprovação administrativa fictícia",
+                values={
+                    **{k: payload[k] for k in ("person", "physical_date", "notes")},
+                    "lines": [payload["lines"][0], approved],
+                },
+            )
+            reviewed, _ = review_sheet(sheet.pk, actor=self.admin, sequence=event.sequence)
+            args = dict(
+                actor=self.admin,
+                sequence=reviewed.sequence,
+                token=reviewed.data["token"],
+                confirmed=True,
+                report_requested=True,
+            )
+            first = confirm_sheet(sheet.pk, **args)
+            self.assertEqual(confirm_sheet(sheet.pk, **args).pk, first.pk)
+            return first.lines.count()
+
+        self.assertEqual(self.database_call(approve), 2)
+        self.sheets("sendSheet", id, 2)
+        self.assertEqual(self.sheets("sheetState")["deliveries"][id]["state"], "duplicate")
+        self.assertEqual(self.database_call(lambda: Reference.objects.count()), 2)
+        self.assertEqual(self.database_call(lambda: Movement.objects.count()), 1)
+        self.assertEqual(
+            self.database_call(
+                lambda: Reference.objects.get(name="Nova garrafa Wi-Fi fictícia").current_stock
+            ),
+            8,
+        )

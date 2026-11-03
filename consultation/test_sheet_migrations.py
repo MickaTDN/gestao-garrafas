@@ -10,7 +10,7 @@ from django.utils import timezone
 
 
 class SheetMigrationJoinTests(TransactionTestCase):
-    latest = "0007_merge_review_wifi"
+    latest = "0008_reference_proposal_protocol"
 
     def go(self, target):
         executor = MigrationExecutor(connection)

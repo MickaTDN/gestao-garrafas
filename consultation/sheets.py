@@ -75,7 +75,7 @@ def decode(raw):
             set(outer) != {"format", "version", "jwe"}
             or outer["format"] != "vertente-pending-sheet"
             or type(outer["version"]) is not int
-            or outer["version"] != 1
+            or outer["version"] not in (1, 2)
         ):
             raise ValueError
         parts = outer["jwe"].split(".")
@@ -91,7 +91,7 @@ def decode(raw):
             set(signed) != {"format", "version", "algorithm", "key_id", "payload", "signature"}
             or signed["format"] != "vertente-sheet"
             or type(signed["version"]) is not int
-            or signed["version"] != 1
+            or signed["version"] != outer["version"]
             or signed["algorithm"] != "ES256"
         ):
             raise ValueError
@@ -127,7 +127,18 @@ def decode(raw):
             raise ValueError
         seen = set()
         for line in payload["lines"]:
-            if set(line) != {"reference_id", "boxes", "units", "box_capacity"}:
+            is_proposal = "proposal" in line
+            if set(line) != {"reference_id", "boxes", "units", "box_capacity"} | (
+                {"proposal"} if is_proposal else set()
+            ):
+                raise ValueError
+            if is_proposal:
+                from inventory.proposals import validate_line
+
+                if outer["version"] != 2 or payload["kind"] != "entry":
+                    raise ValueError
+                validate_line(line)
+            elif outer["version"] == 2 and line.get("reference_id", "").startswith("proposal:"):
                 raise ValueError
             text(line["reference_id"], 100)
             if not line["reference_id"] or line["reference_id"] in seen:
@@ -187,7 +198,7 @@ def _receive_sheet(raw, *, actor, principal=None):
             raise ValueError
         key.verify(
             encode_dss_signature(int.from_bytes(sig[:32]), int.from_bytes(sig[32:])),
-            b"vertente-sheet-v1\0" + data,
+            f"vertente-sheet-v{signed['version']}\0".encode() + data,
             ec.ECDSA(hashes.SHA256()),
         )
     except Exception as error:

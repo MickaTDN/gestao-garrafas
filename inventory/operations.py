@@ -246,6 +246,11 @@ def review_draft(movement_id, *, actor, revision):
     plans = movement_plans(movement, lines, references)
     movement.review_token = uuid.uuid4()
     movement.review_snapshot = {str(pk): reference_state(ref) for pk, ref in references.items()}
+    from .proposals import snapshot
+
+    proposals = snapshot(movement, actor=actor)
+    if proposals:
+        movement.review_snapshot["__proposals__"] = proposals
     movement.save()
     AuditEvent.objects.create(
         actor=actor, movement=movement, action="movement.reviewed", details={"revision": revision}

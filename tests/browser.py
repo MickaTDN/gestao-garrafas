@@ -518,10 +518,12 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
         )
         sector.select_option(str(destination_sector.pk))
         self.assert_responsive(page, width)
-        page.get_by_role("button", name="Criar referência", exact=True).click()
+        page.get_by_label("Garrafas soltas recebidas", exact=True).fill("2")
+        page.get_by_role("button", name="Adicionar nova referência à entrada", exact=True).click()
         self.assertEqual(page.url, edit_url)
         self.assertEqual(page.get_by_label("Garrafas soltas", exact=True).input_value(), "3")
-        self.assertEqual(self.stocks(), [0, 15, 5])
+        self.assertEqual(self.stocks(), [15, 5])
+        page.get_by_role("heading", name="Nova referência proposta · Nova referência browser fictícia", exact=True).wait_for()
         # The same dynamic selector works when editing the catalogue and counting.
         page.goto(self.live_server_url + reverse("web:reference-edit", args=[self.first.pk]))
         page.get_by_label("Localização", exact=True).select_option(str(self.destination.pk))
@@ -541,7 +543,7 @@ class OperationalBrowserTests(StaticLiveServerTestCase):
             ),
             ["", str(origin_sector.pk)],
         )
-        self.assertEqual(self.stocks(), [0, 15, 5])
+        self.assertEqual(self.stocks(), [15, 5])
         self.assert_responsive(page, width)
 
     def test_sector_filter_and_new_reference_desktop(self):

@@ -245,10 +245,14 @@ class OperationWebTests(TestCase):
                 "location": self.location.pk,
                 "box_capacity": 6,
                 "current_stock": 888,
+                "revision": Movement.objects.get(pk=draft.pk).revision,
+                "units": 2,
             },
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Reference.objects.get(name="Nova garrafa sintética").current_stock, 0)
+        self.assertFalse(Reference.objects.filter(name="Nova garrafa sintética").exists())
+        draft.refresh_from_db()
+        self.assertEqual(draft.source_metadata["reference_proposals"][0]["units"], 2)
         self.assertEqual(draft.lines.get().units, 3)
 
     def test_exit_inventory_cannot_create_or_reactivate_references_even_forged_requests(self):
