@@ -148,7 +148,7 @@ class SheetReceiverProfileTests(TestCase):
     def test_opt_in_on_older_installation_adds_only_exact_receiver_read_grants(self):
         with patch("native_windows.sheet_receiver.native") as command:
             prepare_account(self.root)
-        self.assertEqual(command.call_count, 7)
+        self.assertEqual(command.call_count, 8)
         for args in command.call_args_list:
             text = " ".join(args.args[0])
             self.assertNotIn("owner.json", text)

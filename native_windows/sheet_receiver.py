@@ -36,6 +36,7 @@ def prepare_account(root):
         (root / "runtime", "RX"),
         (root / "secrets", "RX"),
         (root / "signing", "RX"),
+        (root / "installation.json", "R"),
         (root / "secrets/app.json", "R"),
         (root / "signing/signing.pem", "R"),
         (root / "signing/pending-reception.pem", "R"),
