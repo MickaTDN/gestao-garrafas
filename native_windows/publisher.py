@@ -52,6 +52,7 @@ def validate_network(release, root, config):
 
 def render(release, root, config):
     clients = validate_network(release, root, config)
+    address, port = config["address"], config.get("port", 8444)
 
     def quote(path):
         return '"' + Path(path).as_posix() + '"'
