@@ -403,7 +403,7 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 2
+            == 4
         )
         assert conn.execute(
             "SELECT source_id::text,sequence FROM consultation_exportsource"
@@ -411,18 +411,41 @@ def main(directory):
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
     assert (root / "signing/pending-reception.pem").read_bytes() == pending_key_before
     with connection(root) as conn:
-        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 2
+        # Three administrative/file sheets from #31 plus one device/Wi-Fi sheet.
+        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 4
         assert (
             conn.execute(
                 "SELECT count(*) FROM consultation_sheetreceipt WHERE outcome IN ('pending','duplicate') AND octet_length(original)>0"
             ).fetchone()[0]
-            == 4
+            == 6
         )
         assert (
             conn.execute(
                 "SELECT count(*) FROM consultation_sheetreceipt WHERE actor_id IS NULL"
             ).fetchone()[0]
             == 2
+        )
+        assert conn.execute("SELECT count(*) FROM consultation_sheetaction").fetchone()[0] == 5
+    # Retried confirmations remain read-only after a real encrypted Windows recovery.
+    manage(
+        root,
+        "shell",
+        "-c",
+        "from consultation.models import SheetAction; from consultation.review import confirm_sheet; "
+        "rows=list(SheetAction.objects.filter(kind='confirmed').select_related('actor')); "
+        "assert len(rows)==2; "
+        "[confirm_sheet(r.sheet_id,actor=r.actor,sequence=r.sequence-1,token=r.data['token'],confirmed=True) for r in rows]",
+    )
+    with connection(root) as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
+            ).fetchone()[0]
+            == 4
+        )
+        assert conn.execute("SELECT count(*) FROM inventory_reportnumber").fetchone()[0] == 4
+        assert (
+            conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     assert not (root / "runtime/receiver/approved").exists()
     log(

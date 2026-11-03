@@ -87,3 +87,45 @@ class SheetReceipt(SheetEvidence):
         choices=[("pending", "Pendente"), ("duplicate", "Repetida"), ("conflict", "Conflito")],
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class SheetAction(SheetEvidence):
+    """Append-only working copies and decisions; never rewrites incoming evidence."""
+
+    class Kind(models.TextChoices):
+        CORRECTED = "corrected", "Corrigida"
+        REVIEWED = "reviewed", "Conferida"
+        REJECTED = "rejected", "Rejeitada"
+        CONFIRMED = "confirmed", "Confirmada"
+
+    sheet = models.ForeignKey(PendingSheet, on_delete=models.PROTECT, related_name="actions")
+    sequence = models.PositiveIntegerField()
+    kind = models.CharField(max_length=15, choices=Kind)
+    actor = models.ForeignKey("accounts.User", on_delete=models.PROTECT)
+    reason = models.TextField(blank=True)
+    data = models.JSONField(default=dict)
+    movement = models.OneToOneField("inventory.Movement", on_delete=models.PROTECT, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sheet", "sequence"], name="unique_sheet_action_sequence"
+            ),
+            models.UniqueConstraint(
+                fields=["sheet"],
+                condition=models.Q(kind="confirmed"),
+                name="one_sheet_confirmation",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["corrected", "reviewed", "rejected", "confirmed"]),
+                name="valid_sheet_action_kind",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="confirmed", movement__isnull=False)
+                    | (~models.Q(kind="confirmed") & models.Q(movement__isnull=True))
+                ),
+                name="confirmed_sheet_requires_movement",
+            ),
+        ]

@@ -21,6 +21,7 @@
       {% if access.stock_view %}<a class="nav-btn {% if section == 'stock' %}active{% endif %}" href="{% url 'web:stock' %}"><span class="ico" aria-hidden="true">▦</span>Stock</a>{% endif %}
       {% if access.entry %}<a class="nav-btn {% if section == 'entry' %}active{% endif %}" href="{% url 'web:entry' %}"><span class="ico" aria-hidden="true">↘</span>Entradas</a>{% endif %}
       {% if access.exit %}<a class="nav-btn {% if section == 'exit' %}active{% endif %}" href="{% url 'web:exit' %}"><span class="ico" aria-hidden="true">↗</span>Saídas</a>{% endif %}
+      {% if access.admin %}<a class="nav-btn {% if section == 'pending-entry' %}active{% endif %}" href="{% url 'web:pending-entries' %}">Entradas pendentes</a><a class="nav-btn {% if section == 'pending-exit' %}active{% endif %}" href="{% url 'web:pending-exits' %}">Saídas pendentes</a>{% endif %}
       {% if access.inventory %}<a class="nav-btn {% if section == 'inventory' %}active{% endif %}" href="{% url 'web:inventory' %}"><span class="ico" aria-hidden="true">☷</span>Inventário</a>{% endif %}
       {% if access.export %}<a class="nav-btn {% if section == 'export' %}active{% endif %}" href="{% url 'web:vertente-export' %}"><span class="ico" aria-hidden="true">⇩</span>Exportar Stock</a>{% endif %}
       {% if access.reports_view %}<a class="nav-btn {% if section == 'reports' %}active{% endif %}" href="{% url 'web:reports' %}"><span class="ico" aria-hidden="true">▤</span>Relatórios</a>{% endif %}
