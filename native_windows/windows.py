@@ -14,6 +14,7 @@ SERVICES = {
     "web": "GVAWeb",
     "backup": "GVABackup",
     "publisher": "GVAPublisher",
+    "receiver": "GVASheetReceiver",
 }
 
 
@@ -21,7 +22,12 @@ def native(args, **kwargs):
     result = subprocess.run(
         # sc/icacls can emit the Windows OEM/ANSI code page even when our Python
         # host uses UTF-8. Output is diagnostic only; exit status is authoritative.
-        list(map(str, args)), timeout=120, capture_output=True, text=True, errors="replace", **kwargs
+        list(map(str, args)),
+        timeout=120,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        **kwargs,
     )
     if result.returncode:
         detail = ""
@@ -132,6 +138,8 @@ def configure(root, release, *, create=False, only=None):
     for kind, name in SERVICES.items():
         if only and kind != only:
             continue
+        if kind == "receiver" and not create and not exists(name):
+            continue
         binary = f'"{Path(release) / "service/GVA.Native.exe"}" --service {kind}'
         command = [
             "sc.exe",
@@ -166,12 +174,17 @@ def disable_all():
 
 
 def stop_all():
-    for kind in ("publisher", "backup", "web", "postgres"):
+    for kind in ("receiver", "publisher", "backup", "web", "postgres"):
         stop(SERVICES[kind])
 
 
 def activate(root):
-    for kind in ("postgres", "web", "backup", "publisher"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
+        if kind == "receiver":
+            from .sheet_receiver import approved
+
+            if not approved(root):
+                continue
         name = SERVICES[kind]
         if kind == "publisher":
             import json
@@ -197,7 +210,9 @@ def activate(root):
                 if status == 4:
                     break
                 if status == 1:
-                    raise UnsafeOperation("O serviço " + kind + " parou: " + service_failure(root, kind))
+                    raise UnsafeOperation(
+                        "O serviço " + kind + " parou: " + service_failure(root, kind)
+                    )
                 time.sleep(1)
             else:
                 raise UnsafeOperation(

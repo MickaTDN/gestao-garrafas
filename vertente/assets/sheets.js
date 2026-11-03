@@ -1,6 +1,6 @@
 // Drafts are not stock movements. JOSE implements the PR #29 wire protocol.
 import { CompactEncrypt, importJWK, calculateJwkThumbprint } from "./jose.js";
-import { insist, exact, integer, text, UUID, ID, calendarDate, timestamp,
+import { insist, exact, integer, HEX, UUID, ID, calendarDate, timestamp,
   bytes, encode, verifyEnvelope, today } from "./domain.js";
 import { raw, commit, authorization, copyOf, derive, seal, unseal, quantity } from "./store.js";
 
@@ -24,7 +24,7 @@ function safeText(value, max, empty = true) {
   insist(empty || value.trim().length > 0);
 }
 function validate(v, source, device) {
-  exact(v, ["version", "source_id", "device_id", "sheets"]);
+  exact(v, ["version", "source_id", "device_id", "sheets", ...("deliveries" in v ? ["deliveries"] : [])]);
   insist(v.version === 1 && v.source_id === source && v.device_id === device);
   insist(Array.isArray(v.sheets) && v.sheets.length <= 1000);
   const ids = new Set();
@@ -54,6 +54,18 @@ function validate(v, source, device) {
       insist(s.file.format === "vertente-pending-sheet" && s.file.version === 1 &&
         typeof s.file.jwe === "string" && encoder.encode(JSON.stringify(s.file)).length <= MAX_WIRE);
     } else insist(s.state !== "exported");
+  }
+  if (v.deliveries !== undefined) {
+    insist(Array.isArray(v.deliveries) && v.deliveries.length <= 1000);
+    const ids = new Set();
+    for (const d of v.deliveries) {
+      exact(d, ["sheet_id", "file_sha256", "attempt_id", "attempted_at", "last_error", "ack", "ack_request_id"]);
+      insist(UUID.test(d.sheet_id) && !ids.has(d.sheet_id) && HEX.test(d.file_sha256) &&
+        UUID.test(d.attempt_id) && timestamp(d.attempted_at) &&
+        v.sheets.some(s => s.id === d.sheet_id && s.state === "exported"));
+      ids.add(d.sheet_id); safeText(d.last_error, 200);
+      insist(d.ack === null ? d.ack_request_id === null : UUID.test(d.ack_request_id));
+    }
   }
   return v;
 }
@@ -119,7 +131,19 @@ export async function sheetState() {
     await permission(saved, g);
     let v;
     try { v = await open(saved, g); } catch (_) { /* Locked vault exposes no personal fields. */ }
-    return { allowed: true, unlocked: !!v, exists: !!saved.sheetVault, sheets: v?.sheets || [],
+    let transport = null;
+    try { transport = await transportPolicy(saved); } catch (_) { /* Wi-Fi remains opt-in. */ }
+    const deliveries = {};
+    if (v) for (const d of v.deliveries || []) {
+      const s = v.sheets.find(s => s.id === d.sheet_id);
+      try {
+        const proof = d.ack ? await receiptProof(d.ack, saved, g, s, d.ack_request_id, {stored: true}) : null;
+        deliveries[s.id] = {state: proof ? ({pending: "received", duplicate: "duplicate", conflict: "conflict"})[proof.outcome] : "failure",
+          receipt_id: proof?.receipt_id, received_at: proof?.received_at, message: d.last_error};
+      } catch (_) { deliveries[s.id] = {state: "failure", message: "Comprovativo inválido; não existe prova de receção verificada."}; }
+    }
+    return { allowed: true, unlocked: !!v, exists: !!saved.sheetVault, sheets: v?.sheets || [], deliveries,
+      transportEnabled: !!transport && saved.meta.sheet_transport_enabled === true,
       recipient: !!saved.meta.sheet_recipient };
   } catch (e) { return { allowed: false, unlocked: false, sheets: [], error: e.message }; }
 }
@@ -196,5 +220,94 @@ export async function restoreSheets(file, password) {
     if (old) insist(JSON.stringify(old) === JSON.stringify(s), "Conflito com uma folha local; nenhuma folha foi substituída.");
     else prior.sheets.push(s);
   }
+  for (const delivery of v.deliveries || []) {
+    const s = prior.sheets.find(s => s.id === delivery.sheet_id);
+    if (delivery.ack) await receiptProof(delivery.ack, saved, g, s, delivery.ack_request_id, {stored: true});
+    prior.deliveries ||= [];
+    if (!prior.deliveries.some(d => d.sheet_id === delivery.sheet_id)) prior.deliveries.push(delivery);
+  }
   await save(saved, g, prior);
+}
+
+async function transportPolicy(saved) {
+  insist(saved.meta.sheet_transport, "Importe a política Wi-Fi assinada pela informática.");
+  const policy = await verifyEnvelope(saved.meta.sheet_transport, saved.meta.trust, "vertente-sheet-transport", 1);
+  exact(policy, ["source_id", "receiver_origin", "stock_origin"]);
+  const url = new URL(policy.receiver_origin);
+  insist(url.protocol === "https:" && url.origin === policy.receiver_origin && url.pathname === "/" &&
+    !url.username && !url.password && policy.stock_origin === location.origin && url.origin !== location.origin,
+    "Política de outra origem ou transporte não autorizado.");
+  return policy;
+}
+export async function configureTransport(envelope, enabled) {
+  const saved = await raw(), g = await authorization(saved);
+  await permission(saved, g);
+  const candidate = {...saved, meta: {...saved.meta, sheet_transport: envelope}};
+  await transportPolicy(candidate);
+  insist(typeof enabled === "boolean");
+  await commit(saved, tx => {
+    tx.objectStore("meta").put({id: "sheet_transport", value: envelope});
+    tx.objectStore("meta").put({id: "sheet_transport_enabled", value: enabled});
+  });
+}
+export async function disableTransport() {
+  const saved = await raw(); await authorization(saved);
+  await commit(saved, tx => tx.objectStore("meta").put({id: "sheet_transport_enabled", value: false}));
+}
+async function wireHash(file) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify(file))))]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+}
+async function receiptProof(envelope, saved, grant, sheet, requestId, opts = {}) {
+  const data = await verifyEnvelope(envelope, saved.meta.trust, "vertente-sheet-receipt", 1, opts);
+  exact(data, ["source_id", "device_id", "sheet_id", "revision", "file_sha256", "receipt_id", "outcome", "received_at", "request_id"]);
+  insist(data.device_id === grant.device_id && data.sheet_id === sheet.id && data.revision === sheet.revision &&
+    data.request_id === requestId && UUID.test(data.receipt_id) && timestamp(data.received_at) &&
+    ["pending", "duplicate", "conflict"].includes(data.outcome) && data.file_sha256 === await wireHash(sheet.file),
+    "Comprovativo não corresponde à folha, dispositivo ou tentativa.");
+  return data;
+}
+export async function sendSheet(id, revision) {
+  let saved = await raw(), g = await authorization(saved), v = await open(saved, g);
+  const policy = await transportPolicy(saved);
+  insist(saved.meta.sheet_transport_enabled === true, "Ative explicitamente o envio Wi-Fi neste dispositivo.");
+  const sheet = v.sheets.find(s => s.id === id);
+  insist(sheet?.state === "exported" && sheet.revision === revision, "Prepare e confira a folha antes de enviar.");
+  const requestId = crypto.randomUUID(), hash = await wireHash(sheet.file);
+  v.deliveries ||= [];
+  let delivery = v.deliveries.find(d => d.sheet_id === id);
+  if (!delivery) {delivery = {sheet_id: id, ack: null, ack_request_id: null}; v.deliveries.push(delivery);}
+  Object.assign(delivery, {file_sha256: hash, attempt_id: requestId, attempted_at: new Date().toISOString(), last_error: "Tentativa sem comprovativo novo; em caso de interrupção, tente novamente."});
+  await save(saved, g, v); // No request if persistence fails.
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    insist(navigator.onLine, "Sem ligação.");
+    const response = await fetch(policy.receiver_origin + "/v1/pending-sheets", {
+      method: "POST", mode: "cors", credentials: "include", redirect: "error", cache: "no-store", referrerPolicy: "no-referrer",
+      headers: {"Content-Type": "application/json", "X-GVA-Request": requestId},
+      body: JSON.stringify(sheet.file), signal: controller.signal,
+    });
+    insist(response.ok && response.headers.get("content-type")?.startsWith("application/json"));
+    const reader = response.body.getReader(); let size = 0, chunks = [];
+    while (true) {const {done, value} = await reader.read(); if (done) break; size += value.length;
+      if (size > 32768) {await reader.cancel(); throw new Error("Comprovativo demasiado grande.");} chunks.push(value);}
+    const body = new Uint8Array(size); let offset = 0; for (const chunk of chunks) {body.set(chunk, offset); offset += chunk.length;}
+    const ack = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(body));
+    await receiptProof(ack, saved, g, sheet, requestId);
+    saved = await raw(); g = await authorization(saved); v = await open(saved, g);
+    delivery = v.deliveries.find(d => d.sheet_id === id);
+    insist(delivery?.attempt_id === requestId, "Existe outra tentativa; reabra a folha para consultar o resultado.");
+    delivery.ack = ack; delivery.ack_request_id = requestId; delivery.last_error = "";
+    await save(saved, g, v);
+  } catch (_) {
+    try {
+      saved = await raw(); g = await authorization(saved); v = await open(saved, g);
+      delivery = v.deliveries.find(d => d.sheet_id === id);
+      if (delivery?.attempt_id === requestId) {
+        delivery.last_error = "Falha nesta tentativa. Conserve a folha e tente novamente; um comprovativo anterior válido mantém-se.";
+        await save(saved, g, v);
+      }
+    } catch (_) { /* Last committed vault remains intact, including unknown-delivery state. */ }
+    throw new Error("Envio não comprovado nesta tentativa. A folha foi preservada; tente novamente com a mesma identidade.");
+  } finally {clearTimeout(timer);}
 }

@@ -87,8 +87,8 @@ static class Program
         // Elevation is explicit, limited to maintenance, and uses the Windows UAC prompt.
         bool admin = new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
         if (!admin) { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--maintenance") { UseShellExecute = true, Verb = "runas" }); return; }
-        using var form = new Form { Text = "Manutenção — informática", Width = 580, Height = 380 };
-        var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20) }; form.Controls.Add(layout);
+        using var form = new Form { Text = "Manutenção — informática", Width = 580, Height = 600 };
+        var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(20) }; form.Controls.Add(layout);
         layout.Controls.Add(new Label { Text = "Operações autorizadas de manutenção. A recuperação exige uma instalação isolada nova e a versão exata do backup.", Width = 510, Height = 60 });
         void Button(string label, Action action) { var b = new Button { Text = label, Width = 450, Height = 45 }; b.Click += async (_, _) => { b.Enabled = false; try { await Task.Run(action); MessageBox.Show("Operação concluída."); } catch (Exception e) { MessageBox.Show(e is UserError ? e.Message : "Falha; preserve os dados e contacte a informática."); } finally { b.Enabled = true; } }; layout.Controls.Add(b); }
         Button("Criar backup manual cifrado", () => Run(Release, "backup"));
@@ -106,6 +106,15 @@ static class Program
         Button("Aprovar recuperação após conferência (informática)", () => {
             form.Invoke(() => { if (MessageBox.Show("Confirmou a integridade, a sequência Android e TODAS as entradas exportadas após o backup? A origem anterior está isolada e parada? Esta ação autoriza o arranque local da cópia recuperada.", "Conferência obrigatória", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) Run(Release, "approve-recovery", PrivateRequest(new { confirmed_identity_history = true })); });
         });
+        Button("Preparar receção de folhas Wi-Fi (informática)", () => form.Invoke(() => {
+            using var d = new OpenFileDialog { Filter = "Configuração aprovada|*.json" };
+            if (d.ShowDialog() == DialogResult.OK) Run(Release, "configure-sheet-receiver", PrivateRequest(new { configuration = d.FileName }));
+        }));
+        Button("Ativar receção de folhas Wi-Fi", () => form.Invoke(() => {
+            if (MessageBox.Show("DNS, certificados individuais, revogação e firewall foram aprovados pela informática?", "Autorizar receção", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                Run(Release, "control-sheet-receiver", PrivateRequest(new { enable = true, it_network_ready = true }));
+        }));
+        Button("Desativar receção de folhas Wi-Fi", () => Run(Release, "control-sheet-receiver", PrivateRequest(new { enable = false })));
         Button("Abrir instruções de recuperação e configuração", () => Process.Start(new ProcessStartInfo(Path.Combine(Release, "app", "docs", "windows-native.html")) { UseShellExecute = true }));
         form.ShowDialog();
     }
@@ -250,7 +259,7 @@ sealed class NativeService : ServiceBase
     volatile bool stopping;
     string stopFile = "";
     public NativeService(string kind)
-    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
+    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", "receiver" => "GVASheetReceiver", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
     protected override void OnStart(string[] args)
     {
         RequestAdditionalTime(120000);

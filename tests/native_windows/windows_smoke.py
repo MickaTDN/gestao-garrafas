@@ -145,6 +145,9 @@ def main(directory):
     from tests.native_windows.tls_probe import main as tls_probe
 
     tls_probe(root, directory)
+    from tests.native_windows.sheet_receiver_probe import main as receiver_probe
+
+    receiver_probe(root, directory)
     tls_before = {
         path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
     }
@@ -408,13 +411,20 @@ def main(directory):
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
     assert (root / "signing/pending-reception.pem").read_bytes() == pending_key_before
     with connection(root) as conn:
-        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 2
         assert (
             conn.execute(
                 "SELECT count(*) FROM consultation_sheetreceipt WHERE outcome IN ('pending','duplicate') AND octet_length(original)>0"
             ).fetchone()[0]
+            == 4
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM consultation_sheetreceipt WHERE actor_id IS NULL"
+            ).fetchone()[0]
             == 2
         )
+    assert not (root / "runtime/receiver/approved").exists()
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
@@ -432,8 +442,22 @@ def report_failure(error, root):
     # Safe service categories only; never dump secret/config/request files.
     from native_windows.windows import service_failure
 
-    for kind in ("postgres", "web", "backup", "publisher"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
         log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
+    import re
+
+    for name in ("startup.json", "backend.json"):
+        path = root / "runtime/receiver" / name
+        if path.is_file():
+            data = json.loads(path.read_text())
+            safe = {
+                key: value
+                for key, value in data.items()
+                if key in {"phase", "category"}
+                and isinstance(value, str)
+                and re.fullmatch(r"[A-Za-z_]{1,80}", value)
+            }
+            log("::notice::Receiver diagnostic " + name + ": " + json.dumps(safe))
     log(
         "::error::Native Windows smoke: " + type(error).__name__ + ": " + detail.replace("\n", " "),
         error=True,

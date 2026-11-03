@@ -15,7 +15,7 @@ class SyntheticMigrationProbeTests(TestCase):
             app = Path(directory)
             target = app / "consultation/migrations"
             shutil.copytree(ROOT / "consultation/migrations", target)
-            add_synthetic_migration_probe(app)
+            probe = add_synthetic_migration_probe(app)
             graph = MigrationGraph()
             dependencies = {}
             for path in target.glob("[0-9]*.py"):
@@ -40,5 +40,5 @@ class SyntheticMigrationProbeTests(TestCase):
             graph.ensure_not_cyclic()
             self.assertEqual(
                 graph.leaf_nodes("consultation"),
-                [("consultation", "0005_native_synthetic_probe")],
+                [("consultation", probe)],
             )
