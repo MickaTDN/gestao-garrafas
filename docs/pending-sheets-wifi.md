@@ -98,19 +98,19 @@ privadas e o ficheiro público em `tls`; o backup cifrado da PWA inclui provas e
 tentativas. Marcadores de aprovação em `runtime` não são restaurados: a rede exige
 nova aprovação no destino. Não se altera o formato portátil do PR #25.
 
-Base exata: PR #30 `2ad75e5`, que inclui PR #29. Reutilização seletiva do PR #28:
+Origem desta implementação: PR #30 `2ad75e5`, que inclui PR #29. Reutilização seletiva do PR #28:
 verificação do proprietário do listener, ciclo de proxy nativo e separação de contas;
-não integra branches antigas. O PR #31 `4fd1881` é uma linha irmã: na integração
-futura é necessária migração de junção entre as duas migrações `consultation.0005`
-e `0006_sheet_action_guards`. Não renumerar migrações já aplicadas. A prova de
-compatibilidade deve incluir receção seguida de conferência/confirmação explícita
-do PR #31; a receção isolada nunca cria movimentos. Adaptar também as contagens dos
-fixtures Windows quando as suites forem compostas. Os PR originais ficam intactos.
+não integra branches antigas. Nesta branch de integração, o PR #31 `4fd1881` está
+composto com #32: `0007_merge_review_wifi` junta as duas migrações `consultation.0005`
+e `0006_sheet_action_guards`, sem renumerar o histórico. O ensaio HTTPS exige agora
+receção seguida de confirmação administrativa e repetição mista; a receção isolada
+nunca cria movimentos. As contagens dos fixtures Windows foram conciliadas,
+preservando todas as proteções. Os PR originais ficam intactos.
 
-Verificação adicional em árvores temporárias, sem alterar branches: 12 testes
-unitários do backup portátil/recetor com o PR #25 e 8 testes de separação dos
+Verificação adicional em árvores temporárias, sem alterar branches: 14 testes
+unitários do backup portátil/recetor com o PR #25 e 10 testes de separação dos
 gateways com o PR #28 passaram. Existem conflitos de integração futuros na UI de
-manutenção, CLI e ACLs (`#25`: três ficheiros; `#28`: cinco, incluindo fixtures).
+manutenção, CLI e ACLs (`#25`: quatro ficheiros; `#28`: cinco, incluindo fixtures).
 Devem conservar as ações de ambos os módulos, contas distintas e concessões
 mínimas; não resolver por substituição integral de um lado. Estes ensaios unitários
 não substituem um ciclo Windows conjunto após integração autorizada.

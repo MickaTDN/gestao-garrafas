@@ -55,6 +55,7 @@ class LostResponse:
             self.committed.set()
             if not self.release.wait(15):
                 raise RuntimeError("Synthetic response-loss synchronization failed")
+
             # Chromium offline emulation does not reliably close an already-open
             # socket. Actually truncate the response AFTER the real DB commit;
             # the successful signed receipt must never reach the browser.
@@ -357,7 +358,7 @@ class SheetTransportHTTPSIntegrationTests(StaticLiveServerTestCase):
         self.sheets("exportSheet", id, 2)
         return id
 
-    def test_real_https_mtls_lost_response_retry_offline_revocation_and_optional_stage31(self):
+    def test_real_https_mtls_lost_response_retry_offline_and_administrative_confirmation(self):
         id = self.prepared()
         LostResponse.committed.clear()
         LostResponse.release.clear()
@@ -392,6 +393,39 @@ class SheetTransportHTTPSIntegrationTests(StaticLiveServerTestCase):
         self.sheets("unlockSheets", "Synthetic-sheet-only-private-phrase")
         self.assertEqual(self.sheets("sheetState")["deliveries"][id]["state"], "duplicate")
         self.context.set_offline(False)
+        # Actual merged review service is mandatory now, never an optional branch.
+        raw = self.page.evaluate(
+            "async id=>JSON.stringify(await (await import('/assets/sheets.js')).exportSheet(id,2))",
+            id,
+        ).encode()
+
+        def administrative_confirmation():
+            from consultation.review import confirm_sheet, review_sheet
+            from consultation.sheets import receive_sheet
+
+            sheet = PendingSheet.objects.get()
+            self.assertEqual(receive_sheet(raw, actor=self.admin).outcome, "duplicate")
+            review, _ = review_sheet(sheet.pk, actor=self.admin, sequence=0)
+            args = dict(
+                actor=self.admin,
+                sequence=review.sequence,
+                token=review.data["token"],
+                confirmed=True,
+                report_requested=False,
+            )
+            first = confirm_sheet(sheet.pk, **args)
+            self.assertEqual(receive_sheet(raw, actor=self.admin).outcome, "duplicate")
+            repeated = confirm_sheet(sheet.pk, **args)
+            return first.pk, repeated.pk
+
+        first, repeated = self.database_call(administrative_confirmation)
+        self.assertEqual(first, repeated)
+        self.sheets("sendSheet", id, 2)
+        self.assertEqual(self.sheets("sheetState")["deliveries"][id]["state"], "duplicate")
+        self.assertEqual(self.database_call(lambda: Movement.objects.count()), 1)
+        self.assertEqual(
+            self.database_call(lambda: Reference.objects.get(pk=self.ref.pk).current_stock), 20
+        )
         second = self.prepared()
         self.database_call(
             lambda: AuthorizedDevice.objects.filter(pk=self.request["device_id"]).update(
@@ -402,30 +436,3 @@ class SheetTransportHTTPSIntegrationTests(StaticLiveServerTestCase):
             self.sheets("sendSheet", second, 2)
         self.assertEqual(self.database_call(lambda: PendingSheet.objects.count()), 1)
         self.assertEqual(self.context.cookies(), [])
-        # Only this explicitly selected temporary composition may load PR #31.
-        from django.apps import apps
-
-        if apps.all_models["consultation"].get("sheetaction"):
-
-            def administrative_confirmation():
-                from consultation.review import confirm_sheet, review_sheet
-
-                sheet = PendingSheet.objects.get()
-                review, _ = review_sheet(sheet.pk, actor=self.admin, sequence=0)
-                args = dict(
-                    actor=self.admin,
-                    sequence=review.sequence,
-                    token=review.data["token"],
-                    confirmed=True,
-                    report_requested=False,
-                )
-                first = confirm_sheet(sheet.pk, **args)
-                second = confirm_sheet(sheet.pk, **args)
-                return first.pk, second.pk
-
-            first, repeated = self.database_call(administrative_confirmation)
-            self.assertEqual(first, repeated)
-            self.assertEqual(
-                self.database_call(lambda: Reference.objects.get(pk=self.ref.pk).current_stock), 20
-            )
-            self.assertEqual(self.database_call(lambda: Movement.objects.count()), 1)
