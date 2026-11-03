@@ -24,7 +24,7 @@ alterar backups anteriores. Backups antigos continuam nos procedimentos existent
 
 Preservam-se rollback, retenção, provas/PDFs, identidades, gateways isolados e
 aprovação de rede após restauro. Não há alteração de PWA ou dos protocolos.
-Ensaios CI: DPAPI real no Windows, backups consecutivos sem frase, restauro em
+Ensaios preparados para CI (ainda não executados nesta revisão): DPAPI real no Windows, backups consecutivos sem frase, restauro em
 destino novo sem cofre, credencial errada, falha de restauro/rollback e evidências
 existentes, EXEs 1.0→1.1. Linux omite apenas a chamada DPAPI real.
 
@@ -32,3 +32,15 @@ Pendente homologação em Windows 11: UAC com administrador diferente, ACL contr
 utilizador normal, UI, dois computadores/VMs, perda do cofre e frase original,
 restauro antigo e manutenção Wi-Fi desativada. Runners não substituem essa prova.
 Não foram publicadas versões nem alteradas instalações reais.
+
+## Estado desta revisão
+
+Validação local: 92 testes nativos, 91 aprovados e 1 DPAPI omitido em Linux;
+32 regressões de segurança aprovadas; Ruff, diff-check e política dos workflows
+aprovados. Não existe dotnet neste ambiente. Windows/DPAPI real, Chromium,
+PostgreSQL e ciclo EXE desta revisão ainda não foram executados. Não se considera
+a funcionalidade concluída sem esses resultados e a homologação efetiva.
+Push e criação do PR bloqueados por HTTP 401 Bad credentials no GitHub.
+Branch local preservada: feature/simple-portable-backups. Após religar a
+integração GitHub, enviar a branch e criar draft com destino a
+integration/native-recovery-wifi-sheets, executar CI e corrigir eventuais falhas.
