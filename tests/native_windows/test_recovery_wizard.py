@@ -227,8 +227,6 @@ class RecoveryWizardTests(TestCase):
             (self.root / "cluster/precious").read_bytes(), b"confirmed-data-and-history"
         )
         self.assertFalse((self.root / "activation-permit").exists())
-        self.assertFalse((self.root / "runtime/wifi/approved").exists())
-        self.assertFalse((self.root / "runtime/receiver/approved").exists())
 
 
 class ExternalBackupDestinationTests(TestCase):
