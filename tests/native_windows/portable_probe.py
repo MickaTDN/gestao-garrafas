@@ -84,6 +84,8 @@ def run(root, directory, key, phrase):
         if table not in ("inventory_auditevent", "__sequences__"):
             assert after[table] == expected, "Restored table differs: " + table
     assert json.loads((root / "publisher.json").read_text())["enabled"] is False
+    assert not (root / "runtime/wifi/approved").exists()
+    assert not (root / "runtime/receiver/approved").exists()
     assert archive.exists()  # Retention/uninstall never owns the selected external file.
 
     return request

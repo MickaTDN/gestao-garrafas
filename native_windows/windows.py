@@ -15,6 +15,7 @@ SERVICES = {
     "backup": "GVABackup",
     "publisher": "GVAPublisher",
     "receiver": "GVASheetReceiver",
+    "wifi": "GVAManagementWifi",
 }
 
 
@@ -138,7 +139,7 @@ def configure(root, release, *, create=False, only=None):
     for kind, name in SERVICES.items():
         if only and kind != only:
             continue
-        if kind == "receiver" and not create and not exists(name):
+        if kind in {"receiver", "wifi"} and not create and not exists(name):
             continue
         binary = f'"{Path(release) / "service/GVA.Native.exe"}" --service {kind}'
         command = [
@@ -174,14 +175,19 @@ def disable_all():
 
 
 def stop_all():
-    for kind in ("receiver", "publisher", "backup", "web", "postgres"):
+    for kind in ("wifi", "receiver", "publisher", "backup", "web", "postgres"):
         stop(SERVICES[kind])
 
 
 def activate(root):
-    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver", "wifi"):
         if kind == "receiver":
             from .sheet_receiver import approved
+
+            if not approved(root):
+                continue
+        if kind == "wifi":
+            from .management_wifi import approved
 
             if not approved(root):
                 continue

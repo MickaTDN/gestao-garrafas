@@ -153,6 +153,9 @@ def main(directory):
     from tests.native_windows.sheet_receiver_probe import main as receiver_probe
 
     receiver_probe(root, directory)
+    from tests.native_windows.management_wifi_probe import main as management_wifi_probe
+
+    management_wifi_probe(root, directory)
     tls_before = {
         path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
     }
@@ -474,6 +477,7 @@ def main(directory):
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     assert not (root / "runtime/receiver/approved").exists()
+    assert not (root / "runtime/wifi/approved").exists()
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
@@ -495,7 +499,7 @@ def report_failure(error, root):
     # Safe service categories only; never dump secret/config/request files.
     from native_windows.windows import service_failure
 
-    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver", "wifi"):
         log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
     import re
 

@@ -41,6 +41,10 @@ class RecoveryWizardTests(TestCase):
         (self.data / "database.dump").write_bytes(b"synthetic")
         (self.data / "backup-policy.json").write_text('{"retain":14,"copy_to":"machine-dependent"}')
         (self.data / "publisher.json").write_text('{"enabled":true}')
+        for kind in ("wifi", "receiver"):
+            marker = self.root / "runtime" / kind / "approved"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("approved on previous machine")
         for name in ("secrets", "signing", "tls"):
             (self.data / name).mkdir()
         for name, user in (("owner", "gva_owner"), ("app", "gva_web")):
@@ -133,6 +137,8 @@ class RecoveryWizardTests(TestCase):
         self.assertIsNone(json.loads((self.root / "backup-policy.json").read_text())["copy_to"])
         self.assertFalse((self.root / "maintenance.json").exists())
         self.assertFalse((self.root / "activation-permit").exists())
+        self.assertFalse((self.root / "runtime/wifi/approved").exists())
+        self.assertFalse((self.root / "runtime/receiver/approved").exists())
 
     def test_restore_and_activation_failure_restore_original_cluster_without_secret_diagnostics(
         self,
@@ -221,6 +227,8 @@ class RecoveryWizardTests(TestCase):
             (self.root / "cluster/precious").read_bytes(), b"confirmed-data-and-history"
         )
         self.assertFalse((self.root / "activation-permit").exists())
+        self.assertFalse((self.root / "runtime/wifi/approved").exists())
+        self.assertFalse((self.root / "runtime/receiver/approved").exists())
 
 
 class ExternalBackupDestinationTests(TestCase):

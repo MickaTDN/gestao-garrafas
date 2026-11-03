@@ -64,6 +64,8 @@ jobs:
         run: RUN_SHEET_TRANSPORT_HTTPS=1 uv run python manage.py test consultation.test_sheet_transport_https --testrunner tests.ci.AnnotatingRunner --noinput
       - name: Preserved source commits and joined migration history (read-only)
         run: uv run python scripts/check_sheet_review_compatibility.py
+      - name: Management gateway and exact PR34 renderer compatibility (disposable, no merge)
+        run: uv run python scripts/check_management_pr34_compatibility.py
       - name: Stop services
         if: always()
         run: docker compose down

@@ -64,6 +64,8 @@ def main():
             "portable-backup",
             "recovery-preview",
             "recovery-restore",
+            "configure-management-wifi",
+            "control-management-wifi",
         ),
     )
     parser.add_argument("--package")
@@ -86,7 +88,7 @@ def main():
             from .state import write_json
 
             # Only fixed service runtime, never raw exceptions/SQL/credentials.
-            if args.kind in {"postgres", "web", "backup", "publisher", "receiver"}:
+            if args.kind in {"postgres", "web", "backup", "publisher", "receiver", "wifi"}:
                 record = {"category": type(error).__name__}
                 if isinstance(error, OSError):
                     record["file"] = Path(error.filename).name if error.filename else None
@@ -205,6 +207,14 @@ def main():
         setup(root, request)
     elif args.action == "control-sheet-receiver":
         from .sheet_receiver import control
+
+        control(root, request)
+    elif args.action == "configure-management-wifi":
+        from .management_wifi import setup
+
+        setup(root, request)
+    elif args.action == "control-management-wifi":
+        from .management_wifi import control
 
         control(root, request)
     elif args.action == "publisher":

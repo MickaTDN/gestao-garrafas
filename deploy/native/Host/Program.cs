@@ -122,6 +122,15 @@ static class Program
                 Run(Release, "control-sheet-receiver", PrivateRequest(new { enable = true, it_network_ready = true }));
         }));
         Button("Desativar receção de folhas Wi-Fi", () => Run(Release, "control-sheet-receiver", PrivateRequest(new { enable = false })));
+        Button("Preparar Wi-Fi da Gestão (configuração aprovada)", () => form.Invoke(() => {
+            using var d = new OpenFileDialog { Filter = "Configuração aprovada|*.json" };
+            if (d.ShowDialog() == DialogResult.OK) Run(Release, "configure-management-wifi", PrivateRequest(new { configuration = d.FileName }));
+        }));
+        Button("Ativar Wi-Fi da Gestão", () => form.Invoke(() => {
+            if (MessageBox.Show("A informática aprovou DNS, HTTPS, certificados individuais, revogação e firewall restrita?", "Autorizar acesso à Gestão", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                Run(Release, "control-management-wifi", PrivateRequest(new { enable = true, it_network_ready = true }));
+        }));
+        Button("Desativar Wi-Fi da Gestão", () => Run(Release, "control-management-wifi", PrivateRequest(new { enable = false })));
         Button("Abrir instruções de recuperação e configuração", () => Process.Start(new ProcessStartInfo(Path.Combine(Release, "app", "docs", "windows-native.html")) { UseShellExecute = true }));
         form.ShowDialog();
     }
@@ -278,7 +287,7 @@ sealed class NativeService : ServiceBase
     volatile bool stopping;
     string stopFile = "";
     public NativeService(string kind)
-    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", "receiver" => "GVASheetReceiver", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
+    { this.kind = kind; ServiceName = kind switch { "postgres" => "GVAPostgres17", "web" => "GVAWeb", "backup" => "GVABackup", "publisher" => "GVAPublisher", "receiver" => "GVASheetReceiver", "wifi" => "GVAManagementWifi", _ => throw new ArgumentException("Serviço inválido") }; CanShutdown = true; }
     protected override void OnStart(string[] args)
     {
         RequestAdditionalTime(120000);
