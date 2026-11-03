@@ -24,6 +24,9 @@ class IntegratedFixtures(TransportFixtures):
         return self.ack(accept_upload(raw, principal=self.principal, request_id=str(uuid.uuid4())))
 
     def confirm(self, sheet, review, **kwargs):
+        # An entry always requires an explicit report choice, even in concurrent
+        # service calls. Keep that production validation in force.
+        kwargs.setdefault("report_requested", False)
         return confirm_sheet(
             sheet.pk,
             actor=self.admin,
