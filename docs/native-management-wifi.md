@@ -63,6 +63,27 @@ continua separado. Não instalar versões antigas após migrações mais recente
 
 ## Homologação pendente
 
+### Compatibilidade com o recetor de folhas (#32–#34)
+
+O gateway usa `publisher.validate_network`, a mesma validação pura de endereços,
+hosts, portas e redes autorizadas. Não chama `publisher.render` nem lê templates,
+políticas ou certificados do publicador para validar a rede. Não são alteradas ACLs
+NTFS, contas, chaves, autenticação, CSRF ou regras de revogação.
+
+`python scripts/check_management_pr34_compatibility.py` extrai a revisão exata do
+PR #34 (`24c6904ba1dc14d436961eb12188c3a2e9aa9b97`) numa pasta temporária e acrescenta
+apenas o módulo administrativo corrigido e os testes correspondentes. Os módulos do
+publicador e do recetor dessa revisão permanecem intactos. Os 17 testes verificam
+os renderizadores, os perfis nativos e a recusa de leituras da pasta TLS por ambos
+os gateways, mantendo o publicador apenas de leitura e cada proxy com portas e
+certificados próprios. A regressão de composição é excluída no PR #28 isolado e
+executada efetivamente nessa árvore temporária, também na CI.
+
+Esta composição seletiva não integra branches nem resolve automaticamente os
+conflitos futuros de GUI, ciclo de serviços e fixtures Windows. A homologação de
+uma instalação conjunta completa com #34 continua a exigir integração autorizada
+e ensaio próprio; não se alargam permissões para a conseguir iniciar.
+
 Em VMs descartáveis com dados fictícios: testar login próprio/Consulta, entrada,
 saída com assinatura/PDF e inventário no Chromium Android; comparar stock/histórico
 no PC; testar CSRF ausente/inválido, certificado ausente/errado/expirado/revogado,

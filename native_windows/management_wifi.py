@@ -50,9 +50,9 @@ def approved(root):
 
 def render(root, release, config):
     # Reuse the reviewed RFC1918/client allowlist checks, without changing Stock.
-    from .publisher import render as validate
+    from .publisher import validate_network
 
-    validate(release, root, config)
+    validate_network(release, root, config)
     import re
 
     if not re.fullmatch(
