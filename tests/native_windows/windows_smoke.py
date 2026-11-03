@@ -155,7 +155,7 @@ def main(directory):
     with connection(root) as conn:
         assert conn.execute(
             "SELECT count(*),sum(current_stock) FROM inventory_reference"
-        ).fetchone() == (3, 33)
+        ).fetchone() == (4, 33)
         assert conn.execute("SELECT count(*) FROM inventory_importbatch").fetchone()[0] == 0
         assert conn.execute("SELECT upper('água'),lower('ÁGUA')").fetchone() == ("ÁGUA", "água")
         assert (
@@ -403,7 +403,7 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 4
+            == 6
         )
         assert conn.execute(
             "SELECT source_id::text,sequence FROM consultation_exportsource"
@@ -411,13 +411,13 @@ def main(directory):
     assert preserved.is_dir()  # Original data retained, not replaced/deleted.
     assert (root / "signing/pending-reception.pem").read_bytes() == pending_key_before
     with connection(root) as conn:
-        # Three administrative/file sheets from #31 plus one device/Wi-Fi sheet.
-        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 4
+        # Legacy sheets, v2 proposal/approval/exit and the device/Wi-Fi sheet.
+        assert conn.execute("SELECT count(*) FROM consultation_pendingsheet").fetchone()[0] == 6
         assert (
             conn.execute(
                 "SELECT count(*) FROM consultation_sheetreceipt WHERE outcome IN ('pending','duplicate') AND octet_length(original)>0"
             ).fetchone()[0]
-            == 6
+            == 9
         )
         assert (
             conn.execute(
@@ -425,7 +425,19 @@ def main(directory):
             ).fetchone()[0]
             == 2
         )
-        assert conn.execute("SELECT count(*) FROM consultation_sheetaction").fetchone()[0] == 5
+        assert conn.execute("SELECT count(*) FROM consultation_sheetaction").fetchone()[0] == 10
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM inventory_movement WHERE status='draft' AND source_metadata ? 'reference_proposals'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT current_stock FROM inventory_reference WHERE name='Nova referência sintética portátil'"
+            ).fetchone()[0]
+            == 0
+        )
     # Retried confirmations remain read-only after a real encrypted Windows recovery.
     manage(
         root,
@@ -433,7 +445,7 @@ def main(directory):
         "-c",
         "from consultation.models import SheetAction; from consultation.review import confirm_sheet; "
         "rows=list(SheetAction.objects.filter(kind='confirmed').select_related('actor')); "
-        "assert len(rows)==2; "
+        "assert len(rows)==4; "
         "[confirm_sheet(r.sheet_id,actor=r.actor,sequence=r.sequence-1,token=r.data['token'],confirmed=True) for r in rows]",
     )
     with connection(root) as conn:
@@ -441,9 +453,9 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 4
+            == 6
         )
-        assert conn.execute("SELECT count(*) FROM inventory_reportnumber").fetchone()[0] == 4
+        assert conn.execute("SELECT count(*) FROM inventory_reportnumber").fetchone()[0] == 6
         assert (
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )

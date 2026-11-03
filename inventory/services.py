@@ -86,7 +86,9 @@ def locked_lines(movement):
 
 def movement_plans(movement, lines, references, *, signed=False):
     """Validate everything before writing. Caller holds locks, including catalogue lock."""
-    if not lines:
+    from .proposals import pending
+
+    if not lines and not (movement.kind == "entry" and pending(movement)):
         raise ValidationError("Adicione pelo menos uma referência.")
     if movement.kind in ("entry", "exit") and not movement.person_id:
         raise ValidationError("Indique a pessoa responsável.")
@@ -236,10 +238,20 @@ def confirm_movement(
         if not review_token or str(movement.review_token) != str(review_token):
             raise ValidationError("Reveja a operação antes de confirmar.")
         snapshot = {str(pk): reference_state(ref) for pk, ref in references.items()}
+        from .proposals import materialize
+        from .proposals import snapshot as proposal_snapshot
+
+        proposals = proposal_snapshot(movement, actor=actor)
+        if proposals:
+            snapshot["__proposals__"] = proposals
         if movement.review_snapshot != snapshot:
             raise ValidationError(
                 "O stock ou a configuração mudou desde a conferência. Reveja novamente a operação."
             )
+        if proposals:
+            materialize(movement, actor=actor)
+            lines, references = locked_lines(movement)
+            plans = movement_plans(movement, lines, references, signed=signature is not None)
     for plan in plans:
         line, ref = plan["line"], plan["reference"]
         line.quantity, line.stock_before, line.stock_after = (

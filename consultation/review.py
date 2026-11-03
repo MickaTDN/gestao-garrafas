@@ -60,8 +60,20 @@ def _clean(payload, values):
             raise ValueError
         seen = set()
         for line in lines:
-            if set(line) != {"reference_id", "boxes", "units", "box_capacity"}:
+            if set(line) != {"reference_id", "boxes", "units", "box_capacity"} | (
+                {"proposal"} if "proposal" in line else set()
+            ):
                 raise ValueError
+            if "proposal" in line:
+                from inventory.proposals import validate_line
+
+                if payload["kind"] != "entry":
+                    raise ValueError
+                # Location is deliberately optional while correcting, not at review.
+                raw = {**line, "proposal": {"name": line["proposal"]["name"]}}
+                validate_line(raw)
+                if set(line["proposal"]) - {"name", "location_id", "sector_id"}:
+                    raise ValueError
             text(line["reference_id"], 100)
             if not line["reference_id"] or line["reference_id"] in seen:
                 raise ValueError
@@ -87,8 +99,32 @@ def _plans(payload):
         str(r.pk): r
         for r in Reference.objects.select_for_update().filter(pk__in=numeric).order_by("pk")
     }
-    plans = []
+    plans, proposed_names, proposal_basis = [], set(), {}
     for line in payload["lines"]:
+        if "proposal" in line:
+            from inventory.proposals import validate_line
+
+            if payload["kind"] != "entry":
+                raise ValidationError("Saídas não permitem propostas de referências.")
+            clean, total = validate_line(line, approved=True)
+            key = clean["name"].casefold()
+            if key in proposed_names:
+                raise ValidationError(
+                    "Propostas de designação duplicadas; associe/corrija antes de conferir."
+                )
+            proposed_names.add(key)
+            proposal_basis[line["reference_id"]] = clean
+            plans.append(
+                {
+                    "reference": None,
+                    "line": line,
+                    "proposal": clean,
+                    "before": 0,
+                    "quantity": total,
+                    "after": total,
+                }
+            )
+            continue
         ref = refs.get(line["reference_id"])
         if not ref:
             raise ValidationError(
@@ -124,7 +160,7 @@ def _plans(payload):
                 "after": after,
             }
         )
-    return plans, {pk: reference_state(ref) for pk, ref in refs.items()}
+    return plans, {**{pk: reference_state(ref) for pk, ref in refs.items()}, **proposal_basis}
 
 
 def _conflicts(sheet):
@@ -222,6 +258,14 @@ def _confirm_sheet(
         raise ValidationError(
             "Stock, catálogo ou ficheiros divergentes mudaram desde a conferência. Volte a conferir."
         )
+    from inventory.proposals import create_approved
+
+    proposal_refs = {}
+    for plan in plans:
+        if plan["reference"] is None:
+            reference = create_approved(plan["line"], actor=actor)
+            proposal_refs[plan["line"]["reference_id"]] = reference.pk
+            plan["reference"] = reference
     refs = [p["reference"] for p in plans]
     movement = operations.create_draft(actor=actor, kind=payload["kind"], references=refs)
     by_ref = {str(line.reference_id): line for line in movement.lines.all()}
@@ -236,7 +280,11 @@ def _confirm_sheet(
             "report_requested": report_requested,
         },
         rows=[
-            {"id": by_ref[line["reference_id"]].pk, "boxes": line["boxes"], "units": line["units"]}
+            {
+                "id": by_ref[str(proposal_refs.get(line["reference_id"], line["reference_id"]))].pk,
+                "boxes": line["boxes"],
+                "units": line["units"],
+            }
             for line in payload["lines"]
         ],
     )
@@ -248,6 +296,7 @@ def _confirm_sheet(
         "physical_date": payload["physical_date"],
         "sender_revision": sheet.revision,
         "sheet_review_id": action.pk,
+        **({"proposal_reference_ids": proposal_refs} if proposal_refs else {}),
     }
     movement.save(update_fields=["source_metadata"])
     reviewed, _ = operations.review_draft(movement.pk, actor=actor, revision=movement.revision)

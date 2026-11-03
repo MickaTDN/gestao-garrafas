@@ -39,8 +39,13 @@ function validate(v, source, device) {
     insist(Array.isArray(s.lines) && s.lines.length <= 500);
     const refs = new Set();
     for (const l of s.lines) {
-      exact(l, ["reference_id", "name", "boxes", "units", "box_capacity"]);
-      insist(ID.test(l.reference_id) && !refs.has(l.reference_id)); refs.add(l.reference_id);
+      exact(l, ["reference_id", "name", "boxes", "units", "box_capacity", ...("proposal" in l ? ["proposal"] : [])]);
+      if ("proposal" in l) {
+        exact(l.proposal, ["name"]);
+        insist(s.kind === "entry" && l.reference_id.startsWith("proposal:") && UUID.test(l.reference_id.slice(9)));
+        safeText(l.proposal.name, 250, false); insist(l.name === l.proposal.name);
+      } else insist(ID.test(l.reference_id));
+      insist(!refs.has(l.reference_id)); refs.add(l.reference_id);
       safeText(l.name, 250, false);
       insist(l.box_capacity === null || integer(l.box_capacity, 1));
       insist([l.boxes, l.units].every(n => n === null || integer(n)));
@@ -51,7 +56,7 @@ function validate(v, source, device) {
     if (s.file !== null) {
       insist(s.state === "exported");
       exact(s.file, ["format", "version", "jwe"]);
-      insist(s.file.format === "vertente-pending-sheet" && s.file.version === 1 &&
+      insist(s.file.format === "vertente-pending-sheet" && s.file.version === (s.lines.some(l => l.proposal) ? 2 : 1) &&
         typeof s.file.jwe === "string" && encoder.encode(JSON.stringify(s.file)).length <= MAX_WIRE);
     } else insist(s.state !== "exported");
   }
@@ -166,8 +171,16 @@ export async function editSheet(id, revision, values, cancel = false) {
     s.person = values.person; s.physical_date = values.physical_date; s.notes = values.notes;
     insist(Array.isArray(values.lines) && values.lines.length <= 500);
     s.lines = values.lines.map(l => {
-      exact(l, ["reference_id", "boxes", "units"]);
+      exact(l, ["reference_id", "boxes", "units", ...("proposal" in l ? ["proposal"] : [])]);
       const prior = s.lines.find(p => p.reference_id === l.reference_id);
+      if (l.proposal) {
+        exact(l.proposal, ["name", "box_capacity"]);
+        insist(s.kind === "entry" && l.reference_id.startsWith("proposal:") && UUID.test(l.reference_id.slice(9)), "Só entradas permitem propor referências.");
+        safeText(l.proposal.name, 250, false);
+        return {reference_id: l.reference_id, name: l.proposal.name, box_capacity: l.proposal.box_capacity,
+          boxes: l.boxes, units: l.units, proposal: {name: l.proposal.name}};
+      }
+      insist(!prior?.proposal, "Uma proposta não pode transformar-se silenciosamente numa referência oficial.");
       const ref = copy?.data.references.find(r => r.id === l.reference_id);
       insist(prior || ref, "Escolha uma referência da cópia importada.");
       return { ...l, name: prior?.name || ref.name, box_capacity: prior ? prior.box_capacity : ref.box_capacity };
@@ -183,23 +196,24 @@ export async function exportSheet(id, revision) {
   if (s.state === "exported") return s.file; // Exact bytes, identity and revision, never resign a sent sheet.
   safeText(s.person, 200, false);
   insist(calendarDate(s.physical_date) && s.lines.length > 0, "Complete pessoa, data e referências antes de exportar.");
-  const lines = s.lines.map(({reference_id, boxes, units, box_capacity}) => {
-    quantity(boxes, units, box_capacity); return {reference_id, boxes, units, box_capacity};
+  const lines = s.lines.map(({reference_id, boxes, units, box_capacity, proposal}) => {
+    quantity(boxes, units, box_capacity); return {reference_id, boxes, units, box_capacity, ...(proposal ? {proposal} : {})};
   });
+  const version = lines.some(l => l.proposal) ? 2 : 1;
   const r = await recipient(saved);
   const payload = { source_id: g.source_id, device_id: g.device_id, authorization_revision: g.revision,
     sheet_id: s.id, revision: s.revision, kind: s.kind, physical_date: s.physical_date,
     person: s.person, notes: s.notes, lines };
   const data = encoder.encode(JSON.stringify(payload));
-  const prefix = encoder.encode("vertente-sheet-v1\0"), message = new Uint8Array(prefix.length + data.length);
+  const prefix = encoder.encode(`vertente-sheet-v${version}\0`), message = new Uint8Array(prefix.length + data.length);
   message.set(prefix); message.set(data, prefix.length);
   const signature = await crypto.subtle.sign({name: "ECDSA", hash: "SHA-256"}, saved.meta.device.privateKey, message);
-  const envelope = {format: "vertente-sheet", version: 1, algorithm: "ES256", key_id: g.device_key_id,
+  const envelope = {format: "vertente-sheet", version, algorithm: "ES256", key_id: g.device_key_id,
     payload: encode(data), signature: encode(new Uint8Array(signature))};
   const key = await importJWK(r.jwk, "RSA-OAEP-256");
   const jwe = await new CompactEncrypt(encoder.encode(JSON.stringify(envelope)))
     .setProtectedHeader({alg: "RSA-OAEP-256", enc: "A256GCM", kid: r.key_id}).encrypt(key);
-  s.file = {format: "vertente-pending-sheet", version: 1, jwe};
+  s.file = {format: "vertente-pending-sheet", version, jwe};
   insist(encoder.encode(JSON.stringify(s.file)).length <= MAX_WIRE, "Folha demasiado grande.");
   s.state = "exported"; s.updated_at = new Date().toISOString();
   await save(saved, g, v); // Commit before download: a failed commit must not produce a new export.

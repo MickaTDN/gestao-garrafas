@@ -170,5 +170,107 @@ def pending_fixture():
             == result.pk
         )
 
+    # Version-two proposal: receipt creates nothing; approval/confirmation creates
+    # the real identity. A compensating ordinary exit keeps the synthetic sum 33.
+    proposal_id = "proposal:" + str(uuid.uuid4())
+    proposed = {
+        **payload,
+        "sheet_id": str(uuid.uuid4()),
+        "kind": "entry",
+        "lines": [
+            {
+                "reference_id": proposal_id,
+                "proposal": {"name": "Nova referência sintética portátil"},
+                "boxes": None,
+                "units": 1,
+                "box_capacity": 6,
+            }
+        ],
+    }
+
+    def packet(value, version):
+        signed = signed_snapshot(value, key, kind="vertente-sheet", version=version)
+        encrypted = jwe.JWE(
+            json.dumps(signed).encode(),
+            protected={"alg": "RSA-OAEP-256", "enc": "A256GCM", "kid": recipient.thumbprint()},
+            recipient=recipient.public(),
+        )
+        return json.dumps(
+            {
+                "format": "vertente-pending-sheet",
+                "version": version,
+                "jwe": encrypted.serialize(compact=True),
+            }
+        ).encode()
+
+    wire = packet(proposed, 2)
+    sheet = receive_sheet(wire, actor=actor).sheet
+    assert not Reference.objects.filter(name="Nova referência sintética portátil").exists()
+    values = {k: proposed[k] for k in ("person", "physical_date", "notes", "lines")}
+    values["lines"] = [
+        {
+            **proposed["lines"][0],
+            "proposal": {
+                "name": "Nova referência sintética portátil",
+                "location_id": ref.location_id,
+                "sector_id": None,
+            },
+        }
+    ]
+    corrected = correct_sheet(
+        sheet.pk, actor=actor, sequence=0, values=values, reason="Proposta conferida no Windows"
+    )
+    review, _ = review_sheet(sheet.pk, actor=actor, sequence=corrected.sequence)
+    official = confirm_sheet(
+        sheet.pk,
+        actor=actor,
+        sequence=review.sequence,
+        token=review.data["token"],
+        confirmed=True,
+        report_requested=True,
+    )
+    assert receive_sheet(wire, actor=actor).outcome == "duplicate"
+    created = Reference.objects.get(
+        pk=official.source_metadata["proposal_reference_ids"][proposal_id]
+    )
+    assert created.current_stock == 1 and created.code.startswith("GAR-")
+    outgoing = {
+        **proposed,
+        "sheet_id": str(uuid.uuid4()),
+        "kind": "exit",
+        "lines": [{"reference_id": str(created.pk), "boxes": None, "units": 1, "box_capacity": 6}],
+    }
+    sheet = receive_sheet(packet(outgoing, 1), actor=actor).sheet
+    review, _ = review_sheet(sheet.pk, actor=actor, sequence=0)
+    confirm_sheet(
+        sheet.pk,
+        actor=actor,
+        sequence=review.sequence,
+        token=review.data["token"],
+        confirmed=True,
+        validation="signed",
+        signature_data=signature,
+    )
+    created.refresh_from_db()
+    assert created.current_stock == 0
+
+    # An unfinished direct-entry proposal is persistent too, without a catalogue row.
+    from inventory.proposals import add_to_entry
+
+    draft = operations.create_draft(actor=actor, kind="entry")
+    add_to_entry(
+        draft.pk,
+        actor=actor,
+        revision=0,
+        data={
+            "name": "Proposta direta por aprovar",
+            "box_capacity": None,
+            "boxes": None,
+            "units": 3,
+            "location": ref.location,
+        },
+    )
+    assert not Reference.objects.filter(name="Proposta direta por aprovar").exists()
+
 
 pending_fixture()

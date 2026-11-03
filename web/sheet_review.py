@@ -12,8 +12,9 @@ from django.views.decorators.http import require_http_methods
 
 from consultation.models import PendingSheet
 from consultation.review import confirm_sheet, correct_sheet, current, reject_sheet, review_sheet
-from inventory.models import AuditEvent, Reference
+from inventory.models import AuditEvent, Location, Reference, Sector
 
+from .catalog_forms import SectorSelect
 from .operation_forms import ReviewForm
 from .views import administrator_required
 
@@ -62,6 +63,42 @@ class Line(forms.Form):
     box_capacity = forms.IntegerField(
         label="Capacidade por caixa", min_value=1, max_value=2147483647, required=False
     )
+    proposed_name = forms.CharField(
+        label="Designação proposta (só novas referências)", max_length=250, required=False
+    )
+    proposal_location = forms.ModelChoiceField(
+        label="Localização da proposta",
+        queryset=Location.objects.filter(active=True),
+        required=False,
+    )
+    proposal_sector = forms.ModelChoiceField(
+        label="Setor da proposta",
+        queryset=Sector.objects.filter(active=True).select_related("location"),
+        required=False,
+        widget=SectorSelect,
+    )
+
+    def __init__(self, *args, **kwargs):
+        initial = dict(kwargs.get("initial") or {})
+        proposal = initial.get("proposal", {})
+        initial.update(
+            proposed_name=proposal.get("name", ""),
+            proposal_location=proposal.get("location_id"),
+            proposal_sector=proposal.get("sector_id"),
+        )
+        kwargs["initial"] = initial
+        super().__init__(*args, **kwargs)
+
+
+def working_line(data):
+    line = {key: data[key] for key in ("reference_id", "boxes", "units", "box_capacity")}
+    if line["reference_id"].startswith("proposal:"):
+        line["proposal"] = {
+            "name": data["proposed_name"],
+            "location_id": data["proposal_location"].pk if data.get("proposal_location") else None,
+            "sector_id": data["proposal_sector"].pk if data.get("proposal_sector") else None,
+        }
+    return line
 
 
 class WorkingLineSet(forms.BaseFormSet):
@@ -98,6 +135,7 @@ def summary(sheet):
         "event": event,
         "payload": payload,
         "origin": origin,
+        "proposal_count": sum("proposal" in line for line in payload["lines"]),
         "state": event.get_kind_display() if event else "Recebida · por conferir",
     }
 
@@ -176,10 +214,7 @@ def detail(request, pk):
                         "notes": data["notes"],
                         "lines": payload["lines"][:start]
                         + [
-                            {
-                                key: f.cleaned_data[key]
-                                for key in ("reference_id", "boxes", "units", "box_capacity")
-                            }
+                            working_line(f.cleaned_data)
                             for f in lines
                             if f.cleaned_data and not f.cleaned_data.get("DELETE")
                         ]
@@ -217,7 +252,9 @@ def detail(request, pk):
                     form.add_error(None, "Ação inválida.")
                 raise ValidationError("Reveja os campos indicados. Nenhum stock foi alterado.")
         except ValidationError as error:
-            form.add_error(None, error)
+            from .catalog import _errors
+
+            _errors(form, error)
         except PermissionDenied:
             raise
         except Exception:
@@ -235,6 +272,11 @@ def detail(request, pk):
     rows = [
         {"line": line, "reference": refs.get(line["reference_id"])} for line in payload["lines"]
     ]
+    from inventory.catalog import matching_references
+
+    for row in rows:
+        if "proposal" in row["line"]:
+            row["matches"] = matching_references(row["line"]["proposal"].get("name", ""))
     reviewed = event and event.kind == "reviewed"
     for row in rows:
         basis = event.data.get("basis", {}).get(row["line"]["reference_id"], {}) if reviewed else {}

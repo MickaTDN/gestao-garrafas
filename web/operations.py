@@ -23,8 +23,8 @@ from inventory.reporting import can_regenerate, issued_filter, with_file_status
 from inventory.services import confirm_movement, owned_draft, reference_state
 
 from .catalog import _errors
-from .catalog_forms import ReferenceForm
 from .operation_forms import (
+    EntryReferenceForm,
     HeaderForm,
     InventorySearchForm,
     LineFormSet,
@@ -619,6 +619,7 @@ def review(request, pk):
             "form": form,
             "plans": plans,
             "stale_review": stale_review,
+            "reference_proposals": movement.review_snapshot.get("__proposals__", []),
         },
         status=400 if request.method == "POST" else 200,
     )
@@ -664,15 +665,66 @@ def new_reference(request, pk):
         from django.core.exceptions import PermissionDenied
 
         raise PermissionDenied
-    form = ReferenceForm(request.POST if request.method == "POST" else None)
+    identity = request.GET.get("proposal_id", "")
+    prior = next(
+        (
+            p
+            for p in movement.source_metadata.get("reference_proposals", [])
+            if p["reference_id"] == identity
+        ),
+        None,
+    )
+    initial = {"revision": movement.revision}
+    if prior:
+        initial.update(
+            name=prior["proposal"]["name"],
+            location=prior["proposal"]["location_id"],
+            sector=prior["proposal"]["sector_id"],
+            box_capacity=prior["box_capacity"],
+            boxes=prior["boxes"],
+            units=prior["units"],
+            proposal_id=identity,
+        )
+        initial.update(
+            alert_enabled=prior["proposal"].get("alert_enabled", False),
+            minimum=prior["proposal"].get("minimum"),
+        )
+    form = EntryReferenceForm(request.POST if request.method == "POST" else None, initial=initial)
     matches = (
         catalog.matching_references(request.POST.get("name", ""))
         if request.method == "POST"
         else []
     )
-    if request.method == "POST" and form.is_valid():
+    if request.method == "POST" and request.POST.get("action") == "remove-proposal":
+        from inventory.proposals import remove_from_entry
+
         try:
-            catalog.save_reference(actor=request.user, data=form.cleaned_data)
+            remove_from_entry(
+                pk,
+                actor=request.user,
+                revision=int(request.POST.get("revision", "-1")),
+                identity=request.POST.get("proposal_id"),
+            )
+        except (ValidationError, ValueError):
+            form.add_error(
+                None, "Não foi possível retirar a proposta. Reabra a entrada e tente novamente."
+            )
+        else:
+            return redirect("web:operation-edit", pk=pk)
+    if (
+        request.method == "POST"
+        and request.POST.get("action") != "remove-proposal"
+        and form.is_valid()
+    ):
+        try:
+            from inventory.proposals import add_to_entry
+
+            add_to_entry(
+                pk,
+                actor=request.user,
+                revision=form.cleaned_data["revision"],
+                data=form.cleaned_data,
+            )
         except ValidationError as error:
             _errors(form, error)
             if isinstance(error, catalog.DuplicateReferenceError):
@@ -680,7 +732,7 @@ def new_reference(request, pk):
         else:
             messages.success(
                 request,
-                "Referência criada. Pesquise-a e adicione-a à entrada; o rascunho foi preservado.",
+                "Proposta e quantidades adicionadas à entrada. A referência oficial só será criada na confirmação.",
             )
             return redirect("web:operation-edit", pk=pk)
     return render(

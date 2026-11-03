@@ -70,17 +70,45 @@ export function sheetsView(ui) {
     const mark = () => {dirty = true;}; form.addEventListener("input", mark);
     function addLine(l) {
       const card = node("section", undefined, "card stack");
-      const q = inputQuantities({box_capacity: l.box_capacity}, l, "sheet-line-" + (++sequence) + "-");
+      const ref = {box_capacity: l.box_capacity};
+      const q = inputQuantities(ref, l, "sheet-line-" + (++sequence) + "-");
       q.boxes.input.disabled = !writable || !l.box_capacity; q.units.input.disabled = !writable;
-      append(card, node("h3", `${l.reference_id} · ${l.name}`),
+      append(card, node("h3", l.proposal ? `Nova referência proposta · ${l.name}` : `${l.reference_id} · ${l.name}`),
         node("p", l.box_capacity ? `${l.box_capacity} garrafas por caixa (capacidade preservada).` : "Capacidade desconhecida: introduza apenas garrafas."),
         q.boxes.wrap, q.units.wrap, q.preview);
-      const entry = {l, q, card}; lines.push(entry);
+      const entry = {l, q, card};
+      if (l.proposal) {
+        entry.name = field("Nome da referência proposta", "text", "proposal-name-" + sequence, {value: l.name, maxLength: 250, disabled: !writable});
+        entry.capacity = field("Garrafas por caixa da proposta (se conhecida)", "number", "proposal-capacity-" + sequence, {value: l.box_capacity ?? "", min: 1, max: 2147483647, step: 1, disabled: !writable});
+        append(card, entry.name.wrap, entry.capacity.wrap, node("p", "Sem código, localização ou setor: o escritório confere e aprova. Não cria stock oficial.", "warning"));
+        entry.capacity.input.addEventListener("input", () => {
+          ref.box_capacity = optionalNumber(entry.capacity.input);
+          q.boxes.input.disabled = !writable || (!ref.box_capacity && q.boxes.input.value === "");
+          q.units.input.dispatchEvent(new Event("input"));
+        });
+      }
+      lines.push(entry);
       if (writable) card.append(button("Remover " + l.name, () => {lines.splice(lines.indexOf(entry), 1); card.remove(); mark();}, true));
       list.append(card);
     }
     s.lines.forEach(addLine); form.append(list);
     if (writable) {
+      if (s.kind === "entry") {
+        const propose = node("details", undefined, "card stack");
+        const name = field("Designação a propor", "text", "new-proposal-name", {maxLength: 250});
+        const capacity = field("Garrafas por caixa (se conhecida)", "number", "new-proposal-capacity", {min: 1, max: 2147483647, step: 1});
+        name.input.addEventListener("input", () => name.input.setCustomValidity(""));
+        append(propose, node("summary", "Propor nova referência"), name.wrap, capacity.wrap,
+          button("Adicionar proposta de referência", () => {
+            if (!name.input.value.trim()) {name.input.setCustomValidity("Indique a designação a propor."); name.input.focus(); name.input.reportValidity(); return;}
+            if (!capacity.input.checkValidity()) {capacity.input.reportValidity(); return;}
+            const c = optionalNumber(capacity.input);
+            if (c !== null && (!Number.isInteger(c) || c < 1 || c > 2147483647)) {capacity.input.reportValidity(); return;}
+            addLine({reference_id: "proposal:" + crypto.randomUUID(), name: name.input.value, proposal: {name: name.input.value}, box_capacity: c, boxes: null, units: null});
+            mark(); name.input.value = ""; capacity.input.value = "";
+          }, true));
+        form.append(propose);
+      }
       const search = field("Pesquisar referência para a folha", "search", "sheet-search");
       const results = node("div", undefined, "stack");
       const find = () => {
@@ -100,8 +128,9 @@ export function sheetsView(ui) {
       const save = node("button", "Guardar rascunho"); save.type = "submit"; form.append(save);
       form.addEventListener("submit", e => {e.preventDefault(); action(async () => {
         await editSheet(s.id, s.revision, {person: person.input.value, physical_date: physical.input.value,
-          notes: notes.input.value, lines: lines.map(({l, q}) => ({reference_id: l.reference_id,
-            boxes: optionalNumber(q.boxes.input), units: optionalNumber(q.units.input)}))});
+          notes: notes.input.value, lines: lines.map(({l, q, name, capacity}) => ({reference_id: l.reference_id,
+            boxes: optionalNumber(q.boxes.input), units: optionalNumber(q.units.input),
+            ...(l.proposal ? {proposal: {name: name.input.value, box_capacity: optionalNumber(capacity.input)}} : {})}))});
       }, "Rascunho guardado neste dispositivo. Stock inalterado.");});
       form.append(button("Cancelar folha", () => action(async () => {
         if (!(await confirm("Cancelar rascunho", "Cancelar apenas este rascunho local? Não altera stock nem cancela ficheiros já entregues."))) return false;
