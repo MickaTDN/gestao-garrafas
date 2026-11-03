@@ -78,6 +78,24 @@ class SheetReceiverProfileTests(TestCase):
         with self.assertRaises(UnsafeOperation):
             render(self.root, self.release, self.config)
 
+    def test_receiver_network_validation_never_reads_the_publishers_tls_folder(self):
+        # Real Windows failure: its account must NOT read publisher certificates
+        # or even require the public policy through that restricted parent DACL.
+        folder = self.root / "tls"
+        folder.mkdir()
+        (folder / "sheet-transport.public.json").write_text("{}")
+        original = Path.read_text
+
+        def restricted(path, *args, **kwargs):
+            if path.is_relative_to(folder):
+                raise PermissionError("Publisher TLS stays isolated")
+            return original(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", restricted):
+            text = render(self.root, self.release, self.config)
+        self.assertIn("secrets/sheet-receiver/server.key", text)
+        self.assertNotIn("sheet-transport.public.json", text)
+
     def test_stock_publisher_stays_get_only_and_csp_expands_only_for_approved_origin(self):
         cfg = {**self.config, "hostname": "stock.synthetic.test", "port": 8444}
         before = render_publisher(self.release, self.root, cfg)

@@ -46,7 +46,7 @@ def prepare_account(root):
 
 
 def render(root, release, config):
-    from .publisher import render as validate_network
+    from .publisher import validate_network
 
     validate_network(release, root, config)
     receiver = origin(f"https://{config['hostname']}:{config['port']}")
