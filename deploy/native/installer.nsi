@@ -108,6 +108,13 @@ Section "Instalar ou atualizar"
   CreateShortcut "$DESKTOP\Gestão Vertente Aveludada (${Channel}).lnk" "$INSTDIR\GVA.Native.exe"
   CreateShortcut "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})\Gestão Vertente Aveludada.lnk" "$INSTDIR\GVA.Native.exe"
   CreateShortcut "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})\Manutenção.lnk" "$INSTDIR\GVA.Native.exe" "--maintenance"
+  ; Fixed commands only: never forward the URL (%1), paths or browser parameters.
+  WriteRegStr HKLM "Software\Classes\gva-backup-${Channel}" "" "URL:GVA backup wizard"
+  WriteRegStr HKLM "Software\Classes\gva-backup-${Channel}" "URL Protocol" ""
+  WriteRegStr HKLM "Software\Classes\gva-backup-${Channel}\shell\open\command" "" '$\"$INSTDIR\GVA.Native.exe$\" --backup-wizard'
+  WriteRegStr HKLM "Software\Classes\gva-recover-${Channel}" "" "URL:GVA recovery wizard"
+  WriteRegStr HKLM "Software\Classes\gva-recover-${Channel}" "URL Protocol" ""
+  WriteRegStr HKLM "Software\Classes\gva-recover-${Channel}\shell\open\command" "" '$\"$INSTDIR\GVA.Native.exe$\" --recovery-wizard'
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayName" "Gestão Vertente Aveludada (${Channel})"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}" "DisplayVersion" "${Version}"
@@ -142,4 +149,6 @@ Section "Uninstall"
   Delete "$DESKTOP\Gestão Vertente Aveludada (${Channel}).lnk"
   RMDir /r "$SMPROGRAMS\Gestão Vertente Aveludada (${Channel})"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GVA-${Channel}"
+  DeleteRegKey HKLM "Software\Classes\gva-backup-${Channel}"
+  DeleteRegKey HKLM "Software\Classes\gva-recover-${Channel}"
 SectionEnd

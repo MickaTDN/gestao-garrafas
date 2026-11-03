@@ -38,6 +38,11 @@ static class Program
                 return Run(Path.Combine(args[1], "payload"), action, args[2], args[1]);
             }
             if (args.Length == 3 && args[0] == "--preflight") { Preflight(args[1], args[2]); return 0; }
+            if (args.Length == 1 && (args[0] == "--backup-wizard" || args[0] == "--recovery-wizard")) {
+                bool admin = new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                if (!admin) { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, args[0]) { UseShellExecute = true, Verb = "runas" }); return 0; }
+                return RecoveryWizard.Show(Release, args[0] == "--recovery-wizard", Directory.GetParent(Release)!.FullName) ? 0 : 1;
+            }
             if (args.Length == 1 && args[0] == "--maintenance") { Maintenance(); return 0; }
             if (args.Length == 2 && args[0] == "--wizard") return Wizard(args[1]);
             if (args.Length == 1 && args[0] == "--uninstall") return Run(Release, "uninstall");
@@ -75,9 +80,10 @@ static class Program
             var old = Version.Parse(State.GetProperty("version").GetString()!);
             var incoming = Version.Parse(next.GetProperty("version").GetString()!);
             bool uninstalled = State.TryGetProperty("uninstalled", out var removed) && removed.GetBoolean();
-            bool repair = uninstalled && old == incoming;
-            if (repair && !State.GetProperty("package_sha256").GetString()!.Equals(Convert.ToHexString(SHA256.HashData(raw)), StringComparison.OrdinalIgnoreCase)) throw new UserError("Reponha o instalador exato da versão anterior.");
-            if ((old >= incoming && !repair) || (uninstalled && !repair) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Após desinstalar, reponha primeiro a versão exata.");
+            // A recognised uninstall may enter the recovery wizard with compatible,
+            // authenticated code. Repair/update still enforce exact/forward-only
+            // package validation in Python; this never permits a live downgrade.
+            if ((!uninstalled && old >= incoming) || (uninstalled && incoming < old) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Use uma versão autorizada compatível com os dados.");
             if (File.Exists(Path.Combine(Root, "maintenance.json"))) throw new UserError("Manutenção interrompida. É necessária recuperação pela informática.");
         }
     }
@@ -87,11 +93,12 @@ static class Program
         // Elevation is explicit, limited to maintenance, and uses the Windows UAC prompt.
         bool admin = new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
         if (!admin) { Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--maintenance") { UseShellExecute = true, Verb = "runas" }); return; }
-        using var form = new Form { Text = "Manutenção — informática", Width = 580, Height = 600 };
+        using var form = new Form { Text = "Manutenção — informática", Width = 620, Height = 650 };
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(20) }; form.Controls.Add(layout);
-        layout.Controls.Add(new Label { Text = "Operações autorizadas de manutenção. A recuperação exige uma instalação isolada nova e a versão exata do backup.", Width = 510, Height = 60 });
+        layout.Controls.Add(new Label { Text = "Operações autorizadas de manutenção. Crie e recupere cópias cifradas com conferência antes da substituição.", Width = 510, Height = 60 });
         void Button(string label, Action action) { var b = new Button { Text = label, Width = 450, Height = 45 }; b.Click += async (_, _) => { b.Enabled = false; try { await Task.Run(action); MessageBox.Show("Operação concluída."); } catch (Exception e) { MessageBox.Show(e is UserError ? e.Message : "Falha; preserve os dados e contacte a informática."); } finally { b.Enabled = true; } }; layout.Controls.Add(b); }
-        Button("Criar backup manual cifrado", () => Run(Release, "backup"));
+        Button("Criar cópia de segurança", () => form.Invoke(() => RecoveryWizard.Show(Release, false)));
+        Button("Recuperar cópia de segurança", () => form.Invoke(() => RecoveryWizard.Show(Release, true, Directory.GetParent(Release)!.FullName)));
         if (Channel == "synthetic") {
             Button("Dados privados da demonstração", () => form.Invoke(() => SyntheticDemoWizard.ShowCredentials(form, Channel, Root)));
             Button("Abrir kit cifrado de demonstração", () => form.Invoke(() => SyntheticDemoWizard.OpenKit(Channel)));
@@ -145,6 +152,18 @@ static class Program
     static int Wizard(string package)
     {
         string release = Path.Combine(package, "payload");
+        // Recovery has its own authenticated package gate and never bypasses it.
+        if (!File.Exists(Path.Combine(Root, "installation.json")) || (State.TryGetProperty("uninstalled", out var removed) && removed.GetBoolean())) {
+            using var choice = new Form { Text = "Gestão Vertente Aveludada", Width = 520, Height = 220, StartPosition = FormStartPosition.CenterScreen };
+            var fresh = new Button { Text = "Instalação nova / repor programa", Left = 30, Top = 25, Width = 440, Height = 50 };
+            var restore = new Button { Text = "Recuperar cópia de segurança", Left = 30, Top = 90, Width = 440, Height = 50 };
+            choice.Controls.Add(fresh); choice.Controls.Add(restore);
+            fresh.Click += (_, _) => choice.DialogResult = DialogResult.No;
+            restore.Click += (_, _) => choice.DialogResult = DialogResult.Yes;
+            var selected = choice.ShowDialog();
+            if (selected == DialogResult.Yes) return RecoveryWizard.Show(release, true, package) ? 0 : 1;
+            if (selected != DialogResult.No) return 1;
+        }
         Run(release, "verify", package: package); // No service/data changes before verification.
         bool updating = File.Exists(Path.Combine(Root, "installation.json"));
         if (Channel == "synthetic" && !updating) {
@@ -247,7 +266,7 @@ sealed class Dashboard : Form
             Process.Start(new ProcessStartInfo("http://127.0.0.1:" + Program.State.GetProperty("http_port").GetInt32() + "/") { UseShellExecute = true });
         } catch (Exception error) { MessageBox.Show(error is UserError ? error.Message : "Não foi possível abrir. Contacte a informática."); } };
         layout.Controls.Add(open);
-        var backupButton = new Button { Text = "Backup manual (informática)", Width = 250, Height = 40 };
+        var backupButton = new Button { Text = "Cópias de segurança / recuperar", Width = 250, Height = 40 };
         backupButton.Click += (_, _) => Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--maintenance") { UseShellExecute = true }); layout.Controls.Add(backupButton);
     }
 }

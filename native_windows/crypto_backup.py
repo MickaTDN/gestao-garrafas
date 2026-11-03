@@ -36,7 +36,7 @@ def create_recovery_key(password):
     )
 
 
-def encrypt(source, destination, public_pem, metadata):
+def encrypt(source, destination, public_pem, metadata, *, recovery_envelope=None):
     key = serialization.load_pem_public_key(public_pem)
     if not isinstance(key, rsa.RSAPublicKey) or key.key_size < 3072:
         raise UnsafeOperation("Chave pública de recuperação inválida.")
@@ -45,6 +45,7 @@ def encrypt(source, destination, public_pem, metadata):
     header = json.dumps(
         {
             "schema": 1,
+            **({"recovery": recovery_envelope} if recovery_envelope else {}),
             "metadata": metadata,
             "sha256": digest(source),
             "size": Path(source).stat().st_size,
@@ -64,8 +65,10 @@ def encrypt(source, destination, public_pem, metadata):
     cipher.authenticate_additional_data(MAGIC + header)
     destination = Path(destination)
     partial = destination.with_suffix(destination.suffix + ".partial")
+    created = False
     try:
         with Path(source).open("rb") as inp, partial.open("xb") as out:
+            created = True
             out.write(MAGIC + struct.pack(">I", len(header)) + header)
             for block in iter(lambda: inp.read(1024 * 1024), b""):
                 out.write(cipher.update(block))
@@ -73,11 +76,15 @@ def encrypt(source, destination, public_pem, metadata):
             out.write(cipher.tag)
             out.flush()
             os.fsync(out.fileno())
+        # Authenticate the completed encrypted bytes before publishing or pruning.
+        # The ephemeral content key is never persisted or given to the backup service.
+        _verify_ciphertext(partial, content_key, header)
         if destination.exists():
             raise UnsafeOperation("O backup de destino já existe.")
         os.replace(partial, destination)
     finally:
-        partial.unlink(missing_ok=True)
+        if created:
+            partial.unlink(missing_ok=True)
 
 
 def decrypt(source, destination, private_pem, password):
@@ -85,6 +92,7 @@ def decrypt(source, destination, private_pem, password):
     if destination.exists():
         raise UnsafeOperation("O destino de recuperação já existe.")
     temporary = destination.with_suffix(destination.suffix + ".partial")
+    created = False
     try:
         private = serialization.load_pem_private_key(private_pem, password=password.encode())
         with Path(source).open("rb") as inp:
@@ -115,6 +123,7 @@ def decrypt(source, destination, private_pem, password):
             cipher.authenticate_additional_data(MAGIC + header)
             remaining = data["size"]
             with temporary.open("xb") as out:
+                created = True
                 while remaining:
                     block = inp.read(min(1024 * 1024, remaining))
                     if not block:
@@ -133,4 +142,33 @@ def decrypt(source, destination, private_pem, password):
             "Backup inválido, alterado ou chave/frase de recuperação incorreta."
         ) from error
     finally:
-        temporary.unlink(missing_ok=True)
+        if created:
+            temporary.unlink(missing_ok=True)
+
+
+def _verify_ciphertext(path, key, raw_header):
+    import hashlib
+
+    data = json.loads(raw_header)
+    with Path(path).open("rb") as stream:
+        prefix = MAGIC + struct.pack(">I", len(raw_header)) + raw_header
+        if stream.read(len(prefix)) != prefix:
+            raise UnsafeOperation("Falha na verificação do backup cifrado.")
+        stream.seek(-16, 2)
+        tag = stream.read(16)
+        stream.seek(len(prefix))
+        cipher = Cipher(
+            algorithms.AES(key), modes.GCM(base64.b64decode(data["nonce"]), tag)
+        ).decryptor()
+        cipher.authenticate_additional_data(MAGIC + raw_header)
+        h = hashlib.sha256()
+        remaining = data["size"]
+        while remaining:
+            block = stream.read(min(1024 * 1024, remaining))
+            if not block:
+                raise UnsafeOperation("Backup cifrado incompleto.")
+            remaining -= len(block)
+            h.update(cipher.update(block))
+        h.update(cipher.finalize())
+        if h.hexdigest() != data["sha256"]:
+            raise UnsafeOperation("O backup cifrado não corresponde ao original.")

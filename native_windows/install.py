@@ -40,6 +40,8 @@ def prepare_acl(root):
     # Web process must not read the migration/backup credentials.
     protect(root / "secrets/owner.json", [("backup", "R")])
     protect(root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("receiver", "R")])
+    if (root / "secrets/recovery-envelope.json").exists():
+        protect(root / "secrets/recovery-envelope.json", [("backup", "R")])
 
 
 def wait_database(root):

@@ -322,6 +322,15 @@ def main(directory):
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     log("::notice::Native smoke: exact-version repair preserved data and signing identity")
+    # The uninstaller removed the 1.0 package directory. Python cached its
+    # package search path; subsequent imports must use the installed 1.1 code.
+    import native_windows
+
+    native_windows.__path__ = [str(Path(json.loads((root / "installation.json").read_text())["release"]) / "app/native_windows")]
+    from tests.native_windows.portable_probe import run as portable_probe
+
+    portable_request = portable_probe(root, directory, key, phrase)
+    log("::notice::Native smoke: portable backup, failed-restore rollback and verified replacement: PASS")
     # Actual service/DB failure after migration: all services remain disabled,
     # a durable journal blocks restart, and only NEW-root recovery may resume.
     from native_windows.maintenance import UpdateActions
@@ -469,6 +478,10 @@ def main(directory):
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
     )
+    from tests.native_windows.portable_probe import fresh_destination
+
+    fresh_destination(root, directory, portable_request)
+    log("::notice::Native smoke: portable restore into a clean root with fresh services: PASS")
     log(SMOKE_SUCCESS)
 
 

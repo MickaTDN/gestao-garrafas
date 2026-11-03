@@ -20,6 +20,10 @@ internal static class WizardOperation
             using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "maintenance.json")));
             string? phase = document.RootElement.TryGetProperty("phase", out var p) ? p.GetString() : null;
             return phase switch {
+                "recovery-new-cluster" => "A preparar um cluster novo; dados anteriores preservados…",
+                "recovery-database" => "A recuperar e comparar os dados com o backup…",
+                "recovery-schema-and-identity" => "A verificar versão, chaves e permissões…",
+                "recovery-activation" => "A iniciar e verificar os serviços recuperados…",
                 "postgres-binaries" => "A verificar as dependências privadas PostgreSQL…",
                 "register-services" => "A registar os serviços…",
                 "acl" => "A aplicar permissões privadas…",
