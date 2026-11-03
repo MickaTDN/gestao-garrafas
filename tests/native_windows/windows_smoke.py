@@ -115,7 +115,12 @@ def main(directory):
     )
     manage(root, "pending_sheet_setup")
     pending_key_before = (root / "signing/pending-reception.pem").read_bytes()
-    manage(root, "shell", "-c", (Path(__file__).parent / "operation_fixture.py").read_text())
+    manage(
+        root,
+        "shell",
+        "-c",
+        (Path(__file__).parent / "operation_fixture.py").read_text(encoding="utf-8"),
+    )
     run(
         [
             "powershell.exe",
