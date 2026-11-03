@@ -64,13 +64,6 @@ def render(root, release, config):
         or not re.fullmatch(r"[a-f0-9]{64}", config["proxy_token"])
     ):
         raise UnsafeOperation("Portas/origens de receção inválidas ou sobrepostas.")
-    management = Path(root) / "secrets/management-wifi/config.json"
-    if management.exists():
-        cfg = json.loads(management.read_text())
-        if set(ports) & {cfg["port"], cfg["backend_port"]}:
-            raise UnsafeOperation(
-                "A receção não pode partilhar as portas da gestão administrativa."
-            )
     devices = config["devices"]
     if not isinstance(devices, dict) or not 1 <= len(devices) <= 256:
         raise UnsafeOperation("Configure certificados individuais explicitamente autorizados.")
@@ -148,6 +141,9 @@ def setup(root, request):
         config["origin"] = f"https://{config['hostname']}:{config['port']}"
         release = Path(read_state(root)["release"])
         render(root, release, config)
+        from .gateway_network import validate_gateway_ports
+
+        validate_gateway_ports(root, config, sibling="management-wifi")
         for name in TLS_FILES:
             refuse_reparse(source.parent / name)
             if not (source.parent / name).is_file():

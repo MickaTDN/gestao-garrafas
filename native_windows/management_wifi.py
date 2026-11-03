@@ -139,6 +139,9 @@ def setup(root, request):
         config["enabled"] = False
         release = Path(read_state(root)["release"])
         render(root, release, config)
+        from .gateway_network import validate_gateway_ports
+
+        validate_gateway_ports(root, config, sibling="sheet-receiver")
         for name in ("server-chain.crt", "server.key", "device-ca.crt", "device-ca.crl"):
             refuse_reparse(source.parent / name)
             if not (source.parent / name).is_file():

@@ -75,8 +75,10 @@ class SheetReceiverProfileTests(TestCase):
         folder = self.root / "secrets/management-wifi"
         folder.mkdir(parents=True)
         (folder / "config.json").write_text(json.dumps({"port": 8445, "backend_port": 8767}))
+        from native_windows.gateway_network import validate_gateway_ports
+
         with self.assertRaises(UnsafeOperation):
-            render(self.root, self.release, self.config)
+            validate_gateway_ports(self.root, self.config, sibling="management-wifi")
 
     def test_receiver_network_validation_never_reads_the_publishers_tls_folder(self):
         # Real Windows failure: its account must NOT read publisher certificates
@@ -87,7 +89,7 @@ class SheetReceiverProfileTests(TestCase):
         original = Path.read_text
 
         def restricted(path, *args, **kwargs):
-            if path.is_relative_to(folder):
+            if path.is_relative_to(folder) or path.is_relative_to(self.root / "secrets/management-wifi"):
                 raise PermissionError("Publisher TLS stays isolated")
             return original(path, *args, **kwargs)
 
