@@ -40,7 +40,9 @@ def prepare_account(root):
         (root / "signing/signing.pem", "R"),
         (root / "signing/pending-reception.pem", "R"),
     ]:
-        native(["icacls.exe", str(path), "/grant:r", f"NT SERVICE\\{SERVICES['receiver']}:{access}"])
+        native(
+            ["icacls.exe", str(path), "/grant:r", f"NT SERVICE\\{SERVICES['receiver']}:{access}"]
+        )
 
 
 def render(root, release, config):
@@ -215,9 +217,15 @@ def start(root, stop_file):
     release = Path(read_state(root)["release"])
     config = json.loads((root / "secrets/sheet-receiver/config.json").read_text())
     runtime = root / "runtime/receiver"
+
+    def phase(value):
+        write_json(runtime / "startup.json", {"phase": value})
+
+    phase("render")
     path = runtime / "nginx.conf"
     path.write_text(render(root, release, config))
     args = [str(release / "nginx/nginx.exe"), "-p", str(runtime) + "/", "-c", str(path)]
+    phase("nginx_validation")
     subprocess.run(
         [*args, "-t"], check=True, timeout=20, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -229,6 +237,7 @@ def start(root, stop_file):
     )
     processes = []
     try:
+        phase("backend_start")
         backend = subprocess.Popen(
             [str(release / "python/python.exe"), "-B", "-m", "native_windows.receiver_backend"],
             env=env,
@@ -240,6 +249,7 @@ def start(root, stop_file):
         import urllib.request
 
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        phase("backend_readiness")
         for _ in range(60):
             if backend.poll() is not None:
                 raise UnsafeOperation("Backend de receção terminou.")
@@ -263,10 +273,12 @@ def start(root, stop_file):
             raise UnsafeOperation("Backend de receção indisponível.")
         if backend.poll() is not None or not owns_listener(config["backend_port"], backend.pid):
             raise UnsafeOperation("Listener não pertence ao backend autorizado.")
+        phase("proxy_start")
         proxy = subprocess.Popen(
             [*args, "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         processes.append(proxy)
+        phase("running")
         Path(str(stop_file) + ".ready").write_text("ready")
         while not Path(stop_file).exists():
             if any(p.poll() is not None for p in processes):

@@ -418,7 +418,12 @@ def main(directory):
             ).fetchone()[0]
             == 4
         )
-        assert conn.execute("SELECT count(*) FROM consultation_sheetreceipt WHERE actor_id IS NULL").fetchone()[0] == 2
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM consultation_sheetreceipt WHERE actor_id IS NULL"
+            ).fetchone()[0]
+            == 2
+        )
     assert not (root / "runtime/receiver/approved").exists()
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
@@ -437,8 +442,22 @@ def report_failure(error, root):
     # Safe service categories only; never dump secret/config/request files.
     from native_windows.windows import service_failure
 
-    for kind in ("postgres", "web", "backup", "publisher"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
         log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
+    import re
+
+    for name in ("startup.json", "backend.json"):
+        path = root / "runtime/receiver" / name
+        if path.is_file():
+            data = json.loads(path.read_text())
+            safe = {
+                key: value
+                for key, value in data.items()
+                if key in {"phase", "category"}
+                and isinstance(value, str)
+                and re.fullmatch(r"[A-Za-z_]{1,80}", value)
+            }
+            log("::notice::Receiver diagnostic " + name + ": " + json.dumps(safe))
     log(
         "::error::Native Windows smoke: " + type(error).__name__ + ": " + detail.replace("\n", " "),
         error=True,
