@@ -11,6 +11,7 @@ from . import (
     pending_sheets,
     profiles,
     reports,
+    sheet_review,
     user_admin,
     views,
 )
@@ -18,6 +19,9 @@ from . import (
 app_name = "web"
 
 urlpatterns = [
+    path("entradas-pendentes/", sheet_review.listing, {"kind": "entry"}, name="pending-entries"),
+    path("saidas-pendentes/", sheet_review.listing, {"kind": "exit"}, name="pending-exits"),
+    path("folhas-pendentes/<uuid:pk>/conferir/", sheet_review.detail, name="sheet-process"),
     path('folhas-pendentes/',pending_sheets.inbox,name='sheets'),
     path('folhas-pendentes/rececao/<uuid:pk>/',pending_sheets.detail,name='sheet-receipt'),
     path('folhas-pendentes/rececao/<uuid:pk>/original/',pending_sheets.original,name='sheet-original'),

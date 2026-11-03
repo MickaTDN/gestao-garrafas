@@ -63,6 +63,7 @@ def pending_fixture():
     from jwcrypto import jwe, jwk
 
     from consultation.models import AuthorizedDevice, ExportSource
+    from consultation.review import confirm_sheet, correct_sheet, review_sheet
     from consultation.sheets import key_path, receive_sheet
     from consultation.signing import public_key, signed_snapshot
 
@@ -103,6 +104,71 @@ def pending_fixture():
     receipt = receive_sheet(raw, actor=actor)
     assert receipt.outcome == "pending"
     assert receive_sheet(raw, actor=actor).outcome == "duplicate"
+    # Confirm a pending entry and exit through the same reviewed production services.
+    # Net zero preserves the pre-existing native smoke balance while exercising
+    # numbering without entry PDF, mandatory signed exit PDF and recovery evidence.
+    for kind in ("entry", "exit"):
+        payload = {
+            **payload,
+            "sheet_id": str(uuid.uuid4()),
+            "kind": kind,
+            "lines": [
+                {
+                    "reference_id": str(ref.pk),
+                    "boxes": None,
+                    "units": 1,
+                    "box_capacity": ref.box_capacity,
+                }
+            ],
+        }
+        signed = signed_snapshot(payload, key, kind="vertente-sheet", version=1)
+        envelope = jwe.JWE(
+            json.dumps(signed).encode(),
+            protected={"alg": "RSA-OAEP-256", "enc": "A256GCM", "kid": recipient.thumbprint()},
+            recipient=recipient.public(),
+        )
+        wire = json.dumps(
+            {
+                "format": "vertente-pending-sheet",
+                "version": 1,
+                "jwe": envelope.serialize(compact=True),
+            }
+        ).encode()
+        sheet = receive_sheet(wire, actor=actor).sheet
+        sequence = 0
+        if kind == "entry":
+            values = {k: payload[k] for k in ("person", "physical_date", "notes", "lines")}
+            values["person"] = "Pessoa sintética conferida no Windows"
+            sequence = correct_sheet(
+                sheet.pk,
+                actor=actor,
+                sequence=0,
+                values=values,
+                reason="Correção de ensaio auditada",
+            ).sequence
+        review, _ = review_sheet(sheet.pk, actor=actor, sequence=sequence)
+        result = confirm_sheet(
+            sheet.pk,
+            actor=actor,
+            sequence=review.sequence,
+            token=review.data["token"],
+            confirmed=True,
+            report_requested=False,
+            validation="signed" if kind == "exit" else None,
+            signature_data=signature if kind == "exit" else None,
+        )
+        assert result.status == "confirmed"
+        assert (
+            confirm_sheet(
+                sheet.pk,
+                actor=actor,
+                sequence=review.sequence,
+                token=review.data["token"],
+                confirmed=True,
+                report_requested=False,
+            ).pk
+            == result.pk
+        )
 
 
 pending_fixture()
