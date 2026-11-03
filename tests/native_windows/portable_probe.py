@@ -25,15 +25,23 @@ def run(root, directory, key, phrase):
     manifest = json.loads((release.parent / "package.json").read_text())
     archive = directory / ("portable-" + uuid.uuid4().hex + ".gvabackup")
     credential = "synthetic-portable-" + uuid.uuid4().hex
+    from native_windows import backup_vault
+    from native_windows.backup_wizard import configure_credential
+
+    configure_credential(root, {"portable_password": credential})
+    assert credential.encode() not in (root / "secrets" / backup_vault.NAME).read_bytes()
+    assert backup_vault.load(root)["password"] == credential
     result = export_backup(
         root,
         {
             "destination": str(archive),
             "recovery_key": str(key),
             "recovery_password": phrase,
-            "portable_password": credential,
+
         },
     )
+    second = directory / ("consecutive-" + uuid.uuid4().hex + ".gvabackup")
+    assert export_backup(root, {"destination": str(second)})["sha256"] == digest(second)
     assert result["sha256"] == digest(archive)
     with connection(root) as conn:
         before = evidence(conn)
@@ -84,6 +92,7 @@ def run(root, directory, key, phrase):
         if table not in ("inventory_auditevent", "__sequences__"):
             assert after[table] == expected, "Restored table differs: " + table
     assert json.loads((root / "publisher.json").read_text())["enabled"] is False
+    assert not (root / "secrets" / backup_vault.NAME).exists()
     assert not (root / "runtime/wifi/approved").exists()
     assert not (root / "runtime/receiver/approved").exists()
     assert archive.exists()  # Retention/uninstall never owns the selected external file.

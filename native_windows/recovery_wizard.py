@@ -257,6 +257,8 @@ def restore(root, release, manifest, request, trust_path):
             }
             write_json(root / "installation.json", state)
             configure(root, release, create=not registered)
+            # Machine-bound vaults must never survive transfer to another host.
+            (root / "secrets/backup-vault.dpapi").unlink(missing_ok=True)
             prepare_acl(root)
             create_cluster(root)
             mark("recovery-database")

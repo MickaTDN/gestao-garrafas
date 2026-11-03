@@ -78,6 +78,7 @@ def recover(root, release, manifest, request):
         state["uninstalled"] = False
         write_json(root / "installation.json", state)
         configure(root, release, create=True)
+        (root / "secrets/backup-vault.dpapi").unlink(missing_ok=True)
         prepare_acl(root)
         create_cluster(root)
         with (data / "database.dump").open("rb") as dump:

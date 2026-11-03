@@ -43,6 +43,8 @@ def prepare_acl(root):
     protect(
         root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("receiver", "R"), ("wifi", "R")]
     )
+    if (root / "secrets/backup-vault.dpapi").exists():
+        protect(root / "secrets/backup-vault.dpapi")
     if (root / "secrets/recovery-envelope.json").exists():
         protect(root / "secrets/recovery-envelope.json", [("backup", "R")])
 
@@ -206,6 +208,9 @@ def initial(root, release, manifest, request, trust_path):
         protect(recovery)
         mark("acl")
         prepare_acl(root)
+        from .backup_vault import save
+
+        save(root, {"pem": private.decode(), "phrase": request["recovery_password"]})
         mark("cluster-bootstrap")
         create_cluster(root)
         mark("django-migrations")

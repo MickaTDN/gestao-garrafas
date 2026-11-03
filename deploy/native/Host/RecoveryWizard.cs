@@ -32,6 +32,11 @@ internal static class RecoveryWizard
 
     internal static bool Show(string release, bool recovering, string? package = null)
     {
+        bool configured = false;
+        if (!recovering) {
+            try { configured = Run(release, "backup-status", new {}).GetProperty("configured").GetBoolean(); }
+            catch { /* A lost vault requires original phrase, never silent replacement. */ }
+        }
         using var form = new Form { Text = recovering ? "Recuperar cópia de segurança" : "Criar cópia de segurança", Width = 660, Height = 670, StartPosition = FormStartPosition.CenterParent };
         var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(18) };
         form.Controls.Add(flow);
@@ -46,22 +51,36 @@ internal static class RecoveryWizard
         }; flow.Controls.Add(browse);
         var credential = Field(recovering ? "Credencial da cópia portátil (ou código do kit antigo)" : "Frase de recuperação portátil (mínimo 16 caracteres). Guarde-a separadamente da cópia.", true);
         TextBox? confirm = recovering ? null : Field("Confirmar frase de recuperação portátil", true);
+        credential.Visible = recovering || !configured;
+        if (confirm != null) confirm.Visible = !configured;
+        // Hide the labels of the unused phrase fields too.
+        if (configured) {
+            int i = flow.Controls.IndexOf(credential); flow.Controls[i - 1].Visible = false;
+            if (confirm != null) { i = flow.Controls.IndexOf(confirm); flow.Controls[i - 1].Visible = false; }
+        }
+        var compatibility = new CheckBox { Text = "Compatibilidade: cópia ou instalação antiga", Width = 580 };
+        flow.Controls.Add(compatibility);
+        int legacyStart = flow.Controls.Count;
         var kit = Field("Apenas para backups antigos / primeira exportação: kit .gvademo ou chave original (opcional)");
         var chooseKit = new Button { Text = "Escolher kit antigo…", Width = 220 };
         chooseKit.Click += (_, _) => { using var d = new OpenFileDialog { Filter = "Kit de demonstração|*.gvademo|Chave original de recuperação|*.pem" }; if (d.ShowDialog(form) == DialogResult.OK) kit.Text = d.FileName; }; flow.Controls.Add(chooseKit);
         var oldCode = recovering ? null : Field("Código do kit / frase da chave original (apenas primeira exportação)", true);
+        var legacyControls = flow.Controls.Cast<Control>().Skip(legacyStart).ToArray();
+        foreach (var control in legacyControls) control.Visible = false;
+        compatibility.CheckedChanged += (_, _) => { foreach (var control in legacyControls) control.Visible = compatibility.Checked; };
+        if (configured) compatibility.Visible = false;
         Label("A cópia Windows contém os dados do servidor. Preferências e encomendas guardadas só no Android exigem a exportação local da PWA. O Wi-Fi será reativado após aprovação no destino.", 65);
-        var button = new Button { Text = recovering ? "Validar e rever recuperação" : "Criar cópia de segurança", Width = 300, Height = 42 }; flow.Controls.Add(button);
+        var button = new Button { Text = recovering ? "Validar e rever recuperação" : "Criar backup", Width = 300, Height = 42 }; flow.Controls.Add(button);
         var progress = new ProgressBar { Width = 580, Style = ProgressBarStyle.Marquee, Visible = false }; flow.Controls.Add(progress);
         var status = new Label { Width = 590, Height = 100 }; flow.Controls.Add(status);
         button.Click += async (_, _) => {
-            if (!recovering && credential.Text != confirm!.Text) { MessageBox.Show(form, "As frases não coincidem."); return; }
+            if (!recovering && !configured && (credential.Text.Length < 16 || credential.Text != confirm!.Text)) { MessageBox.Show(form, "Use pelo menos 16 caracteres e confirme a mesma frase. Guarde-a separadamente do computador."); return; }
             var request = new Dictionary<string, object?> { [recovering ? "archive" : "destination"] = archive.Text, [recovering ? "credential" : "portable_password"] = credential.Text };
             if (!string.IsNullOrWhiteSpace(kit.Text)) {
                 request[Path.GetExtension(kit.Text).Equals(".gvademo", StringComparison.OrdinalIgnoreCase) ? "demo_kit" : "recovery_key"] = kit.Text;
                 request["credential"] = recovering ? credential.Text : oldCode!.Text;
                 request["recovery_password"] = recovering ? credential.Text : oldCode!.Text;
-            } else if (!recovering && Program.Channel == "synthetic" && !File.Exists(Path.Combine(Program.Root, "secrets", "recovery-envelope.json"))) {
+            } else if (!recovering && Program.Channel == "synthetic" && !File.Exists(Path.Combine(Program.Root, "secrets", "recovery-envelope.json")) && !File.Exists(Path.Combine(Program.Root, "secrets", "backup-vault.dpapi"))) {
                 try {
                     var data = SyntheticDemo.Read(Program.Channel, SyntheticDemoWizard.Parent);
                     request["recovery_private_b64"] = Convert.ToBase64String(File.ReadAllBytes(data.RecoveryKey));
@@ -71,6 +90,13 @@ internal static class RecoveryWizard
             bool complete = false;
             bool success = await WizardOperation.Execute(form, button, progress, status, async () => {
                 if (!recovering) {
+                    if (!configured) {
+                        await Task.Run(() => Run(release, "backup-configure", request));
+                        configured = true;
+                    }
+                    // Normal export has no phrase on the request, command line or disk.
+                    request.Remove("portable_password"); request.Remove("recovery_password");
+                    request.Remove("recovery_private_b64"); request.Remove("credential");
                     var result = await Task.Run(() => Run(release, "portable-backup", request));
                     MessageBox.Show(form, "Cópia cifrada exportada e restauro verificado.\nSHA-256: " + result.GetProperty("sha256").GetString() + "\nGuarde a credencial separadamente.");
                     complete = true;
