@@ -134,3 +134,46 @@ class BackupTests(TestCase):
         ):
             with self.subTest(actual=actual):
                 self.assertFalse(matching_evidence(actual, expected))
+
+
+class RetentionTests(TestCase):
+    def test_retention_preserves_legacy_and_last_restore_verified_anchor(self):
+        import os
+
+        from native_windows.maintenance import prune_backups
+        from native_windows.package import digest
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = []
+            for number in range(5):
+                path = root / f"gva-{number}.gvabackup"
+                path.write_bytes(f"synthetic-{number}".encode())
+                os.utime(path, (number + 1, number + 1))
+                paths.append(path)
+                if number:
+                    path.with_suffix(".sha256.json").write_text(
+                        json.dumps(
+                            {
+                                "size": path.stat().st_size,
+                                "sha256": digest(path),
+                                "authenticated": True,
+                                "restore_verified": number == 1,
+                            }
+                        )
+                    )
+            prune_backups(root, 2)
+            self.assertEqual([p.exists() for p in paths], [True, True, False, True, True])
+
+    def test_modified_receipt_or_backup_is_not_an_authorisation_to_delete(self):
+        from native_windows.maintenance import prune_backups
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gva-old.gvabackup"
+            path.write_bytes(b"only-existing-copy")
+            path.with_suffix(".sha256.json").write_text(
+                json.dumps({"authenticated": True, "sha256": "incorrect", "size": 18})
+            )
+            prune_backups(root, 2)
+            self.assertEqual(path.read_bytes(), b"only-existing-copy")

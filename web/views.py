@@ -1,5 +1,6 @@
 from functools import wraps
 
+from django.conf import settings as django_settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -186,7 +187,8 @@ def history(request):
 @login_required
 @require_GET
 def settings(request):
-    return render(request, "web/settings.html", {"section": "settings"})
+    channel = getattr(django_settings, "NATIVE_BACKUP_CHANNEL", None)
+    return render(request, "web/settings.html", {"section": "settings", "native_backup_channel": channel if channel in {"synthetic", "release"} else None})
 
 
 FEATURES = {

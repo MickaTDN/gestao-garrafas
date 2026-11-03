@@ -153,6 +153,9 @@ def main(directory):
     from tests.native_windows.sheet_receiver_probe import main as receiver_probe
 
     receiver_probe(root, directory)
+    from tests.native_windows.management_wifi_probe import main as management_wifi_probe
+
+    management_wifi_probe(root, directory)
     tls_before = {
         path.name: path.read_bytes() for path in (root / "tls").iterdir() if path.is_file()
     }
@@ -322,6 +325,15 @@ def main(directory):
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     log("::notice::Native smoke: exact-version repair preserved data and signing identity")
+    # The uninstaller removed the 1.0 package directory. Python cached its
+    # package search path; subsequent imports must use the installed 1.1 code.
+    import native_windows
+
+    native_windows.__path__ = [str(Path(json.loads((root / "installation.json").read_text())["release"]) / "app/native_windows")]
+    from tests.native_windows.portable_probe import run as portable_probe
+
+    portable_request = portable_probe(root, directory, key, phrase)
+    log("::notice::Native smoke: portable backup, failed-restore rollback and verified replacement: PASS")
     # Actual service/DB failure after migration: all services remain disabled,
     # a durable journal blocks restart, and only NEW-root recovery may resume.
     from native_windows.maintenance import UpdateActions
@@ -408,7 +420,7 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 6
+            == 7
         )
         assert conn.execute(
             "SELECT source_id::text,sequence FROM consultation_exportsource"
@@ -458,17 +470,22 @@ def main(directory):
             conn.execute(
                 "SELECT count(*) FROM inventory_movement WHERE status='confirmed'"
             ).fetchone()[0]
-            == 6
+            == 7
         )
-        assert conn.execute("SELECT count(*) FROM inventory_reportnumber").fetchone()[0] == 6
+        assert conn.execute("SELECT count(*) FROM inventory_reportnumber").fetchone()[0] == 7
         assert (
             conn.execute("SELECT sum(current_stock) FROM inventory_reference").fetchone()[0] == 33
         )
     assert not (root / "runtime/receiver/approved").exists()
+    assert not (root / "runtime/wifi/approved").exists()
     log(
         "::notice::Native smoke: encrypted recovery verified; data, movements and identity "
         "preserved; activation remains blocked awaiting IT cutover (journal retained by design)"
     )
+    from tests.native_windows.portable_probe import fresh_destination
+
+    fresh_destination(root, directory, portable_request)
+    log("::notice::Native smoke: portable restore into a clean root with fresh services: PASS")
     log(SMOKE_SUCCESS)
 
 
@@ -482,7 +499,7 @@ def report_failure(error, root):
     # Safe service categories only; never dump secret/config/request files.
     from native_windows.windows import service_failure
 
-    for kind in ("postgres", "web", "backup", "publisher", "receiver"):
+    for kind in ("postgres", "web", "backup", "publisher", "receiver", "wifi"):
         log("::notice::Service diagnostic " + kind + ": " + service_failure(root, kind))
     import re
 

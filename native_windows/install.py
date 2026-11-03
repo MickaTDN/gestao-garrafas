@@ -24,13 +24,14 @@ def prepare_acl(root):
     for name, rights in {
         "cluster": [("postgres", "M")],
         "runtime": [(kind, "RX") for kind in SERVICES],
-        "runtime/web": [("web", "M")],
+        "runtime/web": [("web", "M"), ("wifi", "M"), ("backup", "R")],
         "runtime/postgres": [("postgres", "M")],
         "runtime/backup": [("backup", "M")],
         "runtime/publisher": [("publisher", "M")],
         "runtime/receiver": [("receiver", "M")],
-        "secrets": [("web", "RX"), ("backup", "RX"), ("receiver", "RX")],
-        "signing": [("web", "R"), ("backup", "R"), ("receiver", "R")],
+        "runtime/wifi": [("wifi", "M")],
+        "secrets": [("web", "RX"), ("backup", "RX"), ("receiver", "RX"), ("wifi", "RX")],
+        "signing": [("web", "R"), ("backup", "R"), ("receiver", "R"), ("wifi", "R")],
         "tls": [("publisher", "R"), ("backup", "R")],
         "backups": [("backup", "M")],
     }.items():
@@ -39,7 +40,19 @@ def prepare_acl(root):
         protect(path, rights)
     # Web process must not read the migration/backup credentials.
     protect(root / "secrets/owner.json", [("backup", "R")])
-    protect(root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("receiver", "R")])
+    protect(
+        root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("receiver", "R"), ("wifi", "R")]
+    )
+    if (root / "secrets/recovery-envelope.json").exists():
+        protect(root / "secrets/recovery-envelope.json", [("backup", "R")])
+
+    # Restored TLS/config directories must not inherit other application accounts.
+    for folder, account in (("management-wifi", "wifi"), ("sheet-receiver", "receiver")):
+        target = root / "secrets" / folder
+        if target.is_dir():
+            protect(target, [(account, "R"), ("backup", "R")])
+            for item in target.rglob("*"):
+                protect(item, [(account, "R"), ("backup", "R")])
 
 
 def wait_database(root):
