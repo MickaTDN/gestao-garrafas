@@ -90,9 +90,11 @@ class Line(forms.Form):
         super().__init__(*args, **kwargs)
 
 
-def working_line(data):
+def working_line(data, original=None):
     line = {key: data[key] for key in ("reference_id", "boxes", "units", "box_capacity")}
-    if line["reference_id"].startswith("proposal:"):
+    if line["reference_id"].startswith("proposal:") and (
+        (original or {}).get("proposal") or data.get("proposed_name")
+    ):
         line["proposal"] = {
             "name": data["proposed_name"],
             "location_id": data["proposal_location"].pk if data.get("proposal_location") else None,
@@ -104,7 +106,11 @@ def working_line(data):
 class WorkingLineSet(forms.BaseFormSet):
     def add_fields(self, form, index):
         super().add_fields(form, index)
-        form.fields["DELETE"].label = "Retirar esta linha apenas da versão de trabalho"
+        form.fields["DELETE"].label = (
+            "Rejeitar esta proposta (motivo obrigatório)"
+            if form.initial.get("proposal")
+            else "Retirar esta linha apenas da versão de trabalho"
+        )
 
 
 Lines = forms.formset_factory(
@@ -214,7 +220,7 @@ def detail(request, pk):
                         "notes": data["notes"],
                         "lines": payload["lines"][:start]
                         + [
-                            working_line(f.cleaned_data)
+                            working_line(f.cleaned_data, f.initial)
                             for f in lines
                             if f.cleaned_data and not f.cleaned_data.get("DELETE")
                         ]

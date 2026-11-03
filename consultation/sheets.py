@@ -138,7 +138,7 @@ def decode(raw):
                 if outer["version"] != 2 or payload["kind"] != "entry":
                     raise ValueError
                 validate_line(line)
-            elif line.get("reference_id", "").startswith("proposal:"):
+            elif outer["version"] == 2 and line.get("reference_id", "").startswith("proposal:"):
                 raise ValueError
             text(line["reference_id"], 100)
             if not line["reference_id"] or line["reference_id"] in seen:

@@ -110,6 +110,31 @@ class DirectEntryProposalTests(SheetFixtures, TestCase):
             add_to_entry(out.pk, actor=self.admin, revision=0, data=self.data)
         self.assertEqual(Reference.objects.count(), 1)
 
+    def test_existing_custom_entry_and_catalogue_permissions_are_preserved(self):
+        from accounts.models import AccessProfile, User
+
+        profile = AccessProfile.objects.create(
+            name="Entrada e catálogo fictícios", capabilities=["entry", "catalog_manage"]
+        )
+        user = User.objects.create_user(
+            username="synthetic-proposal-custom", role="custom", access_profile=profile
+        )
+        draft = operations.create_draft(actor=user, kind="entry")
+        draft = operations.save_draft(
+            draft.pk, actor=user, revision=0, header={"person_name": "Pessoa fictícia"}
+        )
+        draft = add_to_entry(draft.pk, actor=user, revision=draft.revision, data=self.data)
+        reviewed, _ = operations.review_draft(draft.pk, actor=user, revision=draft.revision)
+        confirm_movement(
+            draft.pk, actor=user, review_token=reviewed.review_token, report_requested=False
+        )
+        self.assertEqual(Reference.objects.count(), 2)
+        # This grants no access to the administrative pending-sheet workflow.
+        from accounts.permissions import require_access
+
+        with self.assertRaises(PermissionDenied):
+            require_access(user, "admin")
+
 
 @skipUnlessDBFeature("has_select_for_update")
 class DirectProposalConcurrencyTests(SheetFixtures, TransactionTestCase):

@@ -42,6 +42,11 @@ movimento, stock e documentos numa única transação. A entrada mantém a escol
 PDF opcional; saídas mantêm PDF obrigatório. Numeração, assinaturas, datas oficiais
 e restrições sobre correções históricas não mudam.
 
+As capacidades existentes são preservadas: a entrada direta exige as permissões de
+entrada e gestão de catálogo, incluindo perfis personalizados já autorizados. O
+processamento de folhas recebidas continua exclusivo do Administrador; não se
+concedem privilégios administrativos aos dispositivos ou a perfis personalizados.
+
 Uma falha de PDF, permissão, stock, localização, duplicação ou integridade reverte
 também as novas referências e respetivos eventos de criação. Originais recebidos
 nunca são reescritos; as decisões e associações ficam no histórico separado da folha.

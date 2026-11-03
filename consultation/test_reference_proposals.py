@@ -139,6 +139,14 @@ class ReferenceProposalTests(ProposalFixtures, TestCase):
                 receive_sheet(raw, actor=self.admin)
         self.assertEqual(Reference.objects.count(), 1)
 
+    def test_legacy_unknown_identifier_with_prefix_remains_receivable_without_creation(self):
+        line = {**self.payload["lines"][0], "reference_id": "proposal:" + str(uuid.uuid4())}
+        receipt = receive_sheet(self.packet({**self.payload, "lines": [line]}), actor=self.admin)
+        self.assertEqual(receipt.outcome, "pending")
+        self.assertEqual(Reference.objects.count(), 1)
+        with self.assertRaises(ValidationError):
+            review_sheet(receipt.sheet_id, actor=self.admin, sequence=0)
+
     def test_explicit_association_preserves_inactive_identity_and_requires_reactivation(self):
         from inventory.catalog import set_reference_active
 

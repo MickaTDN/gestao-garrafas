@@ -94,7 +94,7 @@ def validate_line(line, *, approved=False):
 
 
 def create_approved(line, *, actor):
-    require_access(actor, "admin")
+    require_access(actor, "catalog_manage")
     data, _ = validate_line(line, approved=True)
     return catalog.save_reference(
         actor=actor,
@@ -121,7 +121,6 @@ def snapshot(movement, *, actor):
     lines = pending(movement)
     if not lines:
         return None
-    require_access(actor, "admin")
     require_access(actor, "catalog_manage")
     if (
         movement.kind != "entry"
@@ -146,7 +145,6 @@ def add_to_entry(movement_id, *, actor, revision, data):
     from .operations import _invalidate, _revision
     from .services import owned_draft
 
-    require_access(actor, "admin")
     require_access(actor, "catalog_manage")
     catalog.catalogue_lock()
     movement = Movement.objects.select_for_update().get(pk=movement_id)
@@ -191,7 +189,7 @@ def remove_from_entry(movement_id, *, actor, revision, identity):
     from .operations import _invalidate, _revision
     from .services import owned_draft
 
-    require_access(actor, "admin")
+    require_access(actor, "catalog_manage")
     catalog.catalogue_lock()
     movement = Movement.objects.select_for_update().get(pk=movement_id)
     owned_draft(movement, actor)
