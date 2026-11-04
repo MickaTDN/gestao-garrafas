@@ -14,6 +14,7 @@ SERVICES = {
     "web": "GVAWeb",
     "backup": "GVABackup",
     "publisher": "GVAPublisher",
+    "wifi": "GVAManagementWifi",
 }
 
 
@@ -132,6 +133,8 @@ def configure(root, release, *, create=False, only=None):
     for kind, name in SERVICES.items():
         if only and kind != only:
             continue
+        if kind == "wifi" and not create and not exists(name):
+            continue
         binary = f'"{Path(release) / "service/GVA.Native.exe"}" --service {kind}'
         command = [
             "sc.exe",
@@ -166,12 +169,16 @@ def disable_all():
 
 
 def stop_all():
-    for kind in ("publisher", "backup", "web", "postgres"):
+    for kind in ("wifi", "publisher", "backup", "web", "postgres"):
         stop(SERVICES[kind])
 
 
 def activate(root):
-    for kind in ("postgres", "web", "backup", "publisher"):
+    for kind in ("postgres", "web", "backup", "publisher", "wifi"):
+        if kind == "wifi":
+            from .management_wifi import approved
+            if not approved(root):
+                continue
         name = SERVICES[kind]
         if kind == "publisher":
             import json

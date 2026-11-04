@@ -16,7 +16,8 @@ from .windows import SERVICES, configure, native
 TLS_FILES = ("server-chain.crt", "server.key", "device-ca.crt", "device-ca.crl")
 
 
-def render(release, root, config):
+def validate_network(release, root, config):
+    """Shared validation only: no publisher files, policies or private TLS reads."""
     address = ipaddress.IPv4Address(config["address"])
     allowed_private = any(
         address in ipaddress.ip_network(net)
@@ -46,6 +47,12 @@ def render(release, root, config):
     paths = [Path(root), Path(release)]
     if any(any(char in str(path) for char in ('"', "$", "\n", "\r", ";")) for path in paths):
         raise UnsafeOperation("Caminho do publicador contém caracteres não suportados.")
+    return clients
+
+
+def render(release, root, config):
+    clients = validate_network(release, root, config)
+    address, port = config["address"], config.get("port", 8444)
 
     def quote(path):
         return '"' + Path(path).as_posix() + '"'

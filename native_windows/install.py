@@ -24,12 +24,13 @@ def prepare_acl(root):
     for name, rights in {
         "cluster": [("postgres", "M")],
         "runtime": [(kind, "RX") for kind in SERVICES],
-        "runtime/web": [("web", "M")],
+        "runtime/web": [("web", "M"), ("wifi", "M"), ("backup", "R")],
         "runtime/postgres": [("postgres", "M")],
         "runtime/backup": [("backup", "M")],
         "runtime/publisher": [("publisher", "M")],
-        "secrets": [("web", "RX"), ("backup", "RX")],
-        "signing": [("web", "R"), ("backup", "R")],
+        "runtime/wifi": [("wifi", "M")],
+        "secrets": [("web", "RX"), ("backup", "RX"), ("wifi", "RX")],
+        "signing": [("web", "R"), ("backup", "R"), ("wifi", "R")],
         "tls": [("publisher", "R"), ("backup", "R")],
         "backups": [("backup", "M")],
     }.items():
@@ -38,7 +39,7 @@ def prepare_acl(root):
         protect(path, rights)
     # Web process must not read the migration/backup credentials.
     protect(root / "secrets/owner.json", [("backup", "R")])
-    protect(root / "secrets/app.json", [("web", "R"), ("backup", "R")])
+    protect(root / "secrets/app.json", [("web", "R"), ("backup", "R"), ("wifi", "R")])
 
 
 def wait_database(root):

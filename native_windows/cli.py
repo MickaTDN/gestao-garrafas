@@ -59,6 +59,8 @@ def main():
             "recover",
             "approve-recovery",
             "enable-publisher",
+            "configure-management-wifi",
+            "control-management-wifi",
         ),
     )
     parser.add_argument("--package")
@@ -79,7 +81,7 @@ def main():
         except Exception as error:
             from .state import write_json
             # Only fixed service runtime, never raw exceptions/SQL/credentials.
-            if args.kind in {"postgres", "web", "backup", "publisher"}:
+            if args.kind in {"postgres", "web", "backup", "publisher", "wifi"}:
                 record = {"category": type(error).__name__}
                 if isinstance(error, OSError):
                     record["file"] = Path(error.filename).name if error.filename else None
@@ -163,6 +165,12 @@ def main():
         from .publisher import enable
 
         enable(root, request)
+    elif args.action == "configure-management-wifi":
+        from .management_wifi import setup
+        setup(root, request)
+    elif args.action == "control-management-wifi":
+        from .management_wifi import control
+        control(root, request)
     elif args.action == "publisher":
         from .publisher import configure_publisher
         from .state import exclusive
