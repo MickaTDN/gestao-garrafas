@@ -32,6 +32,16 @@ from native_windows.package import (  # noqa: E402
 )
 
 
+def add_synthetic_migration_probe(app):
+    # Follow the approved consultation schema, never create a competing branch.
+    (app / "consultation/migrations/0005_native_synthetic_probe.py").write_text(
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = [('consultation', '0004_sheet_evidence_guards')]\n"
+        "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
+    )
+
+
 def unpack(archive, target):
     target.mkdir()
     if archive.name.endswith(".tar.gz"):
@@ -133,7 +143,9 @@ def build(args):
 
     item = sources.get("msvc")
     if not isinstance(item, dict):
-        raise UnsafeOperation("Falta o arquivo x64 Microsoft CRT revisto para distribuição privada.")
+        raise UnsafeOperation(
+            "Falta o arquivo x64 Microsoft CRT revisto para distribuição privada."
+        )
     archive = Path(item["archive"])
     if len(item["sha256"]) != 64 or digest(archive) != item["sha256"]:
         raise UnsafeOperation("SHA-256 do fornecedor incorreto: msvc")
@@ -141,7 +153,10 @@ def build(args):
         dest = Path(crt_temp) / "crt"
         unpack(archive, dest)
         deploy(payload, dest, item)
-    provenance.append({k: item[k] for k in ("version", "sha256", "source", "signers_sha256") } | {"component": "msvc"})
+    provenance.append(
+        {k: item[k] for k in ("version", "sha256", "source", "signers_sha256")}
+        | {"component": "msvc"}
+    )
     if args.synthetic_migration_probe and policy["channel"] != "synthetic":
         raise UnsafeOperation("A migração de ensaio nunca pode entrar num pacote de distribuição.")
     python_version = json.loads(
@@ -189,12 +204,7 @@ def build(args):
         ),
     )
     if args.synthetic_migration_probe:
-        (app / "consultation/migrations/0003_native_synthetic_probe.py").write_text(
-            "from django.db import migrations\n"
-            "class Migration(migrations.Migration):\n"
-            "    dependencies = [('consultation', '0002_authorizeddevice')]\n"
-            "    operations = [migrations.RunSQL(\"CREATE TABLE gva_native_ci_probe(id integer PRIMARY KEY, label text NOT NULL); INSERT INTO gva_native_ci_probe VALUES(1, 'synthetic-forward-migration')\")]\n"
-        )
+        add_synthetic_migration_probe(app)
 
     def write(path, value):
         Path(path).write_text(json.dumps(value, sort_keys=True, indent=2), encoding="utf-8")
@@ -243,6 +253,11 @@ def build(args):
         [python, "-B", str(app / "manage.py"), "collectstatic", "--noinput"], env=env, check=True
     )
     # Caches do not belong to the executable inventory; installed code is read-only.
+    # jwcrypto distributes public test vectors containing fixture private keys.
+    # They are not runtime dependencies. Do not ship any private key, even a
+    # published fixture; keep the full private-material scanner unchanged.
+    for name in ("tests.py", "tests-cookbook.py", "tests_mldsa.py"):
+        (payload / "python/Lib/site-packages/jwcrypto" / name).unlink(missing_ok=True)
     for path in payload.rglob("__pycache__"):
         shutil.rmtree(path)
     host_source = output / "host-source"

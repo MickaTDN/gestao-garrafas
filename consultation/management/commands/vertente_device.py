@@ -17,6 +17,7 @@ class Command(BaseCommand):
         parser.add_argument("--output", required=True)
         parser.add_argument("--role", choices=["owner", "employee"], required=True)
         parser.add_argument("--allow-import", action="store_true")
+        parser.add_argument("--allow-sheets", action="store_true")
         parser.add_argument("--days", type=int, default=365)
         parser.add_argument("--confirmed-device-fingerprint", required=True)
 
@@ -41,6 +42,7 @@ class Command(BaseCommand):
                 role=options["role"],
                 allow_import=options["allow_import"],
                 days=options["days"],
+                allow_sheets=options['allow_sheets'],
             )
             write_json(output, envelope)
         except (ValidationError, ValueError, OSError, KeyError, TypeError, binascii.Error) as error:

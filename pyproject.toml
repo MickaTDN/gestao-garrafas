@@ -14,6 +14,7 @@ dependencies = [
   "pillow>=13.0.0,<14",
   "cryptography>=50.0.2,<51",
   "waitress>=3.0.2,<4",
+  "jwcrypto>=1.5.6,<2",
 ]
 
 [dependency-groups]

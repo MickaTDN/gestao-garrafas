@@ -159,11 +159,48 @@ def validate_material(root):
     if not any(item["spki"] == public for item in trust["keys"]):
         raise UnsafeOperation("A confiança Android não corresponde à chave da instalação.")
     with connection(root) as conn:
+        # Provisioning uses the same lock; never inspect a half-written pair.
+        # The connection closes on exit, also releasing this session lock.
+        conn.execute("SELECT pg_advisory_lock(73194622)")
         row = conn.execute(
             "SELECT source_id::text FROM consultation_exportsource WHERE id=1"
         ).fetchone()
         if not row or row[0] != trust["source_id"]:
             raise UnsafeOperation("A origem Android não corresponde à base desta instalação.")
+        exists = conn.execute("SELECT to_regclass('public.consultation_pendingsheet')").fetchone()[
+            0
+        ]
+        needed = bool(
+            exists
+            and conn.execute("SELECT EXISTS(SELECT 1 FROM consultation_pendingsheet)").fetchone()[0]
+        )
+        needed = (
+            needed
+            or conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM inventory_auditevent WHERE action='sheets.recipient_provisioned')"
+            ).fetchone()[0]
+        )
+        validate_pending_material(root, needed=needed)
+
+
+def validate_pending_material(root, *, needed):
+    import base64
+
+    from jwcrypto import jwk
+
+    path = Path(root) / "signing/pending-reception.pem"
+    if not path.exists() and not needed:
+        return  # Backups anteriores e instalações sem receção continuam válidos.
+    try:
+        key = jwk.JWK.from_pem(path.read_bytes())
+        public = json.loads(path.with_suffix(".public.json").read_text())
+        payload = json.loads(base64.urlsafe_b64decode(public["payload"] + "=="))
+        if not key.has_private or key.key_type != "RSA" or key.thumbprint() != payload["key_id"]:
+            raise ValueError
+    except Exception as error:
+        raise UnsafeOperation(
+            "Material de receção de folhas ausente ou inconsistente. Preserve as chaves e backups anteriores."
+        ) from error
 
 
 def backup(root):
