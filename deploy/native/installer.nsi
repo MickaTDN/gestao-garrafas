@@ -37,6 +37,7 @@ VIAddVersionKey "FileDescription" "Instalação e atualização nativa (${Channe
 VIAddVersionKey "FileVersion" "${Version}"
 VIAddVersionKey "LegalCopyright" "Copo com Vida"
 !define MUI_WELCOMEPAGE_TEXT "Instala Python privado, PostgreSQL 17, aplicação e backups. Guarda dados separados do programa. Requer informática para serviços e NTFS. Não altera DNS ou firewall. Canal ${Channel}; os pacotes synthetic servem apenas para dados fictícios."
+!define MUI_WELCOMEPAGE_NEXTBUTTON_TEXT "Instalar"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH

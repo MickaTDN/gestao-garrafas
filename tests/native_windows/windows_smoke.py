@@ -73,8 +73,8 @@ def main(directory):
                     "username": "synthetic-ci-admin",
                     "password": "Synthetic-only-validation-390127!",
                     "synthetic": True,
-                    "recovery_key": str(key),
-                    "recovery_password": phrase,
+                    **({"recovery_key": str(key)} if version == "1.0.0" else {}),
+                    **({"recovery_password": phrase} if version == "1.0.0" else {}),
                 }
             )
         )
@@ -329,11 +329,18 @@ def main(directory):
     # package search path; subsequent imports must use the installed 1.1 code.
     import native_windows
 
-    native_windows.__path__ = [str(Path(json.loads((root / "installation.json").read_text())["release"]) / "app/native_windows")]
+    native_windows.__path__ = [
+        str(
+            Path(json.loads((root / "installation.json").read_text())["release"])
+            / "app/native_windows"
+        )
+    ]
     from tests.native_windows.portable_probe import run as portable_probe
 
     portable_request = portable_probe(root, directory, key, phrase)
-    log("::notice::Native smoke: portable backup, failed-restore rollback and verified replacement: PASS")
+    log(
+        "::notice::Native smoke: portable backup, failed-restore rollback and verified replacement: PASS"
+    )
     # Actual service/DB failure after migration: all services remain disabled,
     # a durable journal blocks restart, and only NEW-root recovery may resume.
     from native_windows.maintenance import UpdateActions

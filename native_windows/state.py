@@ -71,6 +71,7 @@ def update(root, manifest, actions):
             "phase": "prepared",
         }
         write_json(journal, record)
+        migration_started = False
         try:
             # Disables service autostart BEFORE any migration. Reboot cannot start old code.
             for phase, operation in (
@@ -80,6 +81,8 @@ def update(root, manifest, actions):
                 ("migrated", actions.migrate),
                 ("health-verified", actions.health),
             ):
+                if phase == "migrated":
+                    migration_started = True
                 operation()
                 record["phase"] = phase
                 write_json(journal, record)
@@ -96,6 +99,21 @@ def update(root, manifest, actions):
             write_json(root / ("update-" + record["id"] + ".json"), record)
             journal.unlink()
         except Exception:
+            # A proven pre-migration failure may restart the unchanged old schema.
+            # Never execute older code after entering migrate(), even if it raised.
+            rollback = getattr(actions, "rollback_before_migration", None)
+            if not migration_started and rollback is not None:
+                try:
+                    rollback()
+                    record["phase"] = "rolled-back-before-migration"
+                    write_json(root / ("update-" + record["id"] + ".json"), record)
+                    journal.unlink()
+                except Exception:
+                    pass
+                else:
+                    raise UnsafeOperation(
+                        "Atualização não instalada. A versão anterior foi verificada e está disponível; preserve o diagnóstico e contacte a informática."
+                    )
             # Even if activate partly succeeded, stop and disable everything again.
             try:
                 actions.disable()

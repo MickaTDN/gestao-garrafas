@@ -175,6 +175,8 @@ static class Program
         }
         Run(release, "verify", package: package); // No service/data changes before verification.
         bool updating = File.Exists(Path.Combine(Root, "installation.json"));
+        if (updating && !(State.TryGetProperty("uninstalled", out var wasRemoved) && wasRemoved.GetBoolean()))
+            return AutomaticUpdate(release, package);
         if (Channel == "synthetic" && !updating) {
             int? demoResult = SyntheticDemoWizard.Show(Channel, Root, package, Run, PrivateRequest);
             if (demoResult.HasValue) return demoResult.Value;
@@ -236,6 +238,29 @@ static class Program
             } else MessageBox.Show(form, status.Text, "Preparação interrompida — dados preservados", MessageBoxButtons.OK, MessageBoxIcon.Error);
         };
         return form.ShowDialog() == DialogResult.OK ? 0 : 1;
+    }
+
+    static int AutomaticUpdate(string release, string package)
+    {
+        using var form = new Form { Text = "A atualizar Gestão Vertente Aveludada", Width = 600, Height = 230, StartPosition = FormStartPosition.CenterScreen };
+        var status = new Label { Dock = DockStyle.Top, Height = 100, Text = "A preparar uma cópia verificada e a atualizar. Aguarde…" };
+        var progress = new ProgressBar { Dock = DockStyle.Top, Style = ProgressBarStyle.Marquee, Visible = false };
+        var operation = new Button { Visible = false };
+        form.Controls.Add(progress); form.Controls.Add(status); form.Controls.Add(operation);
+        using var timer = new System.Windows.Forms.Timer { Interval = 500 };
+        timer.Tick += (_, _) => status.Text = WizardOperation.Phase(Root);
+        bool complete = false;
+        form.Shown += async (_, _) => {
+            timer.Start();
+            complete = await WizardOperation.Execute(form, operation, progress, status,
+                () => Task.Run(() => Run(release, "update", package: package)),
+                e => e is UserError ? e.Message : "Atualização interrompida. Preserve os dados e contacte a informática.");
+            timer.Stop();
+            if (!complete) MessageBox.Show(form, status.Text, "Atualização não concluída", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            form.Close();
+        };
+        form.ShowDialog();
+        return complete ? 0 : 1; // Only NSIS shows Terminar after verified activation.
     }
 
     internal static string PrivateRequest(object value)
