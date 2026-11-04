@@ -64,7 +64,7 @@ def main(directory):
     phrase = "synthetic-recovery-only-never-use-in-production"
     host_error = directory / "host-error.txt"
 
-    def install(version):
+    def install(version, *, automatic_update=False):
         log("::notice::Native smoke: installing " + version)
         request = directory / f"request-{version}.json"
         request.write_text(
@@ -73,8 +73,8 @@ def main(directory):
                     "username": "synthetic-ci-admin",
                     "password": "Synthetic-only-validation-390127!",
                     "synthetic": True,
-                    **({"recovery_key": str(key)} if version == "1.0.0" else {}),
-                    **({"recovery_password": phrase} if version == "1.0.0" else {}),
+                    **({"recovery_key": str(key)} if not automatic_update else {}),
+                    **({"recovery_password": phrase} if not automatic_update else {}),
                 }
             )
         )
@@ -193,7 +193,7 @@ def main(directory):
     restore_check(root, plain)
     plain.unlink()
     activate(root)
-    install("1.1.0")
+    install("1.1.0", automatic_update=True)
     health_http(root)
     assert json.loads((root / "installation.json").read_text())["version"] == "1.1.0"
     assert (root / "signing/signing.pem").read_bytes() == key_before
