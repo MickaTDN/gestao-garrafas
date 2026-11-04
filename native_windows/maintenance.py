@@ -203,6 +203,14 @@ def validate_pending_material(root, *, needed):
         ) from error
 
 
+def copy_backup_directory(source, target):
+    shutil.copytree(
+        source,
+        target,
+        ignore=shutil.ignore_patterns("backup-vault.dpapi") if source.name == "secrets" else None,
+    )
+
+
 def backup(root, *, recovery_envelope=None, prune=True):
     root = Path(root)
     state = read_state(root)
@@ -252,7 +260,8 @@ def backup(root, *, recovery_envelope=None, prune=True):
                 ):
                     source = root / name
                     if source.is_dir():
-                        shutil.copytree(source, staging / name)
+                        # Exclude the machine-bound admin-only vault before opening files.
+                        copy_backup_directory(source, staging / name)
                     elif source.is_file():
                         shutil.copy2(source, staging / name)
                 manifest = {

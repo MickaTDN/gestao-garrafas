@@ -62,6 +62,8 @@ def main():
             "configure-sheet-receiver",
             "control-sheet-receiver",
             "portable-backup",
+            "backup-status",
+            "backup-configure",
             "recovery-preview",
             "recovery-restore",
             "configure-management-wifi",
@@ -141,7 +143,17 @@ def main():
         if args.request or len(raw) > 1024 * 1024:
             raise UnsafeOperation("Pedido de manutenção inválido.")
         request = json.loads(raw)
-    if args.action == "portable-backup":
+    if args.action in ("backup-status", "backup-configure"):
+        from .backup_wizard import configure_credential, credential_status
+
+        print(
+            json.dumps(
+                credential_status(root)
+                if args.action == "backup-status"
+                else configure_credential(root, request)
+            )
+        )
+    elif args.action == "portable-backup":
         from .backup_wizard import export_backup
 
         print(json.dumps(export_backup(root, request)))

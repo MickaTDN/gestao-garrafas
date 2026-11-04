@@ -49,6 +49,10 @@ def export_backup(root, request):
         state = read_state(root)
         config_path = root / "secrets/recovery-envelope.json"
         password = request.get("portable_password", "")
+        if not password:
+            from .backup_vault import load
+
+            password = load(root)["password"]
         if config_path.exists():
             recovery = json.loads(config_path.read_text())
             pem, phrase = unlock(recovery, password)
@@ -112,3 +116,41 @@ def export_backup(root, request):
             },
         )
         return {"status": "verified", "sha256": digest(target), "size": target.stat().st_size}
+
+
+def configure_credential(root, request):
+    """Configure once, or rebind the SAME envelope after local vault loss."""
+    from . import backup_vault
+
+    administrator()
+    root = Path(root)
+    with exclusive(root):
+        if (root / "maintenance.json").exists():
+            raise UnsafeOperation("Há manutenção pendente.")
+        password = request.get("portable_password", "")
+        config = root / "secrets/recovery-envelope.json"
+        if config.exists():
+            # Never replace an established envelope or silently change its phrase.
+            unlock(json.loads(config.read_text()), password)
+        else:
+            if (root / "secrets" / backup_vault.NAME).exists():
+                initial = backup_vault.load(root)
+                pem, phrase = initial["pem"].encode(), initial["phrase"]
+            else:
+                pem, phrase = material(request, read_state(root)["channel"])
+            value = envelope(pem, phrase, password, (root / "recovery-public.pem").read_bytes())
+            write_json(config, value)
+            protect(config, [("backup", "R")])
+        backup_vault.save(root, {"password": password})
+        return {"status": "configured"}
+
+
+def credential_status(root):
+    from . import backup_vault
+
+    administrator()
+    try:
+        value = backup_vault.load(root)
+        return {"configured": bool(value.get("password")), "bootstrap": bool(value.get("pem"))}
+    except UnsafeOperation:
+        return {"configured": False, "bootstrap": False}
