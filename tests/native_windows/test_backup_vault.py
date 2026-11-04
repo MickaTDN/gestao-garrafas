@@ -64,3 +64,16 @@ class BackupCredentialTests(TestCase):
         self.assertEqual(backup_vault.crypt(cipher, decrypt=True), secret)
         with self.assertRaises(UnsafeOperation):
             backup_vault.crypt(cipher[:-12] + b"altered data", decrypt=True)
+
+    def test_machine_vault_is_excluded_from_automatic_backup_copy(self):
+        from native_windows.maintenance import copy_backup_directory
+
+        source = self.root / "secrets"
+        (source / "backup-vault.dpapi").write_bytes(b"machine-bound")
+        target = self.root / "staging"
+        copy_backup_directory(source, target)
+        self.assertFalse((target / "backup-vault.dpapi").exists())
+        self.assertEqual(
+            (target / "recovery-envelope.json").read_bytes(),
+            (source / "recovery-envelope.json").read_bytes(),
+        )
