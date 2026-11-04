@@ -182,7 +182,9 @@ def main():
             update(
                 root,
                 manifest,
-                UpdateActions(root, release, request["recovery_key"], request["recovery_password"]),
+                UpdateActions(
+                    root, release, request.get("recovery_key"), request.get("recovery_password")
+                ),
             )
     elif args.action == "recover":
         from .recover import recover

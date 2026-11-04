@@ -452,9 +452,35 @@ def restore_check(root, archive):
 
 
 class UpdateActions:
-    def __init__(self, root, release, recovery_key, password):
+    def __init__(self, root, release, recovery_key=None, password=None):
         self.root, self.release = Path(root), Path(release)
-        self.recovery_key, self.password = Path(recovery_key), password
+        self.recovery_key = Path(recovery_key) if recovery_key else None
+        self.password = password
+        self.private_pem = None
+        if not recovery_key:
+            from .backup_vault import load
+            from .portable import envelope, unlock
+
+            try:
+                value = load(root)
+                if value.get("password"):
+                    recovery = json.loads(
+                        (self.root / "secrets/recovery-envelope.json").read_text()
+                    )
+                    self.private_pem, self.password = unlock(recovery, value["password"])
+                else:
+                    self.private_pem, self.password = value["pem"].encode(), value["phrase"]
+                # Verify correspondence before stopping any service, not only decryption later.
+                envelope(
+                    self.private_pem,
+                    self.password,
+                    uuid.uuid4().hex,
+                    (self.root / "recovery-public.pem").read_bytes(),
+                )
+            except Exception as error:
+                raise UnsafeOperation(
+                    "Não foi possível preparar a atualização automática. Abra Cópias de segurança e configure novamente a frase original. Dados e serviços não foram alterados."
+                ) from error
         self.old = read_state(root)
         self.package_sha256 = digest(self.release.parent / "package.json")
 
@@ -477,9 +503,29 @@ class UpdateActions:
         encrypted = backup(self.root)
         with tempfile.TemporaryDirectory(dir=self.root / "backups", prefix=".verify-") as temp:
             plain = Path(temp) / "verified.tar"
-            decrypt(encrypted, plain, self.recovery_key.read_bytes(), self.password)
+            decrypt(
+                encrypted,
+                plain,
+                self.private_pem
+                if self.private_pem is not None
+                else self.recovery_key.read_bytes(),
+                self.password,
+            )
             restore_check(self.root, plain)
         self.password = ""
+        self.private_pem = None
+
+    def rollback_before_migration(self):
+        # Called ONLY before entering migrate; no reverse migrations or restore over live data.
+        if read_state(self.root) != self.old:
+            raise UnsafeOperation("Estado alterado: recuperação automática recusada.")
+        original = self.release
+        try:
+            self.release = Path(self.old["release"])
+            self.health()
+            self.activate()
+        finally:
+            self.release = original
 
     def migrate(self):
         # Old code never starts again. Schema migration runs as owner with NEW code.

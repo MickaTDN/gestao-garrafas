@@ -4,6 +4,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !include "FileFunc.nsh"
+!include "WinMessages.nsh"
 !ifndef Version
   !error "Version required"
 !endif
@@ -37,6 +38,7 @@ VIAddVersionKey "FileDescription" "Instalação e atualização nativa (${Channe
 VIAddVersionKey "FileVersion" "${Version}"
 VIAddVersionKey "LegalCopyright" "Copo com Vida"
 !define MUI_WELCOMEPAGE_TEXT "Instala Python privado, PostgreSQL 17, aplicação e backups. Guarda dados separados do programa. Requer informática para serviços e NTFS. Não altera DNS ou firewall. Canal ${Channel}; os pacotes synthetic servem apenas para dados fictícios."
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW WelcomeShow
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -46,6 +48,10 @@ VIAddVersionKey "LegalCopyright" "Copo com Vida"
 Var Result
 Var Arguments
 Var CIRequest
+Function WelcomeShow
+  GetDlgItem $0 $HWNDPARENT 1
+  SendMessage $0 ${WM_SETTEXT} 0 "STR:Instalar"
+FunctionEnd
 Function .onInit
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Global\GVA.Install.${Channel}") p .r0 ?e'
   Pop $1
