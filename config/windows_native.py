@@ -54,3 +54,9 @@ STORAGES = {
 }
 MEDIA_ROOT = _root / "runtime" / "web" / "documents"
 VERTENTE_SIGNING_KEY_FILE = str(_root / "signing" / "signing.pem")
+
+# Static, channel-specific URI handlers open a local UAC wizard only. No web
+# request can pass a path, credential or operation payload to the privileged host.
+NATIVE_BACKUP_CHANNEL = _state.get("channel") if _state.get("channel") in {"synthetic", "release"} else None
+NATIVE_MAINTENANCE_FILE = str(_root / "maintenance.json")
+MIDDLEWARE = ["config.native_maintenance.NativeMaintenanceMiddleware", *MIDDLEWARE]  # noqa: F405

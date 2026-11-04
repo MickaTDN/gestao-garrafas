@@ -24,7 +24,8 @@ ImageDraw.Draw(image).line(
 output = io.BytesIO()
 image.save(output, format="PNG")
 signature = "data:image/png;base64," + base64.b64encode(output.getvalue()).decode()
-for kind in ("entry", "exit"):
+for kind in ("entry", "exit", "inventory"):
+    ref.refresh_from_db()
     draft = operations.create_draft(actor=actor, kind=kind, references=[ref])
     line = draft.lines.get()
     draft = operations.save_draft(
@@ -36,7 +37,7 @@ for kind in ("entry", "exit"):
             {
                 "id": line.pk,
                 "boxes": None,
-                "units": 2,
+                "units": ref.current_stock if kind == "inventory" else 2,
                 "reason": "",
                 "target_location": ref.location,
             }
