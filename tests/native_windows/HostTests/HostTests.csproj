@@ -4,5 +4,5 @@
     <UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup><Compile Include="../../../deploy/native/Host/WizardOperation.cs" Link="WizardOperation.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../../deploy/native/Host/WizardOperation.cs" Link="WizardOperation.cs" /><Compile Include="../../../deploy/native/Host/RetryTarget.cs" Link="RetryTarget.cs" /></ItemGroup>
 </Project>

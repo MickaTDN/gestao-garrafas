@@ -6,6 +6,7 @@ Hosted runners are Windows Server, NOT evidence of a physical Windows11 reboot.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -193,7 +194,33 @@ def main(directory):
     restore_check(root, plain)
     plain.unlink()
     activate(root)
+    # Reproduce a failed copy left by the previous installer; never reuse its bytes.
+    orphan = Path(os.environ["PROGRAMFILES"]) / "GestaoVertenteAveludada-synthetic/releases/1.1.0"
+    orphan.mkdir()
+    (orphan / "package.json").write_text("untrusted interrupted copy")
     install("1.1.0", automatic_update=True)
+    assert (orphan / "package.json").read_text() == "untrusted interrupted copy"
+    assert "-attempt-" in json.loads((root / "installation.json").read_text())["release"]
+    from native_windows.package import UnsafeOperation
+    from native_windows.recovery_wizard import preview
+
+    incompatible = directory / "backup-1.0.0.gvabackup"
+    shutil.copyfile(encrypted, incompatible)
+    state_now = (root / "installation.json").read_bytes()
+    target_release = Path(json.loads(state_now)["release"])
+    target_manifest = json.loads((target_release.parent / "package.json").read_text())
+    try:
+        preview(
+            root,
+            target_release,
+            target_manifest,
+            {"archive": str(incompatible), "recovery_key": str(key), "recovery_password": phrase},
+        )
+        raise AssertionError("Cross-version recovery accepted")
+    except UnsafeOperation as error:
+        assert "Recupere primeiro" in str(error)
+    assert (root / "installation.json").read_bytes() == state_now
+    assert not (root / "maintenance.json").exists()
     health_http(root)
     assert json.loads((root / "installation.json").read_text())["version"] == "1.1.0"
     assert (root / "signing/signing.pem").read_bytes() == key_before
