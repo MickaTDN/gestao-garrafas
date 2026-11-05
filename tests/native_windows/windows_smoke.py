@@ -201,6 +201,7 @@ def main(directory):
     install("1.1.0", automatic_update=True)
     assert (orphan / "package.json").read_text() == "untrusted interrupted copy"
     assert "-attempt-" in json.loads((root / "installation.json").read_text())["release"]
+    from native_windows.package import UnsafeOperation
     from native_windows.recovery_wizard import preview
 
     incompatible = directory / "backup-1.0.0.gvabackup"
