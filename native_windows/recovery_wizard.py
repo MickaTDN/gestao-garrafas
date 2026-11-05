@@ -52,6 +52,14 @@ def validate_snapshot(data, metadata, saved, manifest):
         raise UnsafeOperation(
             "Backup incompatível com a versão/canal deste instalador. Nenhum dado existente foi substituído."
         )
+    if state["version"] != manifest["version"]:
+        raise UnsafeOperation(
+            "Esta cópia foi criada na versão "
+            + state["version"]
+            + ". Recupere primeiro com o instalador compatível dessa versão; depois atualize normalmente para "
+            + manifest["version"]
+            + ". Nenhum dado ou serviço foi alterado. Não são feitas migrações na recuperação."
+        )
     for port in (state.get("db_port"), state.get("http_port")):
         if type(port) is not int or not 1024 <= port <= 65535:
             raise UnsafeOperation("Porta inválida no backup.")
@@ -107,6 +115,10 @@ def prepared(root, release, manifest, request):
         data = temp / "data"
         saved = extract_verified(plain, data)
         state = validate_snapshot(data, metadata, saved, manifest)
+        if state["package_sha256"] != digest(release.parent / "package.json"):
+            raise UnsafeOperation(
+                "Use o instalador exato que criou esta cópia. Recupere com essa versão e só depois atualize. Instalação preservada."
+            )
         recovery_envelope = header(frozen).get("recovery")
         if recovery_envelope:
             # Header was authenticated by decrypt_backup; preserve unattended portability.

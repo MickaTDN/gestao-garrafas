@@ -48,6 +48,7 @@ VIAddVersionKey "LegalCopyright" "Copo com Vida"
 Var Result
 Var Arguments
 Var CIRequest
+Var ReleaseName
 Function WelcomeShow
   GetDlgItem $0 $HWNDPARENT 1
   SendMessage $0 ${WM_SETTEXT} 0 "STR:Instalar"
@@ -83,29 +84,35 @@ Function .onInit
     SetErrorLevel 1
     Abort "Pacote antigo, incompatível ou sem assinatura autorizada. Dados conservados."
   ${EndIf}
+  FileOpen $0 "$PLUGINSDIR\release-name.txt" r
+  FileRead $0 $ReleaseName
+  FileClose $0
+  StrCmp $ReleaseName "" 0 +3
+    SetErrorLevel 1
+    Abort "Destino não validado."
 FunctionEnd
 Section "Instalar ou atualizar"
   StrCmp $INSTDIR "$PROGRAMFILES64\GestaoVertenteAveludada-${Channel}" +3
     SetErrorLevel 1
     Abort "Use a pasta de programa protegida definida pelo instalador."
-  IfFileExists "$INSTDIR\releases\${Version}\package.json" 0 +3
+  IfFileExists "$INSTDIR\releases\$ReleaseName\*.*" 0 +3
     SetErrorLevel 1
     Abort "Não se substituem versões já instaladas."
-  SetOutPath "$INSTDIR\releases\${Version}"
+  SetOutPath "$INSTDIR\releases\$ReleaseName"
   File /r "${Bundle}\*"
   SetOutPath "$INSTDIR"
   File "${Bundle}\payload\host\GVA.Native.exe"
-  StrCpy $Arguments '--wizard "$INSTDIR\releases\${Version}"'
+  StrCpy $Arguments '--wizard "$INSTDIR\releases\$ReleaseName"'
 !if "${Channel}" == "synthetic"
   ReadEnvStr $Result "GITHUB_ACTIONS"
   ReadEnvStr $CIRequest "GVA_CI_REQUEST"
   ${GetParameters} $0
   ${GetOptions} $0 "/CITestRequest=" $CIRequest
   ${If} $CIRequest != ""
-    StrCpy $Arguments '--ci-wizard "$INSTDIR\releases\${Version}" "$CIRequest"'
+    StrCpy $Arguments '--ci-wizard "$INSTDIR\releases\$ReleaseName" "$CIRequest"'
   ${EndIf}
 !endif
-  ExecWait '"$INSTDIR\releases\${Version}\payload\host\GVA.Native.exe" $Arguments' $Result
+  ExecWait '"$INSTDIR\releases\$ReleaseName\payload\host\GVA.Native.exe" $Arguments' $Result
   ${If} $Result != 0
     SetErrorLevel 1
     Abort "Operação incompleta. Dados conservados; contacte a informática. Não inicie código antigo após migrações."

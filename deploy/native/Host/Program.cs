@@ -86,6 +86,21 @@ static class Program
             if ((!uninstalled && old >= incoming) || (uninstalled && incoming < old) || old < Version.Parse(next.GetProperty("minimum_version").GetString()!) || State.GetProperty("channel").GetString() != Channel) throw new UserError("Versão antiga, repetida ou incompatível. Use uma versão autorizada compatível com os dados.");
             if (File.Exists(Path.Combine(Root, "maintenance.json"))) throw new UserError("Manutenção interrompida. É necessária recuperação pela informática.");
         }
+        if (File.Exists(Path.Combine(Root, "installation.json")) && !(State.TryGetProperty("uninstalled", out var restoredUninstalled) && restoredUninstalled.GetBoolean())) {
+            try {
+                byte[] clear = WindowsVault.Transform(File.ReadAllBytes(Path.Combine(Root, "secrets", "backup-vault.dpapi")), false);
+                try {
+                    using var vault = JsonDocument.Parse(clear);
+                    if (!vault.RootElement.TryGetProperty("password", out _) && !vault.RootElement.TryGetProperty("pem", out _)) throw new InvalidOperationException();
+                } finally { CryptographicOperations.ZeroMemory(clear); }
+            } catch { throw new UserError("Configure Cópias de segurança com a frase original antes de atualizar. Nenhum ficheiro instalado ou serviço foi alterado."); }
+        }
+        string program = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GestaoVertenteAveludada-" + Channel);
+        string selected;
+        try { selected = RetryTarget.Select(Root, program, next.GetProperty("version").GetString()!); }
+        catch (Exception e) { throw new UserError(e is InvalidOperationException ? e.Message : "Não foi possível validar a instalação anterior. Preserve os ficheiros."); }
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(manifestPath)!, "release-name.txt"), selected);
+
     }
 
     static void Maintenance()

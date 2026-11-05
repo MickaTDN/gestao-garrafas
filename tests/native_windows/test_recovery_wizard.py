@@ -197,6 +197,15 @@ class RecoveryWizardTests(TestCase):
         self.assertEqual(permit.read_text(), "another-approved-release")
         self.assertTrue((self.root / "cluster/precious").exists())
 
+    def test_older_backup_is_rejected_early_with_recover_then_update_guidance(self):
+        state = {**self.old, "version": "1.0.0"}
+        (self.data / "installation.json").write_text(json.dumps(state))
+        metadata = {**self.metadata, "version": "1.0.0"}
+        saved = {**self.saved, "version": "1.0.0"}
+        with self.assertRaisesRegex(UnsafeOperation, "Recupere primeiro.*depois atualize"):
+            validate_snapshot(self.data, metadata, saved, self.manifest)
+        self.assertTrue((self.root / "cluster/precious").exists())
+
     def test_version_channel_and_internal_identity_are_checked(self):
         self.assertEqual(
             validate_snapshot(self.data, self.metadata, self.saved, self.manifest), self.old
