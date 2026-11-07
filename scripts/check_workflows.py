@@ -32,6 +32,14 @@ NATIVE_JOB_GUARD = (
 )
 
 
+PR43_HOMOLOGATION_FILE = "pr43-windows11-retry-recovery-homologation.yml"
+PR43_HOMOLOGATION_NAME = "PR43 - Windows 11 retry recovery synthetic homologation"
+PR43_HOMOLOGATION_JOB_GUARD = (
+    "github.event_name == 'workflow_dispatch' && "
+    "github.ref == 'refs/heads/main' && "
+    "github.repository == 'MickaTDN/gestao-garrafas'"
+)
+
 class UniqueLoader(yaml.BaseLoader):
     """Keep YAML 1.1's `on`/booleans as strings and reject duplicate keys."""
 
@@ -53,7 +61,7 @@ def load_workflow(text):
     return yaml.load(text, Loader=UniqueLoader)
 
 
-def validate(workflow, approved):
+def validate(workflow, approved, workflow_name=None):
     errors = []
     if not isinstance(workflow, dict):
         return ["workflow must be a mapping"]
@@ -84,11 +92,23 @@ def validate(workflow, approved):
             errors.append(prefix + "job must not expand permissions")
         if name == "windows-native-synthetic" and job.get("if", "").strip() != NATIVE_JOB_GUARD:
             errors.append(prefix + "native service/ACL installation must not run for fork PRs")
+        # Only the trusted, main-only manual PR43 synthetic homologation job
+        # can exceed 60 minutes. All other workflows/jobs retain the 60m cap.
+        pr43_extended = (
+            workflow_name == PR43_HOMOLOGATION_FILE
+            and workflow.get("name") == PR43_HOMOLOGATION_NAME
+            and workflow.get("on") == {"workflow_dispatch": ""}
+            and workflow.get("permissions") == {"contents": "read"}
+            and name == "validated-synthetic-download"
+            and runner == "windows-2025"
+            and job.get("if", "").strip() == PR43_HOMOLOGATION_JOB_GUARD
+        )
+        max_timeout = 90 if pr43_extended else 60
         try:
-            if not 1 <= int(job.get("timeout-minutes", "0")) <= 60:
+            if not 1 <= int(job.get("timeout-minutes", "0")) <= max_timeout:
                 raise ValueError
         except (ValueError, TypeError):
-            errors.append(prefix + "explicit timeout between 1 and 60 minutes required")
+            errors.append(prefix + f"explicit timeout between 1 and {max_timeout} minutes required")
         for step in job.get("steps", []):
             if not isinstance(step, dict):
                 errors.append(prefix + "step must be a mapping")
@@ -130,7 +150,7 @@ def main():
     paths = sorted((ROOT / ".github/workflows").glob("*.y*ml"))
     for path in paths:
         try:
-            errors = validate(load_workflow(path.read_text()), approved)
+            errors = validate(load_workflow(path.read_text()), approved, path.name)
         except (ValueError, TypeError, yaml.YAMLError) as error:
             errors = [str(error)]
         failures.extend(f"{path.name}: {message}" for message in errors)
