@@ -28,7 +28,38 @@ class WorkflowSecurityTests(unittest.TestCase):
     def test_repository_workflows_follow_policy(self):
         for path in (ROOT / ".github/workflows").glob("*.y*ml"):
             with self.subTest(workflow=path.name):
-                self.assertEqual(validate(load_workflow(path.read_text()), self.approved), [])
+                self.assertEqual(validate(load_workflow(path.read_text()), self.approved, path.name), [])
+
+    def test_extended_timeout_only_for_trusted_pr43_manual_job(self):
+        path = ROOT / ".github/workflows/pr43-windows11-retry-recovery-homologation.yml"
+        trusted = load_workflow(path.read_text())
+        job = trusted["jobs"]["validated-synthetic-download"]
+        self.assertEqual(job["timeout-minutes"], "90")
+        self.assertEqual(validate(trusted, self.approved, path.name), [])
+
+        # A matching job is not sufficient: the exact reviewed workflow
+        # identity, trigger, protected repository and runner are required.
+        self.assertTrue(validate(trusted, self.approved))
+        self.assertTrue(validate(trusted, self.approved, "ci.yml"))
+        cases = (
+            ("over_90", lambda w: w["jobs"]["validated-synthetic-download"].update({"timeout-minutes": "91"})),
+            ("different_workflow_name", lambda w: w.update({"name": "another workflow"})),
+            ("extra_trigger", lambda w: w["on"].update({"push": ""})),
+            ("other_runner", lambda w: w["jobs"]["validated-synthetic-download"].update({"runs-on": "windows-latest"})),
+            ("missing_guard", lambda w: w["jobs"]["validated-synthetic-download"].update({"if": "success()"})),
+            ("other_job", lambda w: w["jobs"].update({"other-job": {
+                "runs-on": "windows-2025", "timeout-minutes": "90", "steps": []
+            }})),
+        )
+        for label, mutate in cases:
+            with self.subTest(case=label):
+                changed = copy.deepcopy(trusted)
+                mutate(changed)
+                self.assertTrue(validate(changed, self.approved, path.name))
+
+        regular = copy.deepcopy(self.workflow)
+        regular["jobs"]["django-postgresql"]["timeout-minutes"] = "90"
+        self.assertTrue(validate(regular, self.approved, "ci.yml"))
 
     def test_privileged_pull_request_target_is_rejected(self):
         self.check_rejected(lambda w: w["on"].update(pull_request_target={}))
